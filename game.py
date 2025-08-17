@@ -605,9 +605,14 @@ def evolve_population(sim_state):
         return new_pop
     
     sim_state['creatures'].sort(key=lambda c: c.score, reverse=True)
-    survivors_h = sim_state['creatures'][:int(len(sim_state['creatures']) * SURVIVAL_RATE)]
+    # FIX: Ensure at least one survivor is chosen if the population is not empty, preventing a gene reset.
+    num_to_select_h = max(1, int(len(sim_state['creatures']) * SURVIVAL_RATE)) if sim_state['creatures'] else 0
+    survivors_h = sim_state['creatures'][:num_to_select_h]
+
     sim_state['carnivores'].sort(key=lambda c: c.score, reverse=True)
-    survivors_c = sim_state['carnivores'][:int(len(sim_state['carnivores']) * SURVIVAL_RATE)]
+    # FIX: Apply the same robust logic to carnivores.
+    num_to_select_c = max(1, int(len(sim_state['carnivores']) * SURVIVAL_RATE)) if sim_state['carnivores'] else 0
+    survivors_c = sim_state['carnivores'][:num_to_select_c]
 
     if sim_state['generation'] % AUTOSAVE_INTERVAL == 0:
         print(f"--- AUTOSAVING BRAINS FOR END OF GENERATION {sim_state['generation']} ---")
