@@ -749,7 +749,8 @@ def main():
         sim_state['clock'].tick(60)
 
         # --- Update the Prometheus metrics ---
-        metric_game_uptime_seconds.inc(time.time() - game_start_time - metric_game_uptime_seconds._value._value)  # Increment the uptime counter
+        frame_time_seconds = sim_state['clock'].tick(60) / 1000.0
+        metric_game_uptime_seconds.inc(frame_time_seconds)
         if sim_state['creatures']:
             best_herbivore = max(sim_state['creatures'], key=lambda c: c.score, default=None)
             metric_best_herbivore_score.set(best_herbivore.score if best_herbivore else 0) 
