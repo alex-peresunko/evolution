@@ -751,23 +751,24 @@ def main():
         # --- Update the Prometheus metrics ---
         frame_time_seconds = sim_state['clock'].tick(60) / 1000.0
         metric_game_uptime_seconds.inc(frame_time_seconds)
-        if sim_state['creatures']:
-            best_herbivore = max(sim_state['creatures'], key=lambda c: c.score, default=None)
-            metric_best_herbivore_score.set(best_herbivore.score if best_herbivore else 0) 
-            best_carnivore = max(sim_state['carnivores'], key=lambda c: c.score, default=None)
-            metric_best_carnivore_score.set(best_carnivore.score if best_carnivore else 0)
-            metric_current_herbivore_count.set(len(sim_state['creatures']))
-            metric_current_carnivore_count.set(len(sim_state['carnivores']))
-            metric_current_food_count.set(len(sim_state['food_items']))
-            metric_best_carnivore_gene_size.set(best_carnivore.genes.get('size', DEFAULT_CARNIVORE_GENES['size']) if best_carnivore else DEFAULT_CARNIVORE_GENES['size'])
-            metric_best_carnivore_gene_max_speed.set(best_carnivore.genes.get('max_speed', DEFAULT_CARNIVORE_GENES['max_speed']) if best_carnivore else DEFAULT_CARNIVORE_GENES['max_speed'])
-            metric_best_carnivore_gene_sight_distance.set(best_carnivore.genes.get('sight_distance', DEFAULT_CARNIVORE_GENES['sight_distance']) if best_carnivore else DEFAULT_CARNIVORE_GENES['sight_distance'])
-            metric_best_carnivore_gene_sight_angle.set(best_carnivore.genes.get('sight_angle', DEFAULT_CARNIVORE_GENES['sight_angle']) if best_carnivore else DEFAULT_CARNIVORE_GENES['sight_angle'])
-            metric_best_herbivore_gene_size.set(best_herbivore.genes.get('size', DEFAULT_HERBIVORE_GENES['size']) if best_herbivore else DEFAULT_HERBIVORE_GENES['size'])
-            metric_best_herbivore_gene_max_speed.set(best_herbivore.genes.get('max_speed', DEFAULT_HERBIVORE_GENES['max_speed']) if best_herbivore else DEFAULT_HERBIVORE_GENES['max_speed'])
-            metric_best_herbivore_gene_sight_distance.set(best_herbivore.genes.get('sight_distance', DEFAULT_HERBIVORE_GENES['sight_distance']) if best_herbivore else DEFAULT_HERBIVORE_GENES['sight_distance'])
-            metric_best_herbivore_gene_sight_angle.set(best_herbivore.genes.get('sight_angle', DEFAULT_HERBIVORE_GENES['sight_angle']) if best_herbivore else DEFAULT_HERBIVORE_GENES['sight_angle'])
+        best_herbivore = max(sim_state['creatures'], key=lambda c: c.score, default=None)
+        metric_best_herbivore_score.set(best_herbivore.score if best_herbivore else 0)
         
+        best_carnivore = max(sim_state['carnivores'], key=lambda c: c.score, default=None)
+        metric_best_carnivore_score.set(best_carnivore.score if best_carnivore else 0)
+        
+        metric_current_herbivore_count.set(len(sim_state['creatures']))
+        metric_current_carnivore_count.set(len(sim_state['carnivores']))
+        metric_current_food_count.set(len(sim_state['food_items']))
+        metric_best_carnivore_gene_size.set(best_carnivore.genes.get('size', DEFAULT_CARNIVORE_GENES['size']) if best_carnivore else DEFAULT_CARNIVORE_GENES['size'])
+        metric_best_carnivore_gene_max_speed.set(best_carnivore.genes.get('max_speed', DEFAULT_CARNIVORE_GENES['max_speed']) if best_carnivore else DEFAULT_CARNIVORE_GENES['max_speed'])
+        metric_best_carnivore_gene_sight_distance.set(best_carnivore.genes.get('sight_distance', DEFAULT_CARNIVORE_GENES['sight_distance']) if best_carnivore else DEFAULT_CARNIVORE_GENES['sight_distance'])
+        metric_best_carnivore_gene_sight_angle.set(best_carnivore.genes.get('sight_angle', DEFAULT_CARNIVORE_GENES['sight_angle']) if best_carnivore else DEFAULT_CARNIVORE_GENES['sight_angle'])
+        metric_best_herbivore_gene_size.set(best_herbivore.genes.get('size', DEFAULT_HERBIVORE_GENES['size']) if best_herbivore else DEFAULT_HERBIVORE_GENES['size'])
+        metric_best_herbivore_gene_max_speed.set(best_herbivore.genes.get('max_speed', DEFAULT_HERBIVORE_GENES['max_speed']) if best_herbivore else DEFAULT_HERBIVORE_GENES['max_speed'])
+        metric_best_herbivore_gene_sight_distance.set(best_herbivore.genes.get('sight_distance', DEFAULT_HERBIVORE_GENES['sight_distance']) if best_herbivore else DEFAULT_HERBIVORE_GENES['sight_distance'])
+        metric_best_herbivore_gene_sight_angle.set(best_herbivore.genes.get('sight_angle', DEFAULT_HERBIVORE_GENES['sight_angle']) if best_herbivore else DEFAULT_HERBIVORE_GENES['sight_angle'])
+    
     pygame.quit()
 
 if __name__ == "__main__":
