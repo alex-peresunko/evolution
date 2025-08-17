@@ -16,9 +16,9 @@ NUM_HERBIVOROUS = 80
 NUM_CARNIVORES = 40
 NUM_FOOD = 100
 FOOD_RADIUS = 5
-FOOD_RESPAWN_RATE = 0.5
+FOOD_RESPAWN_RATE = 0.2
 NUM_OBSTACLES = 5
-GENERATION_TIME = 2000
+GENERATION_TIME = 1000
 
 # --- Spatial Grid Configuration ---
 GRID_CELL_SIZE = 500
@@ -38,15 +38,15 @@ FOOD_MIN_HEALTH_FACTOR = 0.1
 # --- Creature Configuration ---
 HERBIVORE_HEALTH = 2000
 CARNIVORE_HEALTH = 3000
-HERBIVORE_HEALTH_PER_FOOD = 600
-CARNIVORE_HEALTH_PER_FOOD = 800
-CREATURE_ROTATION_SPEED = 0.6
-HEALTH_LOST_ON_HIT = 100
-REPRODUCTION_HEALTH_THRESHOLD = 0.6
-MAX_REPRODUCTIONS = 5
+HERBIVORE_HEALTH_PER_FOOD = 1000
+CARNIVORE_HEALTH_PER_FOOD = 1000
+CREATURE_ROTATION_SPEED = 0.8
+HEALTH_LOST_ON_HIT = 50
+REPRODUCTION_HEALTH_THRESHOLD = 0.5
+MAX_REPRODUCTIONS = 50
 HEALTH_LOSS_PER_TICK = 1 
-HEALTH_LOSS_SPEED_FACTOR = 0.7
-REPRODUCTION_COOLDOWN = 4
+HEALTH_LOSS_SPEED_FACTOR = 1
+REPRODUCTION_COOLDOWN = 3
 REPRODUCTION_POP_CAP_FACTOR = 5
 SMELL_DISTANCE = 400
 HEALTH_GAIN_SIZE_PENALTY = 0.01 # Penalty factor for health gain based on size.
@@ -57,9 +57,9 @@ BRAIN_TOPOLOGY = [NUM_WHISKERS + 2 + 2 + 4, 8, 2] # +2 for smell (angle, strengt
 
 # --- Evolution Configuration ---
 MUTATION_RATE = 0.02
-MUTATION_AMOUNT = 0.10
+MUTATION_AMOUNT = 0.02
 GENE_MUTATION_AMOUNT = 0.1
-SURVIVAL_RATE = 0.2
+SURVIVAL_RATE = 0.20
 AUTOSAVE_INTERVAL = 100
 
 # --- Colors ---
@@ -139,7 +139,7 @@ class NeuralNetwork:
         new_nn.biases = [b.copy() for b in self.biases]
         return new_nn
 
-    def save(self, filename, generation=None, genes=None):
+    def save(self, filename, prometheus_metrics, generation=None, genes=None):
         save_dir = "saved_brains"
         os.makedirs(save_dir, exist_ok=True)
         data = {
@@ -149,6 +149,8 @@ class NeuralNetwork:
         }
         if generation is not None: data["generation"] = generation
         if genes is not None: data["genes"] = genes
+        if prometheus_metrics.metric_game_uptime_seconds._value.get() is not None: 
+            data["metric_game_uptime_seconds"] = prometheus_metrics.metric_game_uptime_seconds._value.get()
         with open(os.path.join(save_dir, filename), 'w') as f: json.dump(data, f, indent=4, sort_keys=True)
         print(f"Brain saved to {filename}")
 
@@ -457,7 +459,7 @@ def draw_score_chart(screen, font, history, position, size, color, title):
 # =============================================================================
 # SIMULATION LOGIC FUNCTIONS
 # =============================================================================
-def handle_events(sim_state):
+def handle_events(sim_state, prometheus_metrics):
     for event in pygame.event.get():
         if event.type == pygame.QUIT: sim_state['running'] = False
         if event.type == pygame.KEYDOWN:
@@ -465,11 +467,11 @@ def handle_events(sim_state):
                 # Save the best creature of each type
                 best_herbivore = max(sim_state['creatures'], key=lambda c: c.score, default=None)
                 if best_herbivore:
-                    best_herbivore.brain.save("best_brain_herbivore.json", sim_state['generation'], best_herbivore.genes)
+                    best_herbivore.brain.save("best_brain_herbivore.json", prometheus_metrics, sim_state['generation'], best_herbivore.genes)
 
                 best_carnivore = max(sim_state['carnivores'], key=lambda c: c.score, default=None)
                 if best_carnivore:
-                    best_carnivore.brain.save("best_brain_carnivore.json", sim_state['generation'], best_carnivore.genes)
+                    best_carnivore.brain.save("best_brain_carnivore.json", prometheus_metrics, sim_state['generation'], best_carnivore.genes)
 
             if event.key == pygame.K_l:
                 # --- FIXED LOADING LOGIC ---
@@ -664,7 +666,79 @@ def draw_elements(screen, font, sim_state):
         screen.blit(font.render("PAUSED", True, (255, 100, 100)), (SCREEN_WIDTH // 2 - 60, 20))
     
     pygame.display.flip()
-    
+
+class GameMetrics:
+    def __init__(self, sim_state):
+        # Create Prometheus metrics
+        self.metric_game_uptime_seconds = Counter('evolution_running_seconds', 'Time the game has been running in seconds')
+        self.game_start_time = time.time()
+        self.metric_current_generation_number = Gauge('evolution_current_generation_number', 'Current generation number in the simulation')
+        self.metric_best_herbivore_score = Gauge('evolution_best_herbivore_score', 'Best herbivore score in the current generation')
+        self.metric_best_carnivore_score = Gauge('evolution_best_carnivore_score', 'Best carnivore score in the current generation')
+        self.metric_current_herbivore_count = Gauge('evolution_current_herbivore_count', 'Current number of herbivores in the simulation')
+        self.metric_current_carnivore_count = Gauge('evolution_current_carnivore_count', 'Current number of carnivores in the simulation')
+        self.metric_current_food_count = Gauge('evolution_current_food_count', 'Current number of food items in the simulation')
+
+        self.metric_best_herbivore_gene = Gauge('evolution_best_herbivore_gene', 
+                                                'Best herbivore gene in the current generation',
+                                                ['gene']
+                                                )
+        self.metric_best_carnivore_gene = Gauge('evolution_best_carnivore_gene', 
+                                                'Best carnivore gene in the current generation',
+                                                ['gene']
+                                                )
+
+        self.metric_creature_brain_topology_input_size = Gauge('evolution_creature_brain_topology_input_size', 'Input size of the creature brain topology')
+        self.metric_creature_brain_topology_hidden_layers = Gauge('evolution_creature_brain_topology_hidden_layer_sizes', 'Hidden layer sizes of the creature brain topology')
+        self.metric_creature_brain_topology_output_size = Gauge('evolution_creature_brain_topology_output_size', 'Output size of the creature brain topology')
+        self.metric_creature_brain_topology_hidden_layer_neurons = Gauge('evolution_creature_brain_topology_hidden_layer_neurons', 'Number of neurons in each hidden layer of the creature brain topology')
+
+        # initialize metrics with starting values
+        best_herbivore = max(sim_state['creatures'], key=lambda c: c.score, default=None)
+        best_carnivore = max(sim_state['carnivores'], key=lambda c: c.score, default=None)
+
+        self.metric_game_uptime_seconds.inc(0)  # Initialize counter to 0
+        self.metric_current_generation_number.set(0)  # Start at generation 1
+        self.metric_best_herbivore_score.set(0)  # Initialize to 0
+        self.metric_best_carnivore_score.set(0)  # Initialize to 0
+        self.metric_current_herbivore_count.set(len(sim_state['creatures']))
+        self.metric_current_carnivore_count.set(len(sim_state['carnivores']))
+        self.metric_current_food_count.set(len(sim_state['food_items']))
+        
+        for gene, value in best_herbivore.genes.items() if best_herbivore else DEFAULT_HERBIVORE_GENES.items():
+            self.metric_best_herbivore_gene.labels(gene).set(value)
+        for gene, value in best_carnivore.genes.items() if best_carnivore else DEFAULT_CARNIVORE_GENES.items():
+            self.metric_best_carnivore_gene.labels(gene).set(value)
+        
+        self.metric_creature_brain_topology_input_size.set(BRAIN_TOPOLOGY[0])
+        self.metric_creature_brain_topology_hidden_layers.set(len(BRAIN_TOPOLOGY) - 2)  # Exclude input and output layers
+        self.metric_creature_brain_topology_output_size.set(BRAIN_TOPOLOGY[-1])
+        self.metric_creature_brain_topology_hidden_layer_neurons.set((BRAIN_TOPOLOGY[1]))  # Sum of all hidden layer sizes
+
+    def update(self, sim_state):
+
+        best_herbivore = max(sim_state['creatures'], key=lambda c: c.score, default=None)
+        best_carnivore = max(sim_state['carnivores'], key=lambda c: c.score, default=None)
+        frame_time_seconds = sim_state['clock'].tick(60) / 1000.0
+        
+        self.metric_game_uptime_seconds.inc(frame_time_seconds)
+        self.metric_current_generation_number.set(sim_state['generation'])  # Start at generation 1
+        self.metric_best_herbivore_score.set(best_herbivore.score if best_herbivore else 0)
+        self.metric_best_carnivore_score.set(best_carnivore.score if best_carnivore else 0)
+        self.metric_current_herbivore_count.set(len(sim_state['creatures']))
+        self.metric_current_carnivore_count.set(len(sim_state['carnivores']))
+        self.metric_current_food_count.set(len(sim_state['food_items']))
+
+        for gene, value in best_herbivore.genes.items() if best_herbivore else DEFAULT_HERBIVORE_GENES.items():
+            self.metric_best_herbivore_gene.labels(gene).set(value)
+        for gene, value in best_carnivore.genes.items() if best_carnivore else DEFAULT_CARNIVORE_GENES.items():
+            self.metric_best_carnivore_gene.labels(gene).set(value)
+
+        self.metric_creature_brain_topology_input_size.set(BRAIN_TOPOLOGY[0])
+        self.metric_creature_brain_topology_hidden_layers.set(len(BRAIN_TOPOLOGY) - 2)  # Exclude input and output layers
+        self.metric_creature_brain_topology_output_size.set(BRAIN_TOPOLOGY[-1])
+        self.metric_creature_brain_topology_hidden_layer_neurons.set((BRAIN_TOPOLOGY[1]))  # Sum of all hidden layer sizes
+
 # =============================================================================
 # Main Simulation
 # =============================================================================
@@ -686,59 +760,12 @@ def main():
         'generation': 1, 'generation_timer': 0, 'selected_creature': None,
     }
 
-    # initialize Prometheus metrics
-    metric_game_uptime_seconds = Counter('evolution_running_seconds', 'Time the game has been running in seconds')
-    metric_game_uptime_seconds.inc(0)  # Initialize counter to 0
-    game_start_time = time.time()
-
-    metric_current_generation_number = Gauge('evolution_current_generation_number', 'Current generation number in the simulation')
-    metric_current_generation_number.set(0)  # Start at generation 1
-
-    metric_best_herbivore_score = Gauge('evolution_best_herbivore_score', 'Best herbivore score in the current generation')
-    metric_best_carnivore_score = Gauge('evolution_best_carnivore_score', 'Best carnivore score in the current generation')
-    metric_best_herbivore_score.set(0)  # Initialize to 0
-    metric_best_carnivore_score.set(0)  # Initialize to 0
-    metric_current_herbivore_count = Gauge('evolution_current_herbivore_count', 'Current number of herbivores in the simulation')
-    metric_current_herbivore_count.set(len(sim_state['creatures']))
-    metric_current_carnivore_count = Gauge('evolution_current_carnivore_count', 'Current number of carnivores in the simulation')
-    metric_current_carnivore_count.set(len(sim_state['carnivores']))
-
-    metric_current_food_count = Gauge('evolution_current_food_count', 'Current number of food items in the simulation')
-    metric_current_food_count.set(len(sim_state['food_items']))
-
-    metric_best_carnivore_gene_size = Gauge('evolution_best_carnivore_gene_size', 'Best carnivore gene size in the current generation')
-    metric_best_carnivore_gene_size.set(DEFAULT_CARNIVORE_GENES.get('size'))  
-    metric_best_carnivore_gene_max_speed = Gauge('evolution_best_carnivore_gene_max_speed', 'Best carnivore gene max speed in the current generation')
-    metric_best_carnivore_gene_max_speed.set(DEFAULT_CARNIVORE_GENES.get('max_speed'))
-    metric_best_carnivore_gene_sight_distance = Gauge('evolution_best_carnivore_gene_sight_distance', 'Best carnivore gene sight distance in the current generation')
-    metric_best_carnivore_gene_sight_distance.set(DEFAULT_CARNIVORE_GENES.get('sight_distance'))
-    metric_best_carnivore_gene_sight_angle = Gauge('evolution_best_carnivore_gene_sight_angle', 'Best carnivore gene sight angle in the current generation')
-    metric_best_carnivore_gene_sight_angle.set(DEFAULT_CARNIVORE_GENES.get('sight_angle'))
-    metric_best_herbivore_gene_size = Gauge('evolution_best_herbivore_gene_size', 'Best herbivore gene size in the current generation')
-    metric_best_herbivore_gene_size.set(DEFAULT_HERBIVORE_GENES.get('size'))
-    metric_best_herbivore_gene_max_speed = Gauge('evolution_best_herbivore_gene_max_speed', 'Best herbivore gene max speed in the current generation')
-    metric_best_herbivore_gene_max_speed.set(DEFAULT_HERBIVORE_GENES.get('max_speed'))
-    metric_best_herbivore_gene_sight_distance = Gauge('evolution_best_herbivore_gene_sight_distance', 'Best herbivore gene sight distance in the current generation')
-    metric_best_herbivore_gene_sight_distance.set(DEFAULT_HERBIVORE_GENES.get('sight_distance'))
-    metric_best_herbivore_gene_sight_angle = Gauge('evolution_best_herbivore_gene_sight_angle', 'Best herbivore gene sight angle in the current generation')
-    metric_best_herbivore_gene_sight_angle.set(DEFAULT_HERBIVORE_GENES.get('sight_angle'))
-
-    metric_creature_brain_topology_input_size = Gauge('evolution_creature_brain_topology_input_size', 'Input size of the creature brain topology')
-    metric_creature_brain_topology_input_size.set(BRAIN_TOPOLOGY[0])
-    metric_creature_brain_topology_hidden_layers = Gauge('evolution_creature_brain_topology_hidden_layer_sizes', 'Hidden layer sizes of the creature brain topology')
-    metric_creature_brain_topology_hidden_layers.set(len(BRAIN_TOPOLOGY) - 2)  # Exclude input and output layers
-    metric_creature_brain_topology_output_size = Gauge('evolution_creature_brain_topology_output_size', 'Output size of the creature brain topology')
-    metric_creature_brain_topology_output_size.set(BRAIN_TOPOLOGY[-1])
-    metric_creature_brain_topology_hidden_layer_neurons = Gauge('evolution_creature_brain_topology_hidden_layer_neurons', 'Number of neurons in each hidden layer of the creature brain topology')
-    metric_creature_brain_topology_hidden_layer_neurons.set((BRAIN_TOPOLOGY[1]))  # Sum of all hidden layer sizes
-
-
-
+    prometheus_metrics = GameMetrics(sim_state)
 
     while sim_state['running']:
-        handle_events(sim_state)
+        handle_events(sim_state, prometheus_metrics)
 
-        metric_current_generation_number.set(sim_state['generation'])
+        prometheus_metrics.update(sim_state)
 
         if not sim_state['paused']:
             update_world(sim_state)
@@ -749,25 +776,7 @@ def main():
         sim_state['clock'].tick(60)
 
         # --- Update the Prometheus metrics ---
-        frame_time_seconds = sim_state['clock'].tick(60) / 1000.0
-        metric_game_uptime_seconds.inc(frame_time_seconds)
-        best_herbivore = max(sim_state['creatures'], key=lambda c: c.score, default=None)
-        metric_best_herbivore_score.set(best_herbivore.score if best_herbivore else 0)
-        
-        best_carnivore = max(sim_state['carnivores'], key=lambda c: c.score, default=None)
-        metric_best_carnivore_score.set(best_carnivore.score if best_carnivore else 0)
-        
-        metric_current_herbivore_count.set(len(sim_state['creatures']))
-        metric_current_carnivore_count.set(len(sim_state['carnivores']))
-        metric_current_food_count.set(len(sim_state['food_items']))
-        metric_best_carnivore_gene_size.set(best_carnivore.genes.get('size', DEFAULT_CARNIVORE_GENES['size']) if best_carnivore else DEFAULT_CARNIVORE_GENES['size'])
-        metric_best_carnivore_gene_max_speed.set(best_carnivore.genes.get('max_speed', DEFAULT_CARNIVORE_GENES['max_speed']) if best_carnivore else DEFAULT_CARNIVORE_GENES['max_speed'])
-        metric_best_carnivore_gene_sight_distance.set(best_carnivore.genes.get('sight_distance', DEFAULT_CARNIVORE_GENES['sight_distance']) if best_carnivore else DEFAULT_CARNIVORE_GENES['sight_distance'])
-        metric_best_carnivore_gene_sight_angle.set(best_carnivore.genes.get('sight_angle', DEFAULT_CARNIVORE_GENES['sight_angle']) if best_carnivore else DEFAULT_CARNIVORE_GENES['sight_angle'])
-        metric_best_herbivore_gene_size.set(best_herbivore.genes.get('size', DEFAULT_HERBIVORE_GENES['size']) if best_herbivore else DEFAULT_HERBIVORE_GENES['size'])
-        metric_best_herbivore_gene_max_speed.set(best_herbivore.genes.get('max_speed', DEFAULT_HERBIVORE_GENES['max_speed']) if best_herbivore else DEFAULT_HERBIVORE_GENES['max_speed'])
-        metric_best_herbivore_gene_sight_distance.set(best_herbivore.genes.get('sight_distance', DEFAULT_HERBIVORE_GENES['sight_distance']) if best_herbivore else DEFAULT_HERBIVORE_GENES['sight_distance'])
-        metric_best_herbivore_gene_sight_angle.set(best_herbivore.genes.get('sight_angle', DEFAULT_HERBIVORE_GENES['sight_angle']) if best_herbivore else DEFAULT_HERBIVORE_GENES['sight_angle'])
+        prometheus_metrics.update(sim_state)
     
     pygame.quit()
 

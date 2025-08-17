@@ -719,7 +719,7 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "linear",
+            "lineInterpolation": "smooth",
             "lineWidth": 1,
             "pointSize": 5,
             "scaleDistribution": {
@@ -772,65 +772,15 @@
       "targets": [
         {
           "disableTextWrap": false,
-          "editorMode": "builder",
-          "expr": "evolution_best_herbivore_gene_size{job=\"evolution\"}",
-          "fullMetaSearch": false,
-          "includeNullMetadata": true,
-          "legendFormat": "Size",
-          "range": true,
-          "refId": "A",
-          "useBackend": false
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "fev2gbax7os8we"
-          },
-          "disableTextWrap": false,
-          "editorMode": "builder",
-          "expr": "evolution_best_herbivore_gene_max_speed{job=\"evolution\"}",
-          "fullMetaSearch": false,
-          "hide": false,
-          "includeNullMetadata": true,
-          "legendFormat": "Max speed",
-          "range": true,
-          "refId": "B",
-          "useBackend": false
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "fev2gbax7os8we"
-          },
-          "disableTextWrap": false,
           "editorMode": "code",
           "exemplar": false,
-          "expr": "evolution_best_herbivore_gene_sight_distance{job=\"evolution\"}/100",
+          "expr": "evolution_best_herbivore_gene{job=\"evolution\"}",
           "fullMetaSearch": false,
-          "hide": false,
           "includeNullMetadata": true,
           "instant": false,
-          "legendFormat": "Sight distance (/100)",
+          "legendFormat": "{{gene}}",
           "range": true,
-          "refId": "C",
-          "useBackend": false
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "fev2gbax7os8we"
-          },
-          "disableTextWrap": false,
-          "editorMode": "builder",
-          "exemplar": false,
-          "expr": "evolution_best_herbivore_gene_sight_angle{job=\"evolution\"}",
-          "fullMetaSearch": false,
-          "hide": false,
-          "includeNullMetadata": true,
-          "instant": false,
-          "legendFormat": "Sight angle",
-          "range": true,
-          "refId": "D",
+          "refId": "A",
           "useBackend": false
         }
       ],
@@ -864,7 +814,7 @@
               "viz": false
             },
             "insertNulls": false,
-            "lineInterpolation": "linear",
+            "lineInterpolation": "smooth",
             "lineWidth": 1,
             "pointSize": 5,
             "scaleDistribution": {
@@ -899,7 +849,7 @@
         "x": 12,
         "y": 16
       },
-      "id": 6,
+      "id": 12,
       "options": {
         "legend": {
           "calcs": [],
@@ -917,65 +867,15 @@
       "targets": [
         {
           "disableTextWrap": false,
-          "editorMode": "builder",
-          "expr": "evolution_best_carnivore_gene_size{job=\"evolution\"}",
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "evolution_best_carnivore_gene{job=\"evolution\"}",
           "fullMetaSearch": false,
           "includeNullMetadata": true,
-          "legendFormat": "Size",
+          "instant": false,
+          "legendFormat": "{{gene}}",
           "range": true,
           "refId": "A",
-          "useBackend": false
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "fev2gbax7os8we"
-          },
-          "disableTextWrap": false,
-          "editorMode": "builder",
-          "expr": "evolution_best_carnivore_gene_max_speed{job=\"evolution\"}",
-          "fullMetaSearch": false,
-          "hide": false,
-          "includeNullMetadata": true,
-          "legendFormat": "Max speed",
-          "range": true,
-          "refId": "B",
-          "useBackend": false
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "fev2gbax7os8we"
-          },
-          "disableTextWrap": false,
-          "editorMode": "builder",
-          "exemplar": false,
-          "expr": "evolution_best_carnivore_gene_sight_distance{job=\"evolution\"} / 100",
-          "fullMetaSearch": false,
-          "hide": false,
-          "includeNullMetadata": true,
-          "instant": false,
-          "legendFormat": "Sight distance (/100)",
-          "range": true,
-          "refId": "C",
-          "useBackend": false
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "fev2gbax7os8we"
-          },
-          "disableTextWrap": false,
-          "editorMode": "builder",
-          "exemplar": false,
-          "expr": "evolution_best_carnivore_gene_sight_angle{job=\"evolution\"}",
-          "fullMetaSearch": false,
-          "hide": false,
-          "includeNullMetadata": true,
-          "instant": false,
-          "legendFormat": "Sight angle",
-          "range": true,
-          "refId": "D",
           "useBackend": false
         }
       ],
@@ -991,7 +891,7 @@
     "list": []
   },
   "time": {
-    "from": "now-1h",
+    "from": "now-10m",
     "to": "now"
   },
   "timepicker": {
@@ -1010,6 +910,6 @@
   "timezone": "browser",
   "title": "Evolution simulation",
   "uid": "6a418c28-cbeb-46f9-a1f4-af86d6e6d051",
-  "version": 29,
+  "version": 33,
   "weekStart": "monday"
 }
