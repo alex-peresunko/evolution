@@ -628,7 +628,7 @@ def evolve_population(sim_state):
     
     sim_state['generation'] += 1
     sim_state['generation_timer'] = 0
-    sim_state['food_items'] = [Food(sim_state['world_bounds']) for _ in range(NUM_FOOD)]
+    # sim_state['food_items'] = [Food(sim_state['world_bounds']) for _ in range(NUM_FOOD)]
 
 def draw_elements(screen, font, sim_state):
     screen.fill(COLOR_BACKGROUND)
