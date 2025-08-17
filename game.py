@@ -251,9 +251,13 @@ class Creature:
                         self.score += 1
 
         for obs in obstacles:
-            if obs.rect.collidepoint(self.pos):
+            # --- FIX: Use colliderect for accurate physics instead of collidepoint ---
+            creature_rect = pygame.Rect(self.pos.x - self.size, self.pos.y - self.size, self.size * 2, self.size * 2)
+            if obs.rect.colliderect(creature_rect):
                 self.health -= HEALTH_LOST_ON_HIT
-                self.pos -= pygame.math.Vector2(math.cos(self.angle), math.sin(self.angle)) * new_speed * 2
+                # A stronger pushback is more effective
+                self.pos -= pygame.math.Vector2(math.cos(self.angle), math.sin(self.angle)) * self.current_speed * 3
+                break # Exit after one collision to prevent multiple penalties in one frame
 
     def see(self, food_items, obstacles, herbivores=None, carnivores=None):
         inputs = []
