@@ -25,10 +25,10 @@ GRID_CELL_SIZE = 500
 
 # --- GENE DEFAULTS: Base values for the first generation ---
 DEFAULT_HERBIVORE_GENES = {
-    "size": 10, "max_speed": 4, "sight_distance": 150, "sight_angle": math.radians(180)
+    "size": 10, "max_speed": 4, "sight_distance": 150, "sight_angle": math.radians(180), "max_stamina": 1000
 }
 DEFAULT_CARNIVORE_GENES = {
-    "size": 6, "max_speed": 5, "sight_distance": 500, "sight_angle": math.radians(30)
+    "size": 6, "max_speed": 5, "sight_distance": 500, "sight_angle": math.radians(30), "max_stamina": 1200
 }
 
 # --- Food Configuration ---
@@ -52,10 +52,16 @@ SMELL_DISTANCE = 400
 MAX_NORMALIZED_SIGHT_DISTANCE = 2000 # For normalizing sight distance gene input
 HEALTH_GAIN_SIZE_PENALTY = 0.01 # Penalty factor for health gain based on size.
 
+# --- Stamina Configuration ---
+STAMINA_DEPLETION_SPEED_THRESHOLD = 0.7 # Deplete if speed is > 70% of max
+STAMINA_DEPLETION_RATE = 2.5            # Stamina lost per tick at high speed
+STAMINA_REGEN_RATE = 1.0                # Stamina gained per tick when resting
+STAMINA_EXHAUSTION_PENALTY = 0.2        # Speed is multiplied by this when exhausted
+
 # --- Neural Network Configuration ---
 NUM_WHISKERS = 3
-# Inputs: Whiskers(3), Target(2), Smell(2), State(3), Self-Aware(4) = 14 total
-BRAIN_TOPOLOGY = [NUM_WHISKERS + 2 + 2 + 3 + 4, 8, 2]
+# Inputs: Whiskers(3), Target(2), Smell(2), State(3), Self-Aware(4), Stamina(1) = 15 total
+BRAIN_TOPOLOGY = [NUM_WHISKERS + 2 + 2 + 3 + 4 + 1, 8, 2]
 
 # --- Evolution Configuration ---
 MUTATION_RATE = 0.02
@@ -212,6 +218,8 @@ class Creature:
         self.max_speed = self.genes["max_speed"]
         self.sight_distance = self.genes["sight_distance"]
         self.sight_angle = self.genes["sight_angle"]
+        self.max_stamina = self.genes["max_stamina"]
+        self.stamina = self.max_stamina # Start with full stamina
 
         self.whiskers = [0.0] * NUM_WHISKERS
         self.whisker_angles = np.linspace(-self.sight_angle / 2, self.sight_angle / 2, NUM_WHISKERS)
@@ -224,19 +232,31 @@ class Creature:
     def act(self, outputs, global_food_list, global_herbivore_list, obstacles):
         self.angle = (self.angle + outputs[0] * CREATURE_ROTATION_SPEED) % (2 * math.pi)
         speed_multiplier = max(0.1, self.health / self.max_health)
-        new_speed = max(0, outputs[1]) * self.max_speed * speed_multiplier
+
+        # --- Stamina Exhaustion Penalty ---
+        is_exhausted = self.stamina <= 0
+        speed_penalty = STAMINA_EXHAUSTION_PENALTY if is_exhausted else 1.0
+        new_speed = max(0, outputs[1]) * self.max_speed * speed_multiplier * speed_penalty
+        
+        # --- Update Stamina based on speed ---
+        if self.max_speed > 0 and new_speed / self.max_speed > STAMINA_DEPLETION_SPEED_THRESHOLD:
+            depletion_amount = (new_speed / self.max_speed) * STAMINA_DEPLETION_RATE
+            self.stamina -= depletion_amount
+        else:
+            self.stamina += STAMINA_REGEN_RATE
+        self.stamina = max(0, min(self.stamina, self.max_stamina))
+
         self.pos += pygame.math.Vector2(math.cos(self.angle), math.sin(self.angle)) * new_speed
         self.pos.x %= self.world_bounds[0]; self.pos.y %= self.world_bounds[1]
         self.health -= (HEALTH_LOSS_PER_TICK + (new_speed * HEALTH_LOSS_SPEED_FACTOR))
         self.current_speed = new_speed
+
         if self.is_carnivore:
             base_size = DEFAULT_CARNIVORE_GENES['size']
             for prey in global_herbivore_list[:]:
-                # --- FIX: Check distance against the SUM of both creature radii ---
                 if prey.id != self.id and self.pos.distance_to(prey.pos) < (self.size + prey.size):
                     global_herbivore_list.remove(prey)
                     base_health_gain = CARNIVORE_HEALTH_PER_FOOD
-                    # Bigger creatures need more food - apply penalty
                     size_penalty_denominator = 1 + (self.size - base_size) * HEALTH_GAIN_SIZE_PENALTY
                     actual_health_gain = base_health_gain / max(0.1, size_penalty_denominator)
                     self.health = min(self.max_health, self.health + actual_health_gain)
@@ -244,24 +264,20 @@ class Creature:
         else:
             base_size = DEFAULT_HERBIVORE_GENES['size']
             for food in global_food_list[:]:
-                    # --- FIX: Check distance against the SUM of creature and food radii ---
                     if self.pos.distance_to(food.pos) < (self.size + FOOD_RADIUS):
                         global_food_list.remove(food)
                         base_health_gain = food.get_health_value()
-                        # Bigger creatures need more food - apply penalty
                         size_penalty_denominator = 1 + (self.size - base_size) * HEALTH_GAIN_SIZE_PENALTY
                         actual_health_gain = base_health_gain / max(0.1, size_penalty_denominator)
                         self.health = min(self.max_health, self.health + actual_health_gain)
                         self.score += 1
 
         for obs in obstacles:
-            # --- FIX: Use colliderect for accurate physics instead of collidepoint ---
             creature_rect = pygame.Rect(self.pos.x - self.size, self.pos.y - self.size, self.size * 2, self.size * 2)
             if obs.rect.colliderect(creature_rect):
                 self.health -= HEALTH_LOST_ON_HIT
-                # A stronger pushback is more effective
                 self.pos -= pygame.math.Vector2(math.cos(self.angle), math.sin(self.angle)) * self.current_speed * 3
-                break # Exit after one collision to prevent multiple penalties in one frame
+                break 
 
     def see(self, food_items, obstacles, herbivores=None, carnivores=None):
         inputs = []
@@ -293,7 +309,7 @@ class Creature:
             avoid_angle = food_angle - predator_angle * (1 - predator_dist)**2
             inputs.extend([np.clip(avoid_angle, -1, 1), food_dist])
 
-        # --- Add Smell Inputs (Omni-directional) ---
+        # --- Smell Inputs (Omni-directional) ---
         smell_angle, smell_strength = 0.0, 0.0
         if self.is_carnivore:
             smellable_prey = [h for h in herbivores or [] if h.id != self.id]
@@ -326,6 +342,9 @@ class Creature:
         inputs.append(self.sight_distance / MAX_NORMALIZED_SIGHT_DISTANCE)
         inputs.append(self.sight_angle / (2 * math.pi))
         
+        # --- Stamina Input ---
+        inputs.append(self.stamina / self.max_stamina if self.max_stamina > 0 else 0)
+
         return inputs
 
     def get_target_info(self, target):
@@ -349,25 +368,19 @@ class Creature:
 
         # --- 2. Draw Shape Based on Type ---
         if self.is_carnivore:
-            # Draw an aggressive, arrow-like triangle for carnivores
             p_nose = self.pos + pygame.math.Vector2(math.cos(self.angle), math.sin(self.angle)) * self.size
             p_back_left = self.pos + pygame.math.Vector2(math.cos(self.angle + math.pi * 0.85), math.sin(self.angle + math.pi * 0.85)) * self.size
             p_back_right = self.pos + pygame.math.Vector2(math.cos(self.angle - math.pi * 0.85), math.sin(self.angle - math.pi * 0.85)) * self.size
             pygame.draw.polygon(screen, color, [p_nose, p_back_left, p_back_right])
         else:
-            # Draw a round body for herbivores. The radius IS its size.
             body_radius = int(self.size)
             pygame.draw.circle(screen, color, self.pos, body_radius)
-
-            # Draw two eyes that rotate with the creature
             eye_color = (0, 0, 0)
             eye_radius = int(self.size * 0.2)
             eye_forward_offset = self.size * 0.4
             eye_side_offset = self.size * 0.35
-
             forward_vec = pygame.math.Vector2(math.cos(self.angle), math.sin(self.angle))
-            side_vec = pygame.math.Vector2(-math.sin(self.angle), math.cos(self.angle)) # Perpendicular vector
-
+            side_vec = pygame.math.Vector2(-math.sin(self.angle), math.cos(self.angle))
             eye1_pos = self.pos + forward_vec * eye_forward_offset + side_vec * eye_side_offset
             eye2_pos = self.pos + forward_vec * eye_forward_offset - side_vec * eye_side_offset
             pygame.draw.circle(screen, eye_color, eye1_pos, eye_radius)
@@ -382,7 +395,8 @@ class Creature:
     
     def get_info(self):
         info = {"ID": self.id, "Type": "Carnivore" if self.is_carnivore else "Herbivore", "Health": int(self.health),
-                "Score": self.score, "Reproductions": self.reproductions, "Is Best": self.is_best}
+                "Stamina": f"{int(self.stamina)} / {int(self.max_stamina)}", "Score": self.score, 
+                "Reproductions": self.reproductions, "Is Best": self.is_best}
         for gene, value in self.genes.items():
             info[f"Gene: {gene}"] = round(value, 2)
         return info
@@ -397,7 +411,6 @@ class Food:
         self.world_bounds = world_bounds
         self.pos = pygame.math.Vector2(random.uniform(0, world_bounds[0]), random.uniform(0, world_bounds[1]))
         self.lifetime = 0
-        # --- FIX: Store constants as instance attributes ---
         self.max_lifetime = FOOD_MAX_LIFETIME
         self.health_value_base = HERBIVORE_HEALTH_PER_FOOD
         self.min_health_factor = FOOD_MIN_HEALTH_FACTOR
@@ -406,17 +419,14 @@ class Food:
         self.lifetime += 1
 
     def is_rotten(self):
-        # --- FIX: Use instance attribute ---
         return self.lifetime >= self.max_lifetime
 
     def get_health_value(self):
-        # --- FIX: Use instance attributes ---
         if self.is_rotten(): return 0
         freshness = 1.0 - (self.lifetime / self.max_lifetime)
         return int(self.health_value_base * (self.min_health_factor + (1 - self.min_health_factor) * freshness))
 
     def draw(self, screen):
-        # --- FIX: Use instance attribute ---
         alpha = int(50 + 205 * (1.0 - (self.lifetime / self.max_lifetime)))
         temp_surface = pygame.Surface((FOOD_RADIUS * 2, FOOD_RADIUS * 2), pygame.SRCALPHA)
         pygame.draw.circle(temp_surface, (*COLOR_FOOD, alpha), (FOOD_RADIUS, FOOD_RADIUS), FOOD_RADIUS)
@@ -473,66 +483,43 @@ def handle_events(sim_state, prometheus_metrics):
         if event.type == pygame.QUIT: sim_state['running'] = False
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_s:
-                # Save the best creature of each type
                 best_herbivore = max(sim_state['creatures'], key=lambda c: c.score, default=None)
                 if best_herbivore:
                     best_herbivore.brain.save("best_brain_herbivore.json", prometheus_metrics, sim_state['generation'], best_herbivore.genes)
-
                 best_carnivore = max(sim_state['carnivores'], key=lambda c: c.score, default=None)
                 if best_carnivore:
                     best_carnivore.brain.save("best_brain_carnivore.json", prometheus_metrics, sim_state['generation'], best_carnivore.genes)
-
             if event.key == pygame.K_l:
-                # --- FIXED LOADING LOGIC ---
                 try:
-                    # Load the progenitor brain and genes for herbivores
                     progenitor_brain, gen, progenitor_genes = NeuralNetwork.load("best_brain_herbivore.json", BRAIN_TOPOLOGY)
                     sim_state['generation'] = gen
-                    
-                    # Create the new population
                     new_herbivores = []
-                    # Add one "pure" progenitor with the exact loaded brain
                     progenitor_creature = Creature(sim_state['world_bounds'], brain=progenitor_brain, genes=progenitor_genes)
                     new_herbivores.append(progenitor_creature)
-
-                    # Add mutated copies for the rest of the population
                     for _ in range(NUM_HERBIVOROUS - 1):
                         mutated_brain = progenitor_brain.copy()
                         mutated_brain.mutate(MUTATION_RATE, MUTATION_AMOUNT)
                         mutated_genes = mutate_genes(progenitor_genes)
                         new_herbivores.append(Creature(sim_state['world_bounds'], brain=mutated_brain, genes=mutated_genes))
-                    
                     sim_state['creatures'] = new_herbivores
                     print(f"Loaded new herbivore population from generation {gen}.")
-
                 except FileNotFoundError:
                     print("No herbivore brain file found to load.")
-                
                 try:
-                    # Load the progenitor brain and genes for carnivores
                     progenitor_brain_c, _, progenitor_genes_c = NeuralNetwork.load("best_brain_carnivore.json", BRAIN_TOPOLOGY)
-
-                    # Create the new population
                     new_carnivores = []
-                    # Add one "pure" progenitor
                     progenitor_carnivore = Creature(sim_state['world_bounds'], brain=progenitor_brain_c, is_carnivore=True, genes=progenitor_genes_c)
                     new_carnivores.append(progenitor_carnivore)
-                    
-                    # Add mutated copies for the rest
                     for _ in range(NUM_CARNIVORES - 1):
                         mutated_brain = progenitor_brain_c.copy()
                         mutated_brain.mutate(MUTATION_RATE, MUTATION_AMOUNT)
                         mutated_genes = mutate_genes(progenitor_genes_c)
                         new_carnivores.append(Creature(sim_state['world_bounds'], brain=mutated_brain, is_carnivore=True, genes=mutated_genes))
-                    
                     sim_state['carnivores'] = new_carnivores
                     print(f"Loaded new carnivore population.")
-
                 except FileNotFoundError:
                     print("No carnivore brain file found to load.")
-
             if event.key == pygame.K_SPACE: sim_state['paused'] = not sim_state['paused']
-        
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mx, my = event.pos; found = False
             for c in sim_state['creatures'] + sim_state['carnivores']:
@@ -545,18 +532,14 @@ def handle_events(sim_state, prometheus_metrics):
 def update_world(sim_state):
     sim_state['generation_timer'] += 1
     grid = sim_state['grid']
-
     for food in sim_state['food_items']: food.update()
     sim_state['food_items'][:] = [f for f in sim_state['food_items'] if not f.is_rotten()]
     if random.random() < FOOD_RESPAWN_RATE and len(sim_state['food_items']) < NUM_FOOD * 1.5:
         sim_state['food_items'].append(Food(sim_state['world_bounds']))
-
     all_creatures = sim_state['creatures'] + sim_state['carnivores']
-    
     grid.clear()
     for obj in all_creatures + sim_state['food_items']:
         grid.insert(obj)
-
     for c in all_creatures:
         local_objects = grid.query(c.pos, max(c.sight_distance, SMELL_DISTANCE))
         local_food = [obj for obj in local_objects if isinstance(obj, Food)]
@@ -564,22 +547,18 @@ def update_world(sim_state):
         local_carnivores = [obj for obj in local_objects if isinstance(obj, Creature) and obj.is_carnivore]
         outputs = c.perceive_and_think(local_food, local_herbivores, local_carnivores, sim_state['obstacles'])
         c.act(outputs, sim_state['food_items'], sim_state['creatures'], sim_state['obstacles'])
-
     sim_state['creatures'][:] = [c for c in sim_state['creatures'] if c.is_alive()]
     sim_state['carnivores'][:] = [c for c in sim_state['carnivores'] if c.is_alive()]
-    
     if sim_state['creatures']:
         for c in sim_state['creatures']: c.is_best = False
         best_herbivore = max(sim_state['creatures'], key=lambda c: c.score, default=None)
         if best_herbivore:
             best_herbivore.is_best = True
-
     if sim_state['carnivores']:
         for c in sim_state['carnivores']: c.is_best = False
         best_carnivore = max(sim_state['carnivores'], key=lambda c: c.score, default=None)
         if best_carnivore:
             best_carnivore.is_best = True
-
     new_offspring = []
     now = time.time()
     for group, pop_limit, max_health in [(sim_state['creatures'], NUM_HERBIVOROUS, HERBIVORE_HEALTH), (sim_state['carnivores'], NUM_CARNIVORES, CARNIVORE_HEALTH)]:
@@ -607,7 +586,6 @@ def update_world(sim_state):
 def evolve_population(sim_state):
     sim_state['herbivore_score_history'].append(max([c.score for c in sim_state['creatures']] + [0]))
     sim_state['carnivore_score_history'].append(max([c.score for c in sim_state['carnivores']] + [0]))
-    
     def get_new_population(survivors, count, is_carnivore, default_genes):
         if not survivors: return [Creature(sim_state['world_bounds'], is_carnivore=is_carnivore, genes=default_genes) for _ in range(count)]
         new_pop = []
@@ -618,28 +596,20 @@ def evolve_population(sim_state):
             new_genes = mutate_genes(parent.genes)
             new_pop.append(Creature(sim_state['world_bounds'], brain=new_brain, is_carnivore=is_carnivore, genes=new_genes))
         return new_pop
-    
     sim_state['creatures'].sort(key=lambda c: c.score, reverse=True)
-    # FIX: Ensure at least one survivor is chosen if the population is not empty, preventing a gene reset.
     num_to_select_h = max(1, int(len(sim_state['creatures']) * SURVIVAL_RATE)) if sim_state['creatures'] else 0
     survivors_h = sim_state['creatures'][:num_to_select_h]
-
     sim_state['carnivores'].sort(key=lambda c: c.score, reverse=True)
-    # FIX: Apply the same robust logic to carnivores.
     num_to_select_c = max(1, int(len(sim_state['carnivores']) * SURVIVAL_RATE)) if sim_state['carnivores'] else 0
     survivors_c = sim_state['carnivores'][:num_to_select_c]
-
     if sim_state['generation'] % AUTOSAVE_INTERVAL == 0:
         print(f"--- AUTOSAVING BRAINS FOR END OF GENERATION {sim_state['generation']} ---")
         if survivors_h: survivors_h[0].brain.save(f"autosave_herbivore_gen_{sim_state['generation']}.json", sim_state['generation'], survivors_h[0].genes)
         if survivors_c: survivors_c[0].brain.save(f"autosave_carnivore_gen_{sim_state['generation']}.json", sim_state['generation'], survivors_c[0].genes)
-
     sim_state['creatures'] = get_new_population(survivors_h, NUM_HERBIVOROUS, False, DEFAULT_HERBIVORE_GENES)
     sim_state['carnivores'] = get_new_population(survivors_c, NUM_CARNIVORES, True, DEFAULT_CARNIVORE_GENES)
-    
     sim_state['generation'] += 1
     sim_state['generation_timer'] = 0
-    # sim_state['food_items'] = [Food(sim_state['world_bounds']) for _ in range(NUM_FOOD)]
 
 def draw_elements(screen, font, sim_state):
     screen.fill(COLOR_BACKGROUND)
@@ -649,7 +619,6 @@ def draw_elements(screen, font, sim_state):
             item.draw(screen, item == sim_state.get('selected_creature'))
         else:
             item.draw(screen)
-    
     text_y = 10
     stats = [f"Generation: {sim_state['generation']}", f"Time: {GENERATION_TIME - sim_state['generation_timer']}",
              f"Herbivores: {len(sim_state['creatures'])}", f"Carnivores: {len(sim_state['carnivores'])}",
@@ -657,7 +626,6 @@ def draw_elements(screen, font, sim_state):
              f"Top Herbivore Score: {max([c.score for c in sim_state['creatures']] + [0])}",
              f"Top Carnivore Score: {max([c.score for c in sim_state['carnivores']] + [0])}", f"FPS: {int(sim_state['clock'].get_fps())}" ]
     for line in stats: screen.blit(font.render(line, True, COLOR_TEXT), (10, text_y)); text_y += 30
-
     selected = sim_state.get('selected_creature')
     if selected and selected.is_alive():
         info_lines = [f"{k}: {v}" for k, v in selected.get_info().items()]
@@ -665,20 +633,16 @@ def draw_elements(screen, font, sim_state):
         screen.blit(font.render("Selected Creature", True, COLOR_TEXT), (x, y)); y += 30
         for line in info_lines: screen.blit(font.render(line, True, COLOR_TEXT), (x, y)); y += 25
     else: sim_state['selected_creature'] = None
-
     chart_width, chart_height, chart_spacing = 300, 120, 10
     chart_x_start = SCREEN_WIDTH - chart_width - 10
     draw_score_chart(screen, font, sim_state['carnivore_score_history'], (chart_x_start, SCREEN_HEIGHT - chart_height - 10), (chart_width, chart_height), COLOR_CARNIVORE, "Carnivore Top Score")
     draw_score_chart(screen, font, sim_state['herbivore_score_history'], (chart_x_start, SCREEN_HEIGHT - (chart_height * 2) - chart_spacing - 10), (chart_width, chart_height), COLOR_CREATURE, "Herbivore Top Score")
-
     if sim_state['paused']:
         screen.blit(font.render("PAUSED", True, (255, 100, 100)), (SCREEN_WIDTH // 2 - 60, 20))
-    
     pygame.display.flip()
 
 class GameMetrics:
     def __init__(self, sim_state):
-        # Create Prometheus metrics
         self.metric_game_uptime_seconds = Counter('evolution_running_seconds', 'Time the game has been running in seconds')
         self.game_start_time = time.time()
         self.metric_current_generation_number = Gauge('evolution_current_generation_number', 'Current generation number in the simulation')
@@ -687,66 +651,59 @@ class GameMetrics:
         self.metric_current_herbivore_count = Gauge('evolution_current_herbivore_count', 'Current number of herbivores in the simulation')
         self.metric_current_carnivore_count = Gauge('evolution_current_carnivore_count', 'Current number of carnivores in the simulation')
         self.metric_current_food_count = Gauge('evolution_current_food_count', 'Current number of food items in the simulation')
-
-        self.metric_best_herbivore_gene = Gauge('evolution_best_herbivore_gene', 
-                                                'Best herbivore gene in the current generation',
-                                                ['gene']
-                                                )
-        self.metric_best_carnivore_gene = Gauge('evolution_best_carnivore_gene', 
-                                                'Best carnivore gene in the current generation',
-                                                ['gene']
-                                                )
-
+        self.metric_best_herbivore_gene = Gauge('evolution_best_herbivore_gene', 'Best herbivore gene in the current generation', ['gene'])
+        self.metric_best_carnivore_gene = Gauge('evolution_best_carnivore_gene', 'Best carnivore gene in the current generation', ['gene'])
         self.metric_creature_brain_topology_input_size = Gauge('evolution_creature_brain_topology_input_size', 'Input size of the creature brain topology')
         self.metric_creature_brain_topology_hidden_layers = Gauge('evolution_creature_brain_topology_hidden_layer_sizes', 'Hidden layer sizes of the creature brain topology')
         self.metric_creature_brain_topology_output_size = Gauge('evolution_creature_brain_topology_output_size', 'Output size of the creature brain topology')
         self.metric_creature_brain_topology_hidden_layer_neurons = Gauge('evolution_creature_brain_topology_hidden_layer_neurons', 'Number of neurons in each hidden layer of the creature brain topology')
+        # --- New Stamina Metrics ---
+        self.metric_best_herbivore_current_stamina = Gauge('evolution_best_herbivore_current_stamina', 'Current stamina of the best herbivore')
+        self.metric_best_carnivore_current_stamina = Gauge('evolution_best_carnivore_current_stamina', 'Current stamina of the best carnivore')
 
-        # initialize metrics with starting values
         best_herbivore = max(sim_state['creatures'], key=lambda c: c.score, default=None)
         best_carnivore = max(sim_state['carnivores'], key=lambda c: c.score, default=None)
-
-        self.metric_game_uptime_seconds.inc(0)  # Initialize counter to 0
-        self.metric_current_generation_number.set(0)  # Start at generation 1
-        self.metric_best_herbivore_score.set(0)  # Initialize to 0
-        self.metric_best_carnivore_score.set(0)  # Initialize to 0
+        self.metric_game_uptime_seconds.inc(0)
+        self.metric_current_generation_number.set(0)
+        self.metric_best_herbivore_score.set(0)
+        self.metric_best_carnivore_score.set(0)
         self.metric_current_herbivore_count.set(len(sim_state['creatures']))
         self.metric_current_carnivore_count.set(len(sim_state['carnivores']))
         self.metric_current_food_count.set(len(sim_state['food_items']))
-        
+        self.metric_best_herbivore_current_stamina.set(0)
+        self.metric_best_carnivore_current_stamina.set(0)
         for gene, value in best_herbivore.genes.items() if best_herbivore else DEFAULT_HERBIVORE_GENES.items():
             self.metric_best_herbivore_gene.labels(gene).set(value)
         for gene, value in best_carnivore.genes.items() if best_carnivore else DEFAULT_CARNIVORE_GENES.items():
             self.metric_best_carnivore_gene.labels(gene).set(value)
-        
         self.metric_creature_brain_topology_input_size.set(BRAIN_TOPOLOGY[0])
-        self.metric_creature_brain_topology_hidden_layers.set(len(BRAIN_TOPOLOGY) - 2)  # Exclude input and output layers
+        self.metric_creature_brain_topology_hidden_layers.set(len(BRAIN_TOPOLOGY) - 2)
         self.metric_creature_brain_topology_output_size.set(BRAIN_TOPOLOGY[-1])
-        self.metric_creature_brain_topology_hidden_layer_neurons.set((BRAIN_TOPOLOGY[1]))  # Sum of all hidden layer sizes
+        self.metric_creature_brain_topology_hidden_layer_neurons.set((BRAIN_TOPOLOGY[1]))
 
     def update(self, sim_state):
-
         best_herbivore = max(sim_state['creatures'], key=lambda c: c.score, default=None)
         best_carnivore = max(sim_state['carnivores'], key=lambda c: c.score, default=None)
         frame_time_seconds = sim_state['clock'].tick(60) / 1000.0
-        
         self.metric_game_uptime_seconds.inc(frame_time_seconds)
-        self.metric_current_generation_number.set(sim_state['generation'])  # Start at generation 1
+        self.metric_current_generation_number.set(sim_state['generation'])
         self.metric_best_herbivore_score.set(best_herbivore.score if best_herbivore else 0)
         self.metric_best_carnivore_score.set(best_carnivore.score if best_carnivore else 0)
         self.metric_current_herbivore_count.set(len(sim_state['creatures']))
         self.metric_current_carnivore_count.set(len(sim_state['carnivores']))
         self.metric_current_food_count.set(len(sim_state['food_items']))
+        # --- Update Stamina Metrics ---
+        self.metric_best_herbivore_current_stamina.set(best_herbivore.stamina if best_herbivore else 0)
+        self.metric_best_carnivore_current_stamina.set(best_carnivore.stamina if best_carnivore else 0)
 
         for gene, value in best_herbivore.genes.items() if best_herbivore else DEFAULT_HERBIVORE_GENES.items():
             self.metric_best_herbivore_gene.labels(gene).set(value)
         for gene, value in best_carnivore.genes.items() if best_carnivore else DEFAULT_CARNIVORE_GENES.items():
             self.metric_best_carnivore_gene.labels(gene).set(value)
-
         self.metric_creature_brain_topology_input_size.set(BRAIN_TOPOLOGY[0])
-        self.metric_creature_brain_topology_hidden_layers.set(len(BRAIN_TOPOLOGY) - 2)  # Exclude input and output layers
+        self.metric_creature_brain_topology_hidden_layers.set(len(BRAIN_TOPOLOGY) - 2)
         self.metric_creature_brain_topology_output_size.set(BRAIN_TOPOLOGY[-1])
-        self.metric_creature_brain_topology_hidden_layer_neurons.set((BRAIN_TOPOLOGY[1]))  # Sum of all hidden layer sizes
+        self.metric_creature_brain_topology_hidden_layer_neurons.set((BRAIN_TOPOLOGY[1]))
 
 # =============================================================================
 # Main Simulation
@@ -756,7 +713,6 @@ def main():
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("Evolution Sim | S to Save, L to Load, SPACE to Pause")
     font = pygame.font.Font(None, 30)
-
     sim_state = {
         'running': True, 'paused': False, 'clock': pygame.time.Clock(),
         'world_bounds': (SCREEN_WIDTH, SCREEN_HEIGHT),
@@ -768,28 +724,19 @@ def main():
         'herbivore_score_history': [], 'carnivore_score_history': [],
         'generation': 1, 'generation_timer': 0, 'selected_creature': None,
     }
-
     prometheus_metrics = GameMetrics(sim_state)
-
     while sim_state['running']:
         handle_events(sim_state, prometheus_metrics)
-
         prometheus_metrics.update(sim_state)
-
         if not sim_state['paused']:
             update_world(sim_state)
             if sim_state['generation_timer'] > GENERATION_TIME or not sim_state['creatures'] or not sim_state['carnivores']:
                 evolve_population(sim_state)
-        
         draw_elements(screen, font, sim_state)
         sim_state['clock'].tick(60)
-
-        # --- Update the Prometheus metrics ---
         prometheus_metrics.update(sim_state)
-    
     pygame.quit()
 
 if __name__ == "__main__":
-    # Start up the server to expose the metrics.
     start_http_server(8000)
     main()
