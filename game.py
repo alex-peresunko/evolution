@@ -66,7 +66,7 @@ BRAIN_TOPOLOGY = [NUM_WHISKERS + 2 + 2 + 3 + 4 + 1, 8, 2]
 # --- Evolution Configuration ---
 MUTATION_RATE = 0.02
 MUTATION_AMOUNT = 0.02
-GENE_MUTATION_AMOUNT = 0.1
+GENE_MUTATION_AMOUNT = 0.05 # Reduced from 0.1 for smoother evolution
 SURVIVAL_RATE = 0.20
 AUTOSAVE_INTERVAL = 100
 
@@ -218,7 +218,7 @@ class Creature:
         self.max_speed = self.genes["max_speed"]
         self.sight_distance = self.genes["sight_distance"]
         self.sight_angle = self.genes["sight_angle"]
-        self.max_stamina = self.genes["max_stamina"]
+        self.max_stamina = self.genes.get("max_stamina", 1000) # Safely get stamina gene
         self.stamina = self.max_stamina # Start with full stamina
 
         self.whiskers = [0.0] * NUM_WHISKERS
@@ -444,19 +444,23 @@ def combine_brains(brain1, brain2):
         child.biases[i][mask_b] = brain2.biases[i][mask_b]
     return child
 
-def combine_genes(genes1, genes2):
+def combine_genes(genes1, genes2, default_genes):
     child_genes = {}
     for key in genes1:
-        avg_gene = (genes1[key] + genes2[key]) / 2.0
-        mutation = avg_gene * random.uniform(-GENE_MUTATION_AMOUNT, GENE_MUTATION_AMOUNT)
-        child_genes[key] = max(0.1, avg_gene + mutation)
+        if key in genes2 and key in default_genes:
+            avg_gene = (genes1[key] + genes2[key]) / 2.0
+            base_value = default_genes[key]
+            mutation = base_value * random.uniform(-GENE_MUTATION_AMOUNT, GENE_MUTATION_AMOUNT)
+            child_genes[key] = max(0.1, avg_gene + mutation)
     return child_genes
 
-def mutate_genes(genes):
+def mutate_genes(genes, default_genes):
     mutated_genes = {}
     for key, value in genes.items():
-        mutation = value * random.uniform(-GENE_MUTATION_AMOUNT, GENE_MUTATION_AMOUNT)
-        mutated_genes[key] = max(0.1, value + mutation)
+        if key in default_genes:
+            base_value = default_genes[key]
+            mutation = base_value * random.uniform(-GENE_MUTATION_AMOUNT, GENE_MUTATION_AMOUNT)
+            mutated_genes[key] = max(0.1, value + mutation)
     return mutated_genes
 
 def draw_score_chart(screen, font, history, position, size, color, title):
@@ -499,7 +503,7 @@ def handle_events(sim_state, prometheus_metrics):
                     for _ in range(NUM_HERBIVOROUS - 1):
                         mutated_brain = progenitor_brain.copy()
                         mutated_brain.mutate(MUTATION_RATE, MUTATION_AMOUNT)
-                        mutated_genes = mutate_genes(progenitor_genes)
+                        mutated_genes = mutate_genes(progenitor_genes, DEFAULT_HERBIVORE_GENES)
                         new_herbivores.append(Creature(sim_state['world_bounds'], brain=mutated_brain, genes=mutated_genes))
                     sim_state['creatures'] = new_herbivores
                     print(f"Loaded new herbivore population from generation {gen}.")
@@ -513,7 +517,7 @@ def handle_events(sim_state, prometheus_metrics):
                     for _ in range(NUM_CARNIVORES - 1):
                         mutated_brain = progenitor_brain_c.copy()
                         mutated_brain.mutate(MUTATION_RATE, MUTATION_AMOUNT)
-                        mutated_genes = mutate_genes(progenitor_genes_c)
+                        mutated_genes = mutate_genes(progenitor_genes_c, DEFAULT_CARNIVORE_GENES)
                         new_carnivores.append(Creature(sim_state['world_bounds'], brain=mutated_brain, is_carnivore=True, genes=mutated_genes))
                     sim_state['carnivores'] = new_carnivores
                     print(f"Loaded new carnivore population.")
@@ -561,7 +565,10 @@ def update_world(sim_state):
             best_carnivore.is_best = True
     new_offspring = []
     now = time.time()
-    for group, pop_limit, max_health in [(sim_state['creatures'], NUM_HERBIVOROUS, HERBIVORE_HEALTH), (sim_state['carnivores'], NUM_CARNIVORES, CARNIVORE_HEALTH)]:
+    for group, pop_limit, max_health, default_genes in [
+        (sim_state['creatures'], NUM_HERBIVOROUS, HERBIVORE_HEALTH, DEFAULT_HERBIVORE_GENES), 
+        (sim_state['carnivores'], NUM_CARNIVORES, CARNIVORE_HEALTH, DEFAULT_CARNIVORE_GENES)
+    ]:
         pop_cap = pop_limit * REPRODUCTION_POP_CAP_FACTOR
         for i, p1 in enumerate(group):
             p1_is_eligible = (p1.health > max_health * REPRODUCTION_HEALTH_THRESHOLD and p1.reproductions < MAX_REPRODUCTIONS and (p1.last_reproduction_time is None or now - p1.last_reproduction_time > REPRODUCTION_COOLDOWN))
@@ -571,7 +578,7 @@ def update_world(sim_state):
                 p2_is_eligible = (p2.health > max_health * REPRODUCTION_HEALTH_THRESHOLD and p2.reproductions < MAX_REPRODUCTIONS and (p2.last_reproduction_time is None or now - p2.last_reproduction_time > REPRODUCTION_COOLDOWN))
                 is_close_enough = p1.pos.distance_to(p2.pos) < p1.size * 3.0
                 if p2_is_eligible and is_close_enough:
-                    child_genes = combine_genes(p1.genes, p2.genes)
+                    child_genes = combine_genes(p1.genes, p2.genes, default_genes)
                     child_brain = combine_brains(p1.brain, p2.brain)
                     child = Creature(sim_state['world_bounds'], brain=child_brain, is_carnivore=p1.is_carnivore, genes=child_genes)
                     child.pos = (p1.pos + p2.pos) / 2; child.birth_time = now
@@ -593,7 +600,7 @@ def evolve_population(sim_state):
             parent = random.choice(survivors)
             new_brain = parent.brain.copy()
             new_brain.mutate(MUTATION_RATE, MUTATION_AMOUNT)
-            new_genes = mutate_genes(parent.genes)
+            new_genes = mutate_genes(parent.genes, default_genes)
             new_pop.append(Creature(sim_state['world_bounds'], brain=new_brain, is_carnivore=is_carnivore, genes=new_genes))
         return new_pop
     sim_state['creatures'].sort(key=lambda c: c.score, reverse=True)
@@ -657,7 +664,6 @@ class GameMetrics:
         self.metric_creature_brain_topology_hidden_layers = Gauge('evolution_creature_brain_topology_hidden_layer_sizes', 'Hidden layer sizes of the creature brain topology')
         self.metric_creature_brain_topology_output_size = Gauge('evolution_creature_brain_topology_output_size', 'Output size of the creature brain topology')
         self.metric_creature_brain_topology_hidden_layer_neurons = Gauge('evolution_creature_brain_topology_hidden_layer_neurons', 'Number of neurons in each hidden layer of the creature brain topology')
-        # --- New Stamina Metrics ---
         self.metric_best_herbivore_current_stamina = Gauge('evolution_best_herbivore_current_stamina', 'Current stamina of the best herbivore')
         self.metric_best_carnivore_current_stamina = Gauge('evolution_best_carnivore_current_stamina', 'Current stamina of the best carnivore')
 
@@ -692,7 +698,6 @@ class GameMetrics:
         self.metric_current_herbivore_count.set(len(sim_state['creatures']))
         self.metric_current_carnivore_count.set(len(sim_state['carnivores']))
         self.metric_current_food_count.set(len(sim_state['food_items']))
-        # --- Update Stamina Metrics ---
         self.metric_best_herbivore_current_stamina.set(best_herbivore.stamina if best_herbivore else 0)
         self.metric_best_carnivore_current_stamina.set(best_carnivore.stamina if best_carnivore else 0)
 
