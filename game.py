@@ -49,11 +49,13 @@ HEALTH_LOSS_SPEED_FACTOR = 1
 REPRODUCTION_COOLDOWN = 3
 REPRODUCTION_POP_CAP_FACTOR = 5
 SMELL_DISTANCE = 400
+MAX_NORMALIZED_SIGHT_DISTANCE = 2000 # For normalizing sight distance gene input
 HEALTH_GAIN_SIZE_PENALTY = 0.01 # Penalty factor for health gain based on size.
 
 # --- Neural Network Configuration ---
 NUM_WHISKERS = 3
-BRAIN_TOPOLOGY = [NUM_WHISKERS + 2 + 2 + 4, 8, 2] # +2 for smell (angle, strength)
+# Inputs: Whiskers(3), Target(2), Smell(2), State(3), Self-Aware(4) = 14 total
+BRAIN_TOPOLOGY = [NUM_WHISKERS + 2 + 2 + 3 + 4, 8, 2]
 
 # --- Evolution Configuration ---
 MUTATION_RATE = 0.02
@@ -202,9 +204,9 @@ class Creature:
         # --- Enforce a size cap based on the creature's base type ---
         base_size = (DEFAULT_CARNIVORE_GENES['size'] if self.is_carnivore 
                      else DEFAULT_HERBIVORE_GENES['size'])
-        max_size = base_size * 3.0
-        # Clamp the 'size' gene to be within the valid range [0.1, max_size]
-        self.genes["size"] = max(0.1, min(self.genes["size"], max_size))
+        self.max_size_cap = base_size * 3.0
+        # Clamp the 'size' gene to be within the valid range [0.1, max_size_cap]
+        self.genes["size"] = max(0.1, min(self.genes["size"], self.max_size_cap))
 
         self.size = self.genes["size"]
         self.max_speed = self.genes["max_speed"]
@@ -313,10 +315,17 @@ class Creature:
                     smell_strength = 1.0 - (dist / SMELL_DISTANCE)
         inputs.extend([smell_angle, smell_strength])
 
+        # --- Internal State Inputs ---
         inputs.append(self.health / self.max_health)
-        inputs.append(self.current_speed / self.max_speed if self.max_speed > 0 else 0)
         inputs.append(math.sin(self.angle))
         inputs.append(math.cos(self.angle))
+
+        # --- Self-Awareness Inputs (Genes + State) ---
+        inputs.append(self.size / self.max_size_cap)
+        inputs.append(self.current_speed / self.max_speed if self.max_speed > 0 else 0)
+        inputs.append(self.sight_distance / MAX_NORMALIZED_SIGHT_DISTANCE)
+        inputs.append(self.sight_angle / (2 * math.pi))
+        
         return inputs
 
     def get_target_info(self, target):
