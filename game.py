@@ -243,7 +243,9 @@ class Creature:
         inputs = self.see(local_food, obstacles, local_herbivores, local_carnivores)
         return self.think(inputs)
 
-    def act(self, outputs, global_food_list, global_herbivore_list, obstacles):
+# ... inside the Creature class ...
+
+    def act(self, outputs, global_food_list, global_herbivore_list, obstacles, grid):
         # --- Aging and Growth ---
         self.age += 1
         if not self.is_adult:
@@ -252,7 +254,6 @@ class Creature:
                 self.size = self.genetic_size
                 self.max_speed = self.genetic_max_speed
             else:
-                # Grow linearly from juvenile size to adult size
                 growth_ratio = self.age / ADULTHOOD_AGE
                 growth_factor = JUVENILE_SIZE_FACTOR + (1 - JUVENILE_SIZE_FACTOR) * growth_ratio
                 self.size = self.genetic_size * growth_factor
@@ -272,45 +273,55 @@ class Creature:
         self.stamina = max(0, min(self.stamina, self.max_stamina))
 
         self.pos += pygame.math.Vector2(math.cos(self.angle), math.sin(self.angle)) * new_speed
-        self.pos.x %= self.world_bounds[0]; self.pos.y %= self.world_bounds[1]
+        self.pos.x %= self.world_bounds[0]
+        self.pos.y %= self.world_bounds[1]
         self.health -= (HEALTH_LOSS_PER_TICK + (new_speed * HEALTH_LOSS_SPEED_FACTOR))
         self.current_speed = new_speed
 
+        # --- CORRECTED & EFFICIENT INTERACTION LOGIC ---
+        # Query a SMALL area for physical interactions like eating.
+        interaction_radius = self.size * 2 
+        nearby_objects = grid.query(self.pos, interaction_radius)
+
         if self.is_carnivore:
             base_size = DEFAULT_CARNIVORE_GENES['size']
-            for prey in global_herbivore_list[:]:
-                # --- MODIFICATION: More realistic carnivore attack mechanism ---
-                # 1. First, check if the prey is close enough (standard collision check)
-                is_close_enough = self.pos.distance_to(prey.pos) < (self.size + prey.size)
-
-                if prey.id != self.id and is_close_enough:
-                    # 2. If close, now check if the prey is in the "bite cone"
-                    vec_to_prey = prey.pos - self.pos
-                    angle_to_prey = math.atan2(vec_to_prey.y, vec_to_prey.x)
-                    
-                    # Normalize the angle difference to be between -pi and +pi
-                    angle_diff = (angle_to_prey - self.angle + math.pi) % (2 * math.pi) - math.pi
-
-                    # 3. Only eat if the prey is in front of the carnivore
-                    if abs(angle_diff) <= CARNIVORE_BITE_ANGLE / 2:
-                        global_herbivore_list.remove(prey)
-                        base_health_gain = CARNIVORE_HEALTH_PER_FOOD
-                        size_penalty_denominator = 1 + (self.genetic_size - base_size) * HEALTH_GAIN_SIZE_PENALTY
-                        actual_health_gain = base_health_gain / max(0.1, size_penalty_denominator)
-                        self.health = min(self.max_health, self.health + actual_health_gain)
-                        self.score += 1
-                # --- END OF MODIFICATION ---
-        else:
+            for obj in nearby_objects:
+                if isinstance(obj, Creature) and not obj.is_carnivore:
+                    prey = obj
+                    is_close_enough = self.pos.distance_to(prey.pos) < (self.size + prey.size)
+                    if is_close_enough:
+                        vec_to_prey = prey.pos - self.pos
+                        if vec_to_prey.length() > 0:
+                            angle_to_prey = math.atan2(vec_to_prey.y, vec_to_prey.x)
+                            angle_diff = (angle_to_prey - self.angle + math.pi) % (2 * math.pi) - math.pi
+                            if abs(angle_diff) <= CARNIVORE_BITE_ANGLE / 2:
+                                # FIX: Check if prey still exists before removing to prevent crash
+                                if prey in global_herbivore_list:
+                                    global_herbivore_list.remove(prey)
+                                    base_health_gain = CARNIVORE_HEALTH_PER_FOOD
+                                    size_penalty_denominator = 1 + (self.genetic_size - base_size) * HEALTH_GAIN_SIZE_PENALTY
+                                    actual_health_gain = base_health_gain / max(0.1, size_penalty_denominator)
+                                    self.health = min(self.max_health, self.health + actual_health_gain)
+                                    self.score += 1
+                                    break # Eat one prey per frame
+        else: # Is Herbivore
             base_size = DEFAULT_HERBIVORE_GENES['size']
-            for food in global_food_list[:]:
+            for obj in nearby_objects:
+                if isinstance(obj, Food):
+                    food = obj
                     if self.pos.distance_to(food.pos) < (self.size + FOOD_RADIUS):
-                        global_food_list.remove(food)
-                        base_health_gain = food.get_health_value()
-                        size_penalty_denominator = 1 + (self.genetic_size - base_size) * HEALTH_GAIN_SIZE_PENALTY
-                        actual_health_gain = base_health_gain / max(0.1, size_penalty_denominator)
-                        self.health = min(self.max_health, self.health + actual_health_gain)
-                        self.score += 1
+                        # FIX: Check if food still exists before removing
+                        if food in global_food_list:
+                            global_food_list.remove(food)
+                            base_health_gain = food.get_health_value()
+                            size_penalty_denominator = 1 + (self.genetic_size - base_size) * HEALTH_GAIN_SIZE_PENALTY
+                            actual_health_gain = base_health_gain / max(0.1, size_penalty_denominator)
+                            self.health = min(self.max_health, self.health + actual_health_gain)
+                            self.score += 1
+                            break # Eat one food per frame
 
+        # --- CORRECTED OBSTACLE COLLISION ---
+        # Revert to checking against the global list, which is physically correct and cheap.
         for obs in obstacles:
             creature_rect = pygame.Rect(self.pos.x - self.size, self.pos.y - self.size, self.size * 2, self.size * 2)
             if obs.rect.colliderect(creature_rect):
@@ -570,6 +581,16 @@ def handle_events(sim_state, prometheus_metrics):
                 sim_state['drawing_enabled'] = not sim_state['drawing_enabled']
                 draw_status = "Enabled" if sim_state['drawing_enabled'] else "Disabled"
                 print(f"Drawing {draw_status}")
+            if event.key == pygame.K_b:
+                sim_state['background_mode'] = not sim_state['background_mode']
+                if sim_state['background_mode']:
+                    sim_state['drawing_enabled'] = False
+                    sim_state['fps_limited'] = False
+                    print("--- BACKGROUND MODE ENGAGED (Max Speed). Press Ctrl+C in terminal to stop. ---")
+                else:
+                    sim_state['drawing_enabled'] = True
+                    sim_state['fps_limited'] = True
+                    print("--- Background Mode Disengaged ---")
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mx, my = event.pos; found = False
@@ -597,7 +618,7 @@ def update_world(sim_state):
         local_herbivores = [obj for obj in local_objects if isinstance(obj, Creature) and not obj.is_carnivore]
         local_carnivores = [obj for obj in local_objects if isinstance(obj, Creature) and obj.is_carnivore]
         outputs = c.perceive_and_think(local_food, local_herbivores, local_carnivores, sim_state['obstacles'])
-        c.act(outputs, sim_state['food_items'], sim_state['creatures'], sim_state['obstacles'])
+        c.act(outputs, sim_state['food_items'], sim_state['creatures'], sim_state['obstacles'], grid)
     sim_state['creatures'][:] = [c for c in sim_state['creatures'] if c.is_alive()]
     sim_state['carnivores'][:] = [c for c in sim_state['carnivores'] if c.is_alive()]
     if sim_state['creatures']:
@@ -884,12 +905,18 @@ def main():
             'carnivore': {'score': -1, 'genes': None, 'brain': None}
         },
         'fps_limited': True,
-        'drawing_enabled': True
+        'drawing_enabled': True,
+        'background_mode': False
     }
     prometheus_metrics = GameMetrics(sim_state)
     while sim_state['running']:
-        handle_events(sim_state, prometheus_metrics)
-        prometheus_metrics.update(sim_state)
+        if not sim_state['background_mode']:
+            handle_events(sim_state, prometheus_metrics)
+        else: # Minimal event check to prevent window freeze
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    sim_state['running'] = False
+
         if not sim_state['paused']:
             update_world(sim_state)
             if sim_state['generation_timer'] > GENERATION_TIME:
