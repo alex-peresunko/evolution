@@ -44,6 +44,7 @@ HERBIVORE_HEALTH_PER_FOOD = 1000  # Health gained by herbivores per food
 CARNIVORE_HEALTH_PER_FOOD = 1000  # Health gained by carnivores per prey
 CREATURE_ROTATION_SPEED = 0.8  # Rotation speed of creatures
 HEALTH_LOST_ON_HIT = 50  # Health lost when colliding with obstacles
+CARNIVORE_BITE_ANGLE = math.radians(60) # NEW: The angle of the carnivore's attack cone
 REPRODUCTION_HEALTH_THRESHOLD = 0.2  # Minimum health ratio for reproduction
 MAX_REPRODUCTIONS = 50  # Maximum number of reproductions per creature
 HEALTH_LOSS_PER_TICK = 2  # Health lost per tick
@@ -278,13 +279,27 @@ class Creature:
         if self.is_carnivore:
             base_size = DEFAULT_CARNIVORE_GENES['size']
             for prey in global_herbivore_list[:]:
-                if prey.id != self.id and self.pos.distance_to(prey.pos) < (self.size + prey.size):
-                    global_herbivore_list.remove(prey)
-                    base_health_gain = CARNIVORE_HEALTH_PER_FOOD
-                    size_penalty_denominator = 1 + (self.genetic_size - base_size) * HEALTH_GAIN_SIZE_PENALTY
-                    actual_health_gain = base_health_gain / max(0.1, size_penalty_denominator)
-                    self.health = min(self.max_health, self.health + actual_health_gain)
-                    self.score += 1
+                # --- MODIFICATION: More realistic carnivore attack mechanism ---
+                # 1. First, check if the prey is close enough (standard collision check)
+                is_close_enough = self.pos.distance_to(prey.pos) < (self.size + prey.size)
+
+                if prey.id != self.id and is_close_enough:
+                    # 2. If close, now check if the prey is in the "bite cone"
+                    vec_to_prey = prey.pos - self.pos
+                    angle_to_prey = math.atan2(vec_to_prey.y, vec_to_prey.x)
+                    
+                    # Normalize the angle difference to be between -pi and +pi
+                    angle_diff = (angle_to_prey - self.angle + math.pi) % (2 * math.pi) - math.pi
+
+                    # 3. Only eat if the prey is in front of the carnivore
+                    if abs(angle_diff) <= CARNIVORE_BITE_ANGLE / 2:
+                        global_herbivore_list.remove(prey)
+                        base_health_gain = CARNIVORE_HEALTH_PER_FOOD
+                        size_penalty_denominator = 1 + (self.genetic_size - base_size) * HEALTH_GAIN_SIZE_PENALTY
+                        actual_health_gain = base_health_gain / max(0.1, size_penalty_denominator)
+                        self.health = min(self.max_health, self.health + actual_health_gain)
+                        self.score += 1
+                # --- END OF MODIFICATION ---
         else:
             base_size = DEFAULT_HERBIVORE_GENES['size']
             for food in global_food_list[:]:
