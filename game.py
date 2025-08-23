@@ -641,8 +641,56 @@ def update_world(sim_state):
 def evolve_population(sim_state, prometheus_metrics):
     sim_state['herbivore_score_history'].append(max([c.score for c in sim_state['creatures']] + [0]))
     sim_state['carnivore_score_history'].append(max([c.score for c in sim_state['carnivores']] + [0]))
+
+    # --- NEW: Update the Hall of Fame ---
+    hall_of_fame = sim_state['hall_of_fame']
+    best_herbivore_of_gen = max(sim_state['creatures'], key=lambda c: c.score, default=None)
+    if best_herbivore_of_gen and best_herbivore_of_gen.score > hall_of_fame['herbivore']['score']:
+        print(f"New Herbivore record! Gen {sim_state['generation']}, Score: {best_herbivore_of_gen.score}")
+        hall_of_fame['herbivore']['score'] = best_herbivore_of_gen.score
+        hall_of_fame['herbivore']['genes'] = best_herbivore_of_gen.genes.copy()
+        hall_of_fame['herbivore']['brain'] = best_herbivore_of_gen.brain.copy()
+
+    best_carnivore_of_gen = max(sim_state['carnivores'], key=lambda c: c.score, default=None)
+    if best_carnivore_of_gen and best_carnivore_of_gen.score > hall_of_fame['carnivore']['score']:
+        print(f"New Carnivore record! Gen {sim_state['generation']}, Score: {best_carnivore_of_gen.score}")
+        hall_of_fame['carnivore']['score'] = best_carnivore_of_gen.score
+        hall_of_fame['carnivore']['genes'] = best_carnivore_of_gen.genes.copy()
+        hall_of_fame['carnivore']['brain'] = best_carnivore_of_gen.brain.copy()
+    
+    # --- The get_new_population function is now nested to easily access hall_of_fame --- 
     def get_new_population(survivors, count, is_carnivore, default_genes):
-        if not survivors: return [Creature(sim_state['world_bounds'], is_carnivore=is_carnivore, genes=default_genes) for _ in range(count)]
+        species = 'carnivore' if is_carnivore else 'herbivore'
+        
+        # If the species is extinct, use the Hall of Fame for hybrid repopulation
+        if not survivors:
+            print(f"--- {species.capitalize()} extinction event! Repopulating from Hall of Fame and defaults. ---")
+            progenitor_record = hall_of_fame[species]
+            new_pop = []
+            
+            # If a record exists in the hall of fame, use it
+            if progenitor_record['genes'] and progenitor_record['brain']:
+                # Add one "pure" progenitor from the Hall of Fame
+                progenitor = Creature(sim_state['world_bounds'], brain=progenitor_record['brain'].copy(), 
+                                      is_carnivore=is_carnivore, genes=progenitor_record['genes'].copy())
+                new_pop.append(progenitor)
+                
+                # Create half the population as mutated descendants of the progenitor
+                num_mutated_descendants = (count - 1) // 2
+                for _ in range(num_mutated_descendants):
+                    new_brain = progenitor_record['brain'].copy()
+                    new_brain.mutate(MUTATION_RATE, MUTATION_AMOUNT)
+                    new_genes = mutate_genes(progenitor_record['genes'], default_genes)
+                    new_pop.append(Creature(sim_state['world_bounds'], brain=new_brain, is_carnivore=is_carnivore, genes=new_genes))
+            
+            # Fill the rest of the population with brand new default creatures
+            num_defaults = count - len(new_pop)
+            for _ in range(num_defaults):
+                new_pop.append(Creature(sim_state['world_bounds'], is_carnivore=is_carnivore, genes=default_genes))
+            
+            return new_pop
+        
+        # Standard reproduction from survivors
         new_pop = []
         for _ in range(count):
             parent = random.choice(survivors)
@@ -651,9 +699,11 @@ def evolve_population(sim_state, prometheus_metrics):
             new_genes = mutate_genes(parent.genes, default_genes)
             new_pop.append(Creature(sim_state['world_bounds'], brain=new_brain, is_carnivore=is_carnivore, genes=new_genes))
         return new_pop
+    
     sim_state['creatures'].sort(key=lambda c: c.score, reverse=True)
     num_to_select_h = max(1, int(len(sim_state['creatures']) * SURVIVAL_RATE)) if sim_state['creatures'] else 0
     survivors_h = sim_state['creatures'][:num_to_select_h]
+    
     sim_state['carnivores'].sort(key=lambda c: c.score, reverse=True)
     num_to_select_c = max(1, int(len(sim_state['carnivores']) * SURVIVAL_RATE)) if sim_state['carnivores'] else 0
     survivors_c = sim_state['carnivores'][:num_to_select_c]
@@ -669,6 +719,7 @@ def evolve_population(sim_state, prometheus_metrics):
 
     sim_state['creatures'] = get_new_population(survivors_h, NUM_HERBIVOROUS, False, DEFAULT_HERBIVORE_GENES)
     sim_state['carnivores'] = get_new_population(survivors_c, NUM_CARNIVORES, True, DEFAULT_CARNIVORE_GENES)
+    
     sim_state['generation'] += 1
     sim_state['generation_timer'] = 0
 
@@ -788,6 +839,11 @@ def main():
         'obstacles': [Obstacle(random.randint(100, SCREEN_WIDTH-100), random.randint(100, SCREEN_HEIGHT-100), random.randint(50, 150), random.randint(50, 150)) for _ in range(NUM_OBSTACLES)],
         'herbivore_score_history': [], 'carnivore_score_history': [],
         'generation': 1, 'generation_timer': 0, 'selected_creature': None,
+        # --- NEW: Initialize the Hall of Fame ---
+        'hall_of_fame': {
+            'herbivore': {'score': -1, 'genes': None, 'brain': None},
+            'carnivore': {'score': -1, 'genes': None, 'brain': None}
+        }
     }
     prometheus_metrics = GameMetrics(sim_state)
     while sim_state['running']:
@@ -795,7 +851,7 @@ def main():
         prometheus_metrics.update(sim_state)
         if not sim_state['paused']:
             update_world(sim_state)
-            if sim_state['generation_timer'] > GENERATION_TIME or not sim_state['creatures'] or not sim_state['carnivores']:
+            if sim_state['generation_timer'] > GENERATION_TIME:
                 evolve_population(sim_state, prometheus_metrics)
         draw_elements(screen, font, sim_state)
         sim_state['clock'].tick(60)
