@@ -10,84 +10,83 @@ from prometheus_client import start_http_server
 from prometheus_client import Counter, Gauge
 
 # --- Main Simulation Configuration ---
-SCREEN_WIDTH = 2400
-SCREEN_HEIGHT = 1300
-NUM_HERBIVOROUS = 80
-NUM_CARNIVORES = 20
-NUM_FOOD = 100
-FOOD_RADIUS = 5
-FOOD_RESPAWN_RATE = 0.2
-NUM_OBSTACLES = 5
-GENERATION_TIME = 1000
+SCREEN_WIDTH = 2400  # Width of the simulation screen
+SCREEN_HEIGHT = 1300  # Height of the simulation screen
+NUM_HERBIVOROUS = 80  # Initial number of herbivores
+NUM_CARNIVORES = 20  # Initial number of carnivores
+NUM_FOOD = 100  # Initial number of food items
+FOOD_RADIUS = 5  # Radius of food items
+FOOD_RESPAWN_RATE = 0.2  # Probability of food respawning per tick
+NUM_OBSTACLES = 5  # Number of obstacles in the world
+GENERATION_TIME = 1000  # Duration of one generation in ticks
 
 # --- Spatial Grid Configuration ---
-GRID_CELL_SIZE = 500
+GRID_CELL_SIZE = 500  # Size of each cell in the spatial grid for optimization
 
 # --- GENE DEFAULTS: Base values for the first generation ---
-DEFAULT_HERBIVORE_GENES = {
+DEFAULT_HERBIVORE_GENES = {  # Default genetic traits for herbivores
     "size": 10, "max_speed": 5, "sight_distance": 150, "sight_angle": math.radians(180), 
     "max_stamina": 1000, "attractiveness": 10
 }
-DEFAULT_CARNIVORE_GENES = {
+DEFAULT_CARNIVORE_GENES = {  # Default genetic traits for carnivores
     "size": 6, "max_speed": 5, "sight_distance": 500, "sight_angle": math.radians(30), 
     "max_stamina": 1200, "attractiveness": 10
 }
 
 # --- Food Configuration ---
-FOOD_MAX_LIFETIME = 2000
-FOOD_MIN_HEALTH_FACTOR = 0.1
+FOOD_MAX_LIFETIME = 2000  # Maximum lifetime of food before it rots
+FOOD_MIN_HEALTH_FACTOR = 0.1  # Minimum health value of rotting food
 
 # --- Creature Configuration ---
-HERBIVORE_HEALTH = 2000
-CARNIVORE_HEALTH = 3000
-HERBIVORE_HEALTH_PER_FOOD = 1000
-CARNIVORE_HEALTH_PER_FOOD = 1000
-CREATURE_ROTATION_SPEED = 0.8
-HEALTH_LOST_ON_HIT = 50
-REPRODUCTION_HEALTH_THRESHOLD = 0.2
-MAX_REPRODUCTIONS = 50
-HEALTH_LOSS_PER_TICK = 1 
-HEALTH_LOSS_SPEED_FACTOR = 1
-REPRODUCTION_COOLDOWN = 3
-REPRODUCTION_POP_CAP_FACTOR = 10
-MATE_SELECTION_RADIUS = 50 # Radius for a creature to scan for potential mates
-SMELL_DISTANCE = 400
-MAX_NORMALIZED_SIGHT_DISTANCE = 2000 # For normalizing sight distance gene input
-HEALTH_GAIN_SIZE_PENALTY = 0.01 # Penalty factor for health gain based on size.
+HERBIVORE_HEALTH = 2000  # Initial health of herbivores
+CARNIVORE_HEALTH = 3000  # Initial health of carnivores
+HERBIVORE_HEALTH_PER_FOOD = 1000  # Health gained by herbivores per food
+CARNIVORE_HEALTH_PER_FOOD = 1000  # Health gained by carnivores per prey
+CREATURE_ROTATION_SPEED = 0.8  # Rotation speed of creatures
+HEALTH_LOST_ON_HIT = 50  # Health lost when colliding with obstacles
+REPRODUCTION_HEALTH_THRESHOLD = 0.2  # Minimum health ratio for reproduction
+MAX_REPRODUCTIONS = 50  # Maximum number of reproductions per creature
+HEALTH_LOSS_PER_TICK = 1  # Health lost per tick
+HEALTH_LOSS_SPEED_FACTOR = 1  # Additional health loss based on speed
+REPRODUCTION_COOLDOWN = 3  # Cooldown (in seconds) between reproductions
+REPRODUCTION_POP_CAP_FACTOR = 10  # Population cap multiplier for reproduction
+MATE_SELECTION_RADIUS = 50  # Radius for finding mates
+SMELL_DISTANCE = 400  # Maximum distance for smell perception
+MAX_NORMALIZED_SIGHT_DISTANCE = 2000  # Normalization factor for sight distance
+HEALTH_GAIN_SIZE_PENALTY = 0.01  # Penalty for health gain based on size
 
 # --- Life Stage Configuration ---
-ADULTHOOD_AGE = 400             # Ticks until a creature is considered an adult
-JUVENILE_SIZE_FACTOR = 0.4      # A juvenile starts at 40% of its adult size and speed
+ADULTHOOD_AGE = 400  # Ticks until a creature becomes an adult
+JUVENILE_SIZE_FACTOR = 0.4  # Juvenile size as a fraction of adult size
 
 # --- Stamina Configuration ---
-STAMINA_DEPLETION_SPEED_THRESHOLD = 0.7 # Deplete if speed is > 70% of max
-STAMINA_DEPLETION_RATE = 2.5            # Stamina lost per tick at high speed
-STAMINA_REGEN_RATE = 1.0                # Stamina gained per tick when resting
-STAMINA_EXHAUSTION_PENALTY = 0.2        # Speed is multiplied by this when exhausted
+STAMINA_DEPLETION_SPEED_THRESHOLD = 0.7  # Speed threshold for stamina depletion
+STAMINA_DEPLETION_RATE = 2.5  # Stamina lost per tick at high speed
+STAMINA_REGEN_RATE = 1.0  # Stamina regained per tick when resting
+STAMINA_EXHAUSTION_PENALTY = 0.2  # Speed penalty when stamina is exhausted
 
 # --- Neural Network Configuration ---
-NUM_WHISKERS = 3
-# Inputs: Whiskers(3), Target(2), Smell(2), State(3), Self-Aware(4), Stamina(1) = 15 total
-BRAIN_TOPOLOGY = [NUM_WHISKERS + 2 + 2 + 3 + 4 + 1, 8, 2]
+NUM_WHISKERS = 3  # Number of whiskers for obstacle detection
+BRAIN_TOPOLOGY = [NUM_WHISKERS + 2 + 2 + 3 + 4 + 1, 8, 2]  # Neural network structure
 
 # --- Evolution Configuration ---
-MUTATION_RATE = 0.02
-MUTATION_AMOUNT = 0.02
-GENE_MUTATION_AMOUNT = 0.05 # Reduced for smoother evolution
-SURVIVAL_RATE = 0.20
-AUTOSAVE_INTERVAL = 100
+MUTATION_RATE = 0.02  # Probability of mutation per gene
+MUTATION_AMOUNT = 0.02  # Magnitude of mutation
+GENE_MUTATION_AMOUNT = 0.05  # Mutation magnitude for genes
+SURVIVAL_RATE = 0.20  # Fraction of creatures that survive each generation
+AUTOSAVE_INTERVAL = 100  # Interval for autosaving brains
 
 # --- Colors ---
-COLOR_BACKGROUND = (20, 20, 30)
-COLOR_CREATURE = (0, 255, 0)
-COLOR_CARNIVORE = (255, 120, 120)
-COLOR_BEST_CREATURE = (255, 255, 0)
-COLOR_FOOD = (10, 120, 80)
-COLOR_OBSTACLE = (60, 60, 60)
-COLOR_WHISKER = (0, 125, 0)
-COLOR_CARNIVORE_WHISKER = (125, 0, 0)
-COLOR_TEXT = (255, 255, 255)
-COLOR_BIRTH = (0, 255, 255)
+COLOR_BACKGROUND = (20, 20, 30)  # Background color
+COLOR_CREATURE = (0, 255, 0)  # Herbivore color
+COLOR_CARNIVORE = (255, 120, 120)  # Carnivore color
+COLOR_BEST_CREATURE = (255, 255, 0)  # Best creature highlight color
+COLOR_FOOD = (10, 120, 80)  # Food color
+COLOR_OBSTACLE = (60, 60, 60)  # Obstacle color
+COLOR_WHISKER = (0, 125, 0)  # Herbivore whisker color
+COLOR_CARNIVORE_WHISKER = (125, 0, 0)  # Carnivore whisker color
+COLOR_TEXT = (255, 255, 255)  # Text color
+COLOR_BIRTH = (0, 255, 255)  # Color for newly born
 
 # =============================================================================
 # CLASS: SpatialHashGrid (FOR PERFORMANCE)
