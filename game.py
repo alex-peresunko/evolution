@@ -56,7 +56,7 @@ MAX_NORMALIZED_SIGHT_DISTANCE = 2000  # Normalization factor for sight distance
 HEALTH_GAIN_SIZE_PENALTY = 0.01  # Penalty for health gain based on size
 
 # --- Life Stage Configuration ---
-ADULTHOOD_AGE = 400  # Ticks until a creature becomes an adult
+ADULTHOOD_AGE = 100  # Ticks until a creature becomes an adult
 JUVENILE_SIZE_FACTOR = 0.4  # Juvenile size as a fraction of adult size
 
 # --- Stamina Configuration ---
