@@ -774,6 +774,10 @@ class GameMetrics:
         self.metric_current_herbivore_adult_count = Gauge('evolution_current_herbivore_adult_count', 'Current number of adult herbivores')
         self.metric_current_carnivore_adult_count = Gauge('evolution_current_carnivore_adult_count', 'Current number of adult carnivores')
 
+        # --- NEW: Hall of Fame Metrics ---
+        self.metric_hall_of_fame_herbivore_score = Gauge('evolution_hall_of_fame_herbivore_score', 'All-time best score record for a herbivore')
+        self.metric_hall_of_fame_carnivore_score = Gauge('evolution_hall_of_fame_carnivore_score', 'All-time best score record for a carnivore')
+
         best_herbivore = max(sim_state['creatures'], key=lambda c: c.score, default=None)
         best_carnivore = max(sim_state['carnivores'], key=lambda c: c.score, default=None)
         self.metric_game_uptime_seconds.inc(0)
@@ -787,6 +791,11 @@ class GameMetrics:
         self.metric_best_carnivore_current_stamina.set(0)
         self.metric_current_herbivore_adult_count.set(0)
         self.metric_current_carnivore_adult_count.set(0)
+        
+        # --- NEW: Initialize Hall of Fame Metrics ---
+        self.metric_hall_of_fame_herbivore_score.set(0)
+        self.metric_hall_of_fame_carnivore_score.set(0)
+
         for gene, value in best_herbivore.genes.items() if best_herbivore else DEFAULT_HERBIVORE_GENES.items():
             self.metric_best_herbivore_gene.labels(gene).set(value)
         for gene, value in best_carnivore.genes.items() if best_carnivore else DEFAULT_CARNIVORE_GENES.items():
@@ -811,6 +820,11 @@ class GameMetrics:
         self.metric_best_carnivore_current_stamina.set(best_carnivore.stamina if best_carnivore else 0)
         self.metric_current_herbivore_adult_count.set(sum(1 for c in sim_state['creatures'] if c.is_adult))
         self.metric_current_carnivore_adult_count.set(sum(1 for c in sim_state['carnivores'] if c.is_adult))
+
+        # --- NEW: Update Hall of Fame Metrics ---
+        # Use max(0, score) to handle the initial -1 value gracefully on the graph
+        self.metric_hall_of_fame_herbivore_score.set(max(0, sim_state['hall_of_fame']['herbivore']['score']))
+        self.metric_hall_of_fame_carnivore_score.set(max(0, sim_state['hall_of_fame']['carnivore']['score']))
 
         for gene, value in best_herbivore.genes.items() if best_herbivore else DEFAULT_HERBIVORE_GENES.items():
             self.metric_best_herbivore_gene.labels(gene).set(value)
