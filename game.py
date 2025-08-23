@@ -13,7 +13,7 @@ from prometheus_client import Counter, Gauge
 SCREEN_WIDTH = 2400
 SCREEN_HEIGHT = 1300
 NUM_HERBIVOROUS = 80
-NUM_CARNIVORES = 40
+NUM_CARNIVORES = 20
 NUM_FOOD = 100
 FOOD_RADIUS = 5
 FOOD_RESPAWN_RATE = 0.2
@@ -25,10 +25,12 @@ GRID_CELL_SIZE = 500
 
 # --- GENE DEFAULTS: Base values for the first generation ---
 DEFAULT_HERBIVORE_GENES = {
-    "size": 10, "max_speed": 4, "sight_distance": 150, "sight_angle": math.radians(180), "max_stamina": 1000
+    "size": 10, "max_speed": 5, "sight_distance": 150, "sight_angle": math.radians(180), 
+    "max_stamina": 1000, "attractiveness": 10
 }
 DEFAULT_CARNIVORE_GENES = {
-    "size": 6, "max_speed": 5, "sight_distance": 500, "sight_angle": math.radians(30), "max_stamina": 1200
+    "size": 6, "max_speed": 5, "sight_distance": 500, "sight_angle": math.radians(30), 
+    "max_stamina": 1200, "attractiveness": 10
 }
 
 # --- Food Configuration ---
@@ -48,6 +50,7 @@ HEALTH_LOSS_PER_TICK = 1
 HEALTH_LOSS_SPEED_FACTOR = 1
 REPRODUCTION_COOLDOWN = 3
 REPRODUCTION_POP_CAP_FACTOR = 5
+MATE_SELECTION_RADIUS = 50 # Radius for a creature to scan for potential mates
 SMELL_DISTANCE = 400
 MAX_NORMALIZED_SIGHT_DISTANCE = 2000 # For normalizing sight distance gene input
 HEALTH_GAIN_SIZE_PENALTY = 0.01 # Penalty factor for health gain based on size.
@@ -66,7 +69,7 @@ BRAIN_TOPOLOGY = [NUM_WHISKERS + 2 + 2 + 3 + 4 + 1, 8, 2]
 # --- Evolution Configuration ---
 MUTATION_RATE = 0.02
 MUTATION_AMOUNT = 0.02
-GENE_MUTATION_AMOUNT = 0.05 # Reduced from 0.1 for smoother evolution
+GENE_MUTATION_AMOUNT = 0.05 # Reduced for smoother evolution
 SURVIVAL_RATE = 0.20
 AUTOSAVE_INTERVAL = 100
 
@@ -218,8 +221,9 @@ class Creature:
         self.max_speed = self.genes["max_speed"]
         self.sight_distance = self.genes["sight_distance"]
         self.sight_angle = self.genes["sight_angle"]
-        self.max_stamina = self.genes.get("max_stamina", 1000) # Safely get stamina gene
-        self.stamina = self.max_stamina # Start with full stamina
+        self.max_stamina = self.genes.get("max_stamina", 1000)
+        self.attractiveness = self.genes.get("attractiveness", 10)
+        self.stamina = self.max_stamina
 
         self.whiskers = [0.0] * NUM_WHISKERS
         self.whisker_angles = np.linspace(-self.sight_angle / 2, self.sight_angle / 2, NUM_WHISKERS)
@@ -563,32 +567,67 @@ def update_world(sim_state):
         best_carnivore = max(sim_state['carnivores'], key=lambda c: c.score, default=None)
         if best_carnivore:
             best_carnivore.is_best = True
+    
+    # --- New Sexual Selection Reproduction Logic ---
     new_offspring = []
+    reproduced_ids = set()
     now = time.time()
     for group, pop_limit, max_health, default_genes in [
         (sim_state['creatures'], NUM_HERBIVOROUS, HERBIVORE_HEALTH, DEFAULT_HERBIVORE_GENES), 
         (sim_state['carnivores'], NUM_CARNIVORES, CARNIVORE_HEALTH, DEFAULT_CARNIVORE_GENES)
     ]:
         pop_cap = pop_limit * REPRODUCTION_POP_CAP_FACTOR
-        for i, p1 in enumerate(group):
-            p1_is_eligible = (p1.health > max_health * REPRODUCTION_HEALTH_THRESHOLD and p1.reproductions < MAX_REPRODUCTIONS and (p1.last_reproduction_time is None or now - p1.last_reproduction_time > REPRODUCTION_COOLDOWN))
-            if not p1_is_eligible: continue
-            for p2 in group[i + 1:]:
-                if len(group) + len(new_offspring) >= pop_cap: break
-                p2_is_eligible = (p2.health > max_health * REPRODUCTION_HEALTH_THRESHOLD and p2.reproductions < MAX_REPRODUCTIONS and (p2.last_reproduction_time is None or now - p2.last_reproduction_time > REPRODUCTION_COOLDOWN))
-                is_close_enough = p1.pos.distance_to(p2.pos) < p1.size * 3.0
-                if p2_is_eligible and is_close_enough:
-                    child_genes = combine_genes(p1.genes, p2.genes, default_genes)
-                    child_brain = combine_brains(p1.brain, p2.brain)
-                    child = Creature(sim_state['world_bounds'], brain=child_brain, is_carnivore=p1.is_carnivore, genes=child_genes)
-                    child.pos = (p1.pos + p2.pos) / 2; child.birth_time = now
-                    new_offspring.append(child)
-                    p1.health *= 0.7; p2.health *= 0.7
-                    p1.reproductions += 1; p2.reproductions += 1
-                    p1.last_reproduction_time = now; p2.last_reproduction_time = now
-                    break
+        for p1 in group:
+            if p1.id in reproduced_ids or len(group) + len(new_offspring) >= pop_cap:
+                continue
+
+            p1_is_eligible = (p1.health > max_health * REPRODUCTION_HEALTH_THRESHOLD and 
+                              p1.reproductions < MAX_REPRODUCTIONS and 
+                              (p1.last_reproduction_time is None or now - p1.last_reproduction_time > REPRODUCTION_COOLDOWN))
+            
+            if not p1_is_eligible:
+                continue
+
+            # Find all eligible mates within the selection radius
+            potential_mates = []
+            for p2 in group:
+                if p1.id == p2.id or p2.id in reproduced_ids:
+                    continue
+                
+                p2_is_eligible = (p2.health > max_health * REPRODUCTION_HEALTH_THRESHOLD and 
+                                  p2.reproductions < MAX_REPRODUCTIONS and 
+                                  (p2.last_reproduction_time is None or now - p2.last_reproduction_time > REPRODUCTION_COOLDOWN))
+                
+                if p2_is_eligible and p1.pos.distance_to(p2.pos) < MATE_SELECTION_RADIUS:
+                    potential_mates.append(p2)
+
+            # If there are potential mates, choose the most attractive one
+            if potential_mates:
+                best_mate = max(potential_mates, key=lambda mate: mate.attractiveness)
+                
+                # Reproduce with the best mate
+                child_genes = combine_genes(p1.genes, best_mate.genes, default_genes)
+                child_brain = combine_brains(p1.brain, best_mate.brain)
+                child = Creature(sim_state['world_bounds'], brain=child_brain, is_carnivore=p1.is_carnivore, genes=child_genes)
+                child.pos = (p1.pos + best_mate.pos) / 2
+                child.birth_time = now
+                new_offspring.append(child)
+                
+                # Apply costs of reproduction
+                p1.health *= 0.7
+                best_mate.health *= 0.7
+                p1.reproductions += 1
+                best_mate.reproductions += 1
+                p1.last_reproduction_time = now
+                best_mate.last_reproduction_time = now
+                
+                # Mark both as having reproduced this tick
+                reproduced_ids.add(p1.id)
+                reproduced_ids.add(best_mate.id)
+                
     sim_state['creatures'].extend([c for c in new_offspring if not c.is_carnivore])
     sim_state['carnivores'].extend([c for c in new_offspring if c.is_carnivore])
+
 
 def evolve_population(sim_state):
     sim_state['herbivore_score_history'].append(max([c.score for c in sim_state['creatures']] + [0]))
