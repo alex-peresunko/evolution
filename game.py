@@ -562,6 +562,10 @@ def handle_events(sim_state, prometheus_metrics):
                 except FileNotFoundError:
                     print("No carnivore brain file found to load.")
             if event.key == pygame.K_SPACE: sim_state['paused'] = not sim_state['paused']
+            if event.key == pygame.K_RETURN:
+                sim_state['fps_limited'] = not sim_state['fps_limited']
+                limit_status = "Enabled" if sim_state['fps_limited'] else "Disabled"
+                print(f"FPS Limiting {limit_status}")
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mx, my = event.pos; found = False
             for c in sim_state['creatures'] + sim_state['carnivores']:
@@ -747,11 +751,13 @@ def draw_elements(screen, font, sim_state):
         else:
             item.draw(screen)
     text_y = 10
+    limit_status = "Limited (60)" if sim_state['fps_limited'] else "Unlimited"
     stats = [f"Generation: {sim_state['generation']}", f"Time: {GENERATION_TIME - sim_state['generation_timer']}",
              f"Herbivores: {len(sim_state['creatures'])}", f"Carnivores: {len(sim_state['carnivores'])}",
              f"Food: {len(sim_state['food_items'])}",
              f"Top Herbivore Score: {max([c.score for c in sim_state['creatures']] + [0])}",
-             f"Top Carnivore Score: {max([c.score for c in sim_state['carnivores']] + [0])}", f"FPS: {int(sim_state['clock'].get_fps())}" ]
+             f"Top Carnivore Score: {max([c.score for c in sim_state['carnivores']] + [0])}", 
+             f"FPS: {int(sim_state['clock'].get_fps())} [{limit_status}]"]
     for line in stats: screen.blit(font.render(line, True, COLOR_TEXT), (10, text_y)); text_y += 30
     selected = sim_state.get('selected_creature')
     if selected and selected.is_alive():
@@ -872,7 +878,8 @@ def main():
         'hall_of_fame': {
             'herbivore': {'score': -1, 'genes': None, 'brain': None},
             'carnivore': {'score': -1, 'genes': None, 'brain': None}
-        }
+        },
+        'fps_limited': True  # --- NEW: Add the FPS limit flag ---
     }
     prometheus_metrics = GameMetrics(sim_state)
     while sim_state['running']:
@@ -883,7 +890,10 @@ def main():
             if sim_state['generation_timer'] > GENERATION_TIME:
                 evolve_population(sim_state, prometheus_metrics)
         draw_elements(screen, font, sim_state)
-        sim_state['clock'].tick(60)
+        if sim_state['fps_limited']:
+            sim_state['clock'].tick(60)
+        else:
+            sim_state['clock'].tick()  # Uncapped, but still measures deltas for get_fps()
         prometheus_metrics.update(sim_state)
     pygame.quit()
 
