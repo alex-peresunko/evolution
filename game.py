@@ -591,7 +591,6 @@ def update_world(sim_state):
             if p1.id in reproduced_ids or len(group) + len(new_offspring) >= pop_cap:
                 continue
 
-            # --- Reproduction check now includes adulthood ---
             p1_is_eligible = (p1.is_adult and p1.health > max_health * REPRODUCTION_HEALTH_THRESHOLD and 
                               p1.reproductions < MAX_REPRODUCTIONS and 
                               (p1.last_reproduction_time is None or now - p1.last_reproduction_time > REPRODUCTION_COOLDOWN))
@@ -604,7 +603,6 @@ def update_world(sim_state):
                 if p1.id == p2.id or p2.id in reproduced_ids:
                     continue
                 
-                # --- Mate eligibility check also includes adulthood ---
                 p2_is_eligible = (p2.is_adult and p2.health > max_health * REPRODUCTION_HEALTH_THRESHOLD and 
                                   p2.reproductions < MAX_REPRODUCTIONS and 
                                   (p2.last_reproduction_time is None or now - p2.last_reproduction_time > REPRODUCTION_COOLDOWN))
@@ -632,8 +630,8 @@ def update_world(sim_state):
     sim_state['creatures'].extend([c for c in new_offspring if not c.is_carnivore])
     sim_state['carnivores'].extend([c for c in new_offspring if c.is_carnivore])
 
-
-def evolve_population(sim_state):
+# --- FIX: Function now accepts prometheus_metrics object ---
+def evolve_population(sim_state, prometheus_metrics):
     sim_state['herbivore_score_history'].append(max([c.score for c in sim_state['creatures']] + [0]))
     sim_state['carnivore_score_history'].append(max([c.score for c in sim_state['carnivores']] + [0]))
     def get_new_population(survivors, count, is_carnivore, default_genes):
@@ -652,10 +650,17 @@ def evolve_population(sim_state):
     sim_state['carnivores'].sort(key=lambda c: c.score, reverse=True)
     num_to_select_c = max(1, int(len(sim_state['carnivores']) * SURVIVAL_RATE)) if sim_state['carnivores'] else 0
     survivors_c = sim_state['carnivores'][:num_to_select_c]
+
     if sim_state['generation'] % AUTOSAVE_INTERVAL == 0:
         print(f"--- AUTOSAVING BRAINS FOR END OF GENERATION {sim_state['generation']} ---")
-        if survivors_h: survivors_h[0].brain.save(f"autosave_herbivore_gen_{sim_state['generation']}.json", sim_state['generation'], survivors_h[0].genes)
-        if survivors_c: survivors_c[0].brain.save(f"autosave_carnivore_gen_{sim_state['generation']}.json", sim_state['generation'], survivors_c[0].genes)
+        # --- FIX: Correctly call the save method with all required arguments ---
+        if survivors_h:
+            survivors_h[0].brain.save(f"autosave_herbivore_gen_{sim_state['generation']}.json", prometheus_metrics,
+                                      generation=sim_state['generation'], genes=survivors_h[0].genes)
+        if survivors_c:
+            survivors_c[0].brain.save(f"autosave_carnivore_gen_{sim_state['generation']}.json", prometheus_metrics,
+                                      generation=sim_state['generation'], genes=survivors_c[0].genes)
+
     sim_state['creatures'] = get_new_population(survivors_h, NUM_HERBIVOROUS, False, DEFAULT_HERBIVORE_GENES)
     sim_state['carnivores'] = get_new_population(survivors_c, NUM_CARNIVORES, True, DEFAULT_CARNIVORE_GENES)
     sim_state['generation'] += 1
@@ -709,7 +714,6 @@ class GameMetrics:
         self.metric_creature_brain_topology_hidden_layer_neurons = Gauge('evolution_creature_brain_topology_hidden_layer_neurons', 'Number of neurons in each hidden layer of the creature brain topology')
         self.metric_best_herbivore_current_stamina = Gauge('evolution_best_herbivore_current_stamina', 'Current stamina of the best herbivore')
         self.metric_best_carnivore_current_stamina = Gauge('evolution_best_carnivore_current_stamina', 'Current stamina of the best carnivore')
-        # --- New Life Stage Metrics ---
         self.metric_current_herbivore_adult_count = Gauge('evolution_current_herbivore_adult_count', 'Current number of adult herbivores')
         self.metric_current_carnivore_adult_count = Gauge('evolution_current_carnivore_adult_count', 'Current number of adult carnivores')
 
@@ -748,8 +752,6 @@ class GameMetrics:
         self.metric_current_food_count.set(len(sim_state['food_items']))
         self.metric_best_herbivore_current_stamina.set(best_herbivore.stamina if best_herbivore else 0)
         self.metric_best_carnivore_current_stamina.set(best_carnivore.stamina if best_carnivore else 0)
-        
-        # --- Update Life Stage Metrics ---
         self.metric_current_herbivore_adult_count.set(sum(1 for c in sim_state['creatures'] if c.is_adult))
         self.metric_current_carnivore_adult_count.set(sum(1 for c in sim_state['carnivores'] if c.is_adult))
 
@@ -788,7 +790,8 @@ def main():
         if not sim_state['paused']:
             update_world(sim_state)
             if sim_state['generation_timer'] > GENERATION_TIME or not sim_state['creatures'] or not sim_state['carnivores']:
-                evolve_population(sim_state)
+                # --- FIX: Pass prometheus_metrics to the function ---
+                evolve_population(sim_state, prometheus_metrics)
         draw_elements(screen, font, sim_state)
         sim_state['clock'].tick(60)
         prometheus_metrics.update(sim_state)
