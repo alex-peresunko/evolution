@@ -566,6 +566,11 @@ def handle_events(sim_state, prometheus_metrics):
                 sim_state['fps_limited'] = not sim_state['fps_limited']
                 limit_status = "Enabled" if sim_state['fps_limited'] else "Disabled"
                 print(f"FPS Limiting {limit_status}")
+            if event.key == pygame.K_d:
+                sim_state['drawing_enabled'] = not sim_state['drawing_enabled']
+                draw_status = "Enabled" if sim_state['drawing_enabled'] else "Disabled"
+                print(f"Drawing {draw_status}")
+
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mx, my = event.pos; found = False
             for c in sim_state['creatures'] + sim_state['carnivores']:
@@ -874,12 +879,12 @@ def main():
         'obstacles': [Obstacle(random.randint(100, SCREEN_WIDTH-100), random.randint(100, SCREEN_HEIGHT-100), random.randint(50, 150), random.randint(50, 150)) for _ in range(NUM_OBSTACLES)],
         'herbivore_score_history': [], 'carnivore_score_history': [],
         'generation': 1, 'generation_timer': 0, 'selected_creature': None,
-        # --- NEW: Initialize the Hall of Fame ---
         'hall_of_fame': {
             'herbivore': {'score': -1, 'genes': None, 'brain': None},
             'carnivore': {'score': -1, 'genes': None, 'brain': None}
         },
-        'fps_limited': True  # --- NEW: Add the FPS limit flag ---
+        'fps_limited': True,
+        'drawing_enabled': True
     }
     prometheus_metrics = GameMetrics(sim_state)
     while sim_state['running']:
@@ -889,7 +894,8 @@ def main():
             update_world(sim_state)
             if sim_state['generation_timer'] > GENERATION_TIME:
                 evolve_population(sim_state, prometheus_metrics)
-        draw_elements(screen, font, sim_state)
+        if sim_state['drawing_enabled']:
+            draw_elements(screen, font, sim_state)
         if sim_state['fps_limited']:
             sim_state['clock'].tick(60)
         else:
