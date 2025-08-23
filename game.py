@@ -18,7 +18,7 @@ NUM_FOOD = 60  # Initial number of food items
 FOOD_RADIUS = 5  # Radius of food items
 FOOD_RESPAWN_RATE = 0.2  # Probability of food respawning per tick
 NUM_OBSTACLES = 5  # Number of obstacles in the world
-GENERATION_TIME = 400  # Duration of one generation in ticks
+GENERATION_TIME = 600  # Duration of one generation in ticks
 
 # --- Spatial Grid Configuration ---
 GRID_CELL_SIZE = 500  # Size of each cell in the spatial grid for optimization
@@ -459,23 +459,31 @@ def combine_brains(brain1, brain2):
         child.biases[i][mask_b] = brain2.biases[i][mask_b]
     return child
 
+# --- FIX: Made gene functions forward-compatible ---
 def combine_genes(genes1, genes2, default_genes):
     child_genes = {}
-    for key in genes1:
-        if key in genes2 and key in default_genes:
-            avg_gene = (genes1[key] + genes2[key]) / 2.0
-            base_value = default_genes[key]
-            mutation = base_value * random.uniform(-GENE_MUTATION_AMOUNT, GENE_MUTATION_AMOUNT)
-            child_genes[key] = max(0.1, avg_gene + mutation)
+    # Iterate over the default gene set to ensure all genes are processed
+    for key, default_value in default_genes.items():
+        # Safely get parent genes, falling back to the default value if missing
+        p1_gene = genes1.get(key, default_value)
+        p2_gene = genes2.get(key, default_value)
+        
+        avg_gene = (p1_gene + p2_gene) / 2.0
+        base_value = default_value
+        mutation = base_value * random.uniform(-GENE_MUTATION_AMOUNT, GENE_MUTATION_AMOUNT)
+        child_genes[key] = max(0.1, avg_gene + mutation)
     return child_genes
 
 def mutate_genes(genes, default_genes):
     mutated_genes = {}
-    for key, value in genes.items():
-        if key in default_genes:
-            base_value = default_genes[key]
-            mutation = base_value * random.uniform(-GENE_MUTATION_AMOUNT, GENE_MUTATION_AMOUNT)
-            mutated_genes[key] = max(0.1, value + mutation)
+    # Iterate over the default gene set to ensure all genes are processed
+    for key, default_value in default_genes.items():
+        # Safely get parent gene, falling back to the default value if missing
+        parent_value = genes.get(key, default_value)
+        
+        base_value = default_value
+        mutation = base_value * random.uniform(-GENE_MUTATION_AMOUNT, GENE_MUTATION_AMOUNT)
+        mutated_genes[key] = max(0.1, parent_value + mutation)
     return mutated_genes
 
 def draw_score_chart(screen, font, history, position, size, color, title):
@@ -630,7 +638,6 @@ def update_world(sim_state):
     sim_state['creatures'].extend([c for c in new_offspring if not c.is_carnivore])
     sim_state['carnivores'].extend([c for c in new_offspring if c.is_carnivore])
 
-# --- FIX: Function now accepts prometheus_metrics object ---
 def evolve_population(sim_state, prometheus_metrics):
     sim_state['herbivore_score_history'].append(max([c.score for c in sim_state['creatures']] + [0]))
     sim_state['carnivore_score_history'].append(max([c.score for c in sim_state['carnivores']] + [0]))
@@ -653,7 +660,6 @@ def evolve_population(sim_state, prometheus_metrics):
 
     if sim_state['generation'] % AUTOSAVE_INTERVAL == 0:
         print(f"--- AUTOSAVING BRAINS FOR END OF GENERATION {sim_state['generation']} ---")
-        # --- FIX: Correctly call the save method with all required arguments ---
         if survivors_h:
             survivors_h[0].brain.save(f"autosave_herbivore_gen_{sim_state['generation']}.json", prometheus_metrics,
                                       generation=sim_state['generation'], genes=survivors_h[0].genes)
@@ -790,7 +796,6 @@ def main():
         if not sim_state['paused']:
             update_world(sim_state)
             if sim_state['generation_timer'] > GENERATION_TIME or not sim_state['creatures'] or not sim_state['carnivores']:
-                # --- FIX: Pass prometheus_metrics to the function ---
                 evolve_population(sim_state, prometheus_metrics)
         draw_elements(screen, font, sim_state)
         sim_state['clock'].tick(60)
