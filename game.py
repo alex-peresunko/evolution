@@ -13,12 +13,12 @@ from prometheus_client import Counter, Gauge
 SCREEN_WIDTH = 2400  # Width of the simulation screen
 SCREEN_HEIGHT = 1300  # Height of the simulation screen
 NUM_HERBIVOROUS = 80  # Initial number of herbivores
-NUM_CARNIVORES = 20  # Initial number of carnivores
-NUM_FOOD = 100  # Initial number of food items
+NUM_CARNIVORES = 35  # Initial number of carnivores
+NUM_FOOD = 60  # Initial number of food items
 FOOD_RADIUS = 5  # Radius of food items
 FOOD_RESPAWN_RATE = 0.2  # Probability of food respawning per tick
 NUM_OBSTACLES = 5  # Number of obstacles in the world
-GENERATION_TIME = 1000  # Duration of one generation in ticks
+GENERATION_TIME = 400  # Duration of one generation in ticks
 
 # --- Spatial Grid Configuration ---
 GRID_CELL_SIZE = 500  # Size of each cell in the spatial grid for optimization
@@ -38,15 +38,15 @@ FOOD_MAX_LIFETIME = 2000  # Maximum lifetime of food before it rots
 FOOD_MIN_HEALTH_FACTOR = 0.1  # Minimum health value of rotting food
 
 # --- Creature Configuration ---
-HERBIVORE_HEALTH = 2000  # Initial health of herbivores
-CARNIVORE_HEALTH = 3000  # Initial health of carnivores
+HERBIVORE_HEALTH = 1500  # Initial health of herbivores
+CARNIVORE_HEALTH = 1500  # Initial health of carnivores
 HERBIVORE_HEALTH_PER_FOOD = 1000  # Health gained by herbivores per food
 CARNIVORE_HEALTH_PER_FOOD = 1000  # Health gained by carnivores per prey
 CREATURE_ROTATION_SPEED = 0.8  # Rotation speed of creatures
 HEALTH_LOST_ON_HIT = 50  # Health lost when colliding with obstacles
 REPRODUCTION_HEALTH_THRESHOLD = 0.2  # Minimum health ratio for reproduction
 MAX_REPRODUCTIONS = 50  # Maximum number of reproductions per creature
-HEALTH_LOSS_PER_TICK = 1  # Health lost per tick
+HEALTH_LOSS_PER_TICK = 2  # Health lost per tick
 HEALTH_LOSS_SPEED_FACTOR = 1  # Additional health loss based on speed
 REPRODUCTION_COOLDOWN = 3  # Cooldown (in seconds) between reproductions
 REPRODUCTION_POP_CAP_FACTOR = 10  # Population cap multiplier for reproduction
@@ -72,8 +72,8 @@ BRAIN_TOPOLOGY = [NUM_WHISKERS + 2 + 2 + 3 + 4 + 1, 8, 2]  # Neural network stru
 # --- Evolution Configuration ---
 MUTATION_RATE = 0.02  # Probability of mutation per gene
 MUTATION_AMOUNT = 0.02  # Magnitude of mutation
-GENE_MUTATION_AMOUNT = 0.05  # Mutation magnitude for genes
-SURVIVAL_RATE = 0.20  # Fraction of creatures that survive each generation
+GENE_MUTATION_AMOUNT = 0.10  # Mutation magnitude for genes
+SURVIVAL_RATE = 0.05  # Fraction of creatures that survive each generation
 AUTOSAVE_INTERVAL = 100  # Interval for autosaving brains
 
 # --- Colors ---
