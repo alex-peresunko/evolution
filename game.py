@@ -44,16 +44,20 @@ HERBIVORE_HEALTH_PER_FOOD = 1000
 CARNIVORE_HEALTH_PER_FOOD = 1000
 CREATURE_ROTATION_SPEED = 0.8
 HEALTH_LOST_ON_HIT = 50
-REPRODUCTION_HEALTH_THRESHOLD = 0.5
+REPRODUCTION_HEALTH_THRESHOLD = 0.2
 MAX_REPRODUCTIONS = 50
 HEALTH_LOSS_PER_TICK = 1 
 HEALTH_LOSS_SPEED_FACTOR = 1
 REPRODUCTION_COOLDOWN = 3
-REPRODUCTION_POP_CAP_FACTOR = 5
+REPRODUCTION_POP_CAP_FACTOR = 10
 MATE_SELECTION_RADIUS = 50 # Radius for a creature to scan for potential mates
 SMELL_DISTANCE = 400
 MAX_NORMALIZED_SIGHT_DISTANCE = 2000 # For normalizing sight distance gene input
 HEALTH_GAIN_SIZE_PENALTY = 0.01 # Penalty factor for health gain based on size.
+
+# --- Life Stage Configuration ---
+ADULTHOOD_AGE = 400             # Ticks until a creature is considered an adult
+JUVENILE_SIZE_FACTOR = 0.4      # A juvenile starts at 40% of its adult size and speed
 
 # --- Stamina Configuration ---
 STAMINA_DEPLETION_SPEED_THRESHOLD = 0.7 # Deplete if speed is > 70% of max
@@ -207,23 +211,29 @@ class Creature:
         self.last_reproduction_time: Optional[float] = None
         self.current_speed = 0.0
 
+        # --- Life Stage Attributes ---
+        self.age = 0
+        self.is_adult = False
+
         if genes: self.genes = genes
         else: self.genes = DEFAULT_CARNIVORE_GENES.copy() if is_carnivore else DEFAULT_HERBIVORE_GENES.copy()
         
-        # --- Enforce a size cap based on the creature's base type ---
-        base_size = (DEFAULT_CARNIVORE_GENES['size'] if self.is_carnivore 
-                     else DEFAULT_HERBIVORE_GENES['size'])
+        base_size = (DEFAULT_CARNIVORE_GENES['size'] if self.is_carnivore else DEFAULT_HERBIVORE_GENES['size'])
         self.max_size_cap = base_size * 3.0
-        # Clamp the 'size' gene to be within the valid range [0.1, max_size_cap]
         self.genes["size"] = max(0.1, min(self.genes["size"], self.max_size_cap))
 
-        self.size = self.genes["size"]
-        self.max_speed = self.genes["max_speed"]
+        # --- Distinguish Genetic Traits from Current Physical Traits ---
+        self.genetic_size = self.genes["size"]
+        self.genetic_max_speed = self.genes["max_speed"]
         self.sight_distance = self.genes["sight_distance"]
         self.sight_angle = self.genes["sight_angle"]
         self.max_stamina = self.genes.get("max_stamina", 1000)
         self.attractiveness = self.genes.get("attractiveness", 10)
         self.stamina = self.max_stamina
+
+        # --- Initialize as a Juvenile ---
+        self.size = self.genetic_size * JUVENILE_SIZE_FACTOR
+        self.max_speed = self.genetic_max_speed * JUVENILE_SIZE_FACTOR
 
         self.whiskers = [0.0] * NUM_WHISKERS
         self.whisker_angles = np.linspace(-self.sight_angle / 2, self.sight_angle / 2, NUM_WHISKERS)
@@ -234,15 +244,26 @@ class Creature:
         return self.think(inputs)
 
     def act(self, outputs, global_food_list, global_herbivore_list, obstacles):
+        # --- Aging and Growth ---
+        self.age += 1
+        if not self.is_adult:
+            if self.age >= ADULTHOOD_AGE:
+                self.is_adult = True
+                self.size = self.genetic_size
+                self.max_speed = self.genetic_max_speed
+            else:
+                # Grow linearly from juvenile size to adult size
+                growth_ratio = self.age / ADULTHOOD_AGE
+                growth_factor = JUVENILE_SIZE_FACTOR + (1 - JUVENILE_SIZE_FACTOR) * growth_ratio
+                self.size = self.genetic_size * growth_factor
+                self.max_speed = self.genetic_max_speed * growth_factor
+
         self.angle = (self.angle + outputs[0] * CREATURE_ROTATION_SPEED) % (2 * math.pi)
         speed_multiplier = max(0.1, self.health / self.max_health)
-
-        # --- Stamina Exhaustion Penalty ---
         is_exhausted = self.stamina <= 0
         speed_penalty = STAMINA_EXHAUSTION_PENALTY if is_exhausted else 1.0
         new_speed = max(0, outputs[1]) * self.max_speed * speed_multiplier * speed_penalty
         
-        # --- Update Stamina based on speed ---
         if self.max_speed > 0 and new_speed / self.max_speed > STAMINA_DEPLETION_SPEED_THRESHOLD:
             depletion_amount = (new_speed / self.max_speed) * STAMINA_DEPLETION_RATE
             self.stamina -= depletion_amount
@@ -261,7 +282,7 @@ class Creature:
                 if prey.id != self.id and self.pos.distance_to(prey.pos) < (self.size + prey.size):
                     global_herbivore_list.remove(prey)
                     base_health_gain = CARNIVORE_HEALTH_PER_FOOD
-                    size_penalty_denominator = 1 + (self.size - base_size) * HEALTH_GAIN_SIZE_PENALTY
+                    size_penalty_denominator = 1 + (self.genetic_size - base_size) * HEALTH_GAIN_SIZE_PENALTY
                     actual_health_gain = base_health_gain / max(0.1, size_penalty_denominator)
                     self.health = min(self.max_health, self.health + actual_health_gain)
                     self.score += 1
@@ -271,7 +292,7 @@ class Creature:
                     if self.pos.distance_to(food.pos) < (self.size + FOOD_RADIUS):
                         global_food_list.remove(food)
                         base_health_gain = food.get_health_value()
-                        size_penalty_denominator = 1 + (self.size - base_size) * HEALTH_GAIN_SIZE_PENALTY
+                        size_penalty_denominator = 1 + (self.genetic_size - base_size) * HEALTH_GAIN_SIZE_PENALTY
                         actual_health_gain = base_health_gain / max(0.1, size_penalty_denominator)
                         self.health = min(self.max_health, self.health + actual_health_gain)
                         self.score += 1
@@ -292,7 +313,7 @@ class Creature:
                 clipped_line = obs.rect.clipline(self.pos, end_point)
                 if clipped_line: closest_dist = min(closest_dist, self.pos.distance_to(clipped_line[0]))
             self.whiskers[i] = closest_dist
-            inputs.append(1.0 - (closest_dist / self.sight_distance))
+            inputs.append(1.0 - (closest_dist / self.sight_distance if self.sight_distance > 0 else 1))
         
         def in_sight(target):
             if target.id == self.id: return False
@@ -313,7 +334,6 @@ class Creature:
             avoid_angle = food_angle - predator_angle * (1 - predator_dist)**2
             inputs.extend([np.clip(avoid_angle, -1, 1), food_dist])
 
-        # --- Smell Inputs (Omni-directional) ---
         smell_angle, smell_strength = 0.0, 0.0
         if self.is_carnivore:
             smellable_prey = [h for h in herbivores or [] if h.id != self.id]
@@ -335,32 +355,25 @@ class Creature:
                     smell_strength = 1.0 - (dist / SMELL_DISTANCE)
         inputs.extend([smell_angle, smell_strength])
 
-        # --- Internal State Inputs ---
         inputs.append(self.health / self.max_health)
         inputs.append(math.sin(self.angle))
         inputs.append(math.cos(self.angle))
-
-        # --- Self-Awareness Inputs (Genes + State) ---
         inputs.append(self.size / self.max_size_cap)
-        inputs.append(self.current_speed / self.max_speed if self.max_speed > 0 else 0)
+        inputs.append(self.current_speed / self.genetic_max_speed if self.genetic_max_speed > 0 else 0)
         inputs.append(self.sight_distance / MAX_NORMALIZED_SIGHT_DISTANCE)
         inputs.append(self.sight_angle / (2 * math.pi))
-        
-        # --- Stamina Input ---
         inputs.append(self.stamina / self.max_stamina if self.max_stamina > 0 else 0)
-
         return inputs
 
     def get_target_info(self, target):
         dist = self.pos.distance_to(target.pos)
         angle = (math.atan2(target.pos.y - self.pos.y, target.pos.x - self.pos.x) - self.angle + math.pi) % (2 * math.pi) - math.pi
-        return angle / (self.sight_angle / 2), dist / self.sight_distance
+        return angle / (self.sight_angle / 2 if self.sight_angle > 0 else 1), dist / (self.sight_distance if self.sight_distance > 0 else 1)
     
     def think(self, inputs): return self.brain.forward(inputs)
     def is_alive(self): return self.health > 0
     
     def draw(self, screen, is_selected=False):
-        # --- 1. Determine Creature Color ---
         if self.birth_time and time.time() - self.birth_time < 3:
             color = COLOR_BIRTH
         else:
@@ -370,7 +383,6 @@ class Creature:
             color = tuple(int(base_color[i] * health_ratio + (180) * (1 - health_ratio)) for i in range(3))
             if self.is_best: color = COLOR_BEST_CREATURE
 
-        # --- 2. Draw Shape Based on Type ---
         if self.is_carnivore:
             p_nose = self.pos + pygame.math.Vector2(math.cos(self.angle), math.sin(self.angle)) * self.size
             p_back_left = self.pos + pygame.math.Vector2(math.cos(self.angle + math.pi * 0.85), math.sin(self.angle + math.pi * 0.85)) * self.size
@@ -390,7 +402,6 @@ class Creature:
             pygame.draw.circle(screen, eye_color, eye1_pos, eye_radius)
             pygame.draw.circle(screen, eye_color, eye2_pos, eye_radius)
 
-        # --- 3. Draw Whiskers if Selected ---
         if self.is_best or is_selected:
             whisker_color = COLOR_CARNIVORE_WHISKER if self.is_carnivore else COLOR_WHISKER
             for i, angle in enumerate(self.whisker_angles):
@@ -398,9 +409,10 @@ class Creature:
                 pygame.draw.line(screen, whisker_color, self.pos, end, 1)
     
     def get_info(self):
-        info = {"ID": self.id, "Type": "Carnivore" if self.is_carnivore else "Herbivore", "Health": int(self.health),
-                "Stamina": f"{int(self.stamina)} / {int(self.max_stamina)}", "Score": self.score, 
-                "Reproductions": self.reproductions, "Is Best": self.is_best}
+        status = "Adult" if self.is_adult else f"Juvenile ({self.age}/{ADULTHOOD_AGE})"
+        info = {"ID": self.id, "Type": "Carnivore" if self.is_carnivore else "Herbivore", "Status": status,
+                "Health": int(self.health), "Stamina": f"{int(self.stamina)}/{int(self.max_stamina)}",
+                "Score": self.score, "Reproductions": self.reproductions, "Is Best": self.is_best}
         for gene, value in self.genes.items():
             info[f"Gene: {gene}"] = round(value, 2)
         return info
@@ -568,7 +580,6 @@ def update_world(sim_state):
         if best_carnivore:
             best_carnivore.is_best = True
     
-    # --- New Sexual Selection Reproduction Logic ---
     new_offspring = []
     reproduced_ids = set()
     now = time.time()
@@ -581,47 +592,41 @@ def update_world(sim_state):
             if p1.id in reproduced_ids or len(group) + len(new_offspring) >= pop_cap:
                 continue
 
-            p1_is_eligible = (p1.health > max_health * REPRODUCTION_HEALTH_THRESHOLD and 
+            # --- Reproduction check now includes adulthood ---
+            p1_is_eligible = (p1.is_adult and p1.health > max_health * REPRODUCTION_HEALTH_THRESHOLD and 
                               p1.reproductions < MAX_REPRODUCTIONS and 
                               (p1.last_reproduction_time is None or now - p1.last_reproduction_time > REPRODUCTION_COOLDOWN))
             
             if not p1_is_eligible:
                 continue
 
-            # Find all eligible mates within the selection radius
             potential_mates = []
             for p2 in group:
                 if p1.id == p2.id or p2.id in reproduced_ids:
                     continue
                 
-                p2_is_eligible = (p2.health > max_health * REPRODUCTION_HEALTH_THRESHOLD and 
+                # --- Mate eligibility check also includes adulthood ---
+                p2_is_eligible = (p2.is_adult and p2.health > max_health * REPRODUCTION_HEALTH_THRESHOLD and 
                                   p2.reproductions < MAX_REPRODUCTIONS and 
                                   (p2.last_reproduction_time is None or now - p2.last_reproduction_time > REPRODUCTION_COOLDOWN))
                 
                 if p2_is_eligible and p1.pos.distance_to(p2.pos) < MATE_SELECTION_RADIUS:
                     potential_mates.append(p2)
 
-            # If there are potential mates, choose the most attractive one
             if potential_mates:
                 best_mate = max(potential_mates, key=lambda mate: mate.attractiveness)
-                
-                # Reproduce with the best mate
                 child_genes = combine_genes(p1.genes, best_mate.genes, default_genes)
                 child_brain = combine_brains(p1.brain, best_mate.brain)
                 child = Creature(sim_state['world_bounds'], brain=child_brain, is_carnivore=p1.is_carnivore, genes=child_genes)
                 child.pos = (p1.pos + best_mate.pos) / 2
                 child.birth_time = now
                 new_offspring.append(child)
-                
-                # Apply costs of reproduction
                 p1.health *= 0.7
                 best_mate.health *= 0.7
                 p1.reproductions += 1
                 best_mate.reproductions += 1
                 p1.last_reproduction_time = now
                 best_mate.last_reproduction_time = now
-                
-                # Mark both as having reproduced this tick
                 reproduced_ids.add(p1.id)
                 reproduced_ids.add(best_mate.id)
                 
@@ -705,6 +710,9 @@ class GameMetrics:
         self.metric_creature_brain_topology_hidden_layer_neurons = Gauge('evolution_creature_brain_topology_hidden_layer_neurons', 'Number of neurons in each hidden layer of the creature brain topology')
         self.metric_best_herbivore_current_stamina = Gauge('evolution_best_herbivore_current_stamina', 'Current stamina of the best herbivore')
         self.metric_best_carnivore_current_stamina = Gauge('evolution_best_carnivore_current_stamina', 'Current stamina of the best carnivore')
+        # --- New Life Stage Metrics ---
+        self.metric_current_herbivore_adult_count = Gauge('evolution_current_herbivore_adult_count', 'Current number of adult herbivores')
+        self.metric_current_carnivore_adult_count = Gauge('evolution_current_carnivore_adult_count', 'Current number of adult carnivores')
 
         best_herbivore = max(sim_state['creatures'], key=lambda c: c.score, default=None)
         best_carnivore = max(sim_state['carnivores'], key=lambda c: c.score, default=None)
@@ -717,6 +725,8 @@ class GameMetrics:
         self.metric_current_food_count.set(len(sim_state['food_items']))
         self.metric_best_herbivore_current_stamina.set(0)
         self.metric_best_carnivore_current_stamina.set(0)
+        self.metric_current_herbivore_adult_count.set(0)
+        self.metric_current_carnivore_adult_count.set(0)
         for gene, value in best_herbivore.genes.items() if best_herbivore else DEFAULT_HERBIVORE_GENES.items():
             self.metric_best_herbivore_gene.labels(gene).set(value)
         for gene, value in best_carnivore.genes.items() if best_carnivore else DEFAULT_CARNIVORE_GENES.items():
@@ -739,6 +749,10 @@ class GameMetrics:
         self.metric_current_food_count.set(len(sim_state['food_items']))
         self.metric_best_herbivore_current_stamina.set(best_herbivore.stamina if best_herbivore else 0)
         self.metric_best_carnivore_current_stamina.set(best_carnivore.stamina if best_carnivore else 0)
+        
+        # --- Update Life Stage Metrics ---
+        self.metric_current_herbivore_adult_count.set(sum(1 for c in sim_state['creatures'] if c.is_adult))
+        self.metric_current_carnivore_adult_count.set(sum(1 for c in sim_state['carnivores'] if c.is_adult))
 
         for gene, value in best_herbivore.genes.items() if best_herbivore else DEFAULT_HERBIVORE_GENES.items():
             self.metric_best_herbivore_gene.labels(gene).set(value)
