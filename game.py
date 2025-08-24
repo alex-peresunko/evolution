@@ -18,10 +18,10 @@ NUM_FOOD = 60  # Initial number of food items
 FOOD_RADIUS = 5  # Radius of food items
 FOOD_RESPAWN_RATE = 0.2  # Probability of food respawning per tick
 NUM_OBSTACLES = 5  # Number of obstacles in the world
-GENERATION_TIME = 600  # Duration of one generation in ticks
+GENERATION_TIME = 400  # Duration of one generation in ticks
 
 # --- Spatial Grid Configuration ---
-GRID_CELL_SIZE = 500  # Size of each cell in the spatial grid for optimization
+GRID_CELL_SIZE = 200  # Size of each cell in the spatial grid for optimization
 
 # --- GENE DEFAULTS: Base values for the first generation ---
 DEFAULT_HERBIVORE_GENES = {  # Default genetic traits for herbivores
@@ -33,18 +33,28 @@ DEFAULT_CARNIVORE_GENES = {  # Default genetic traits for carnivores
     "max_stamina": 1200, "attractiveness": 10
 }
 
+# --- Gene Constraints ---
+GENE_MIN_MAX = {
+    "size": (5, 25),              # Min/max radius of a creature
+    "max_speed": (2, 10),         # Min/max potential top speed
+    "sight_distance": (50, 800),  # Min/max sight distance. It cannot grow infinitely.
+    "sight_angle": (math.radians(10), math.radians(360)), # Min/max sight cone angle
+    "max_stamina": (500, 2500),   # Min/max base stamina
+    "attractiveness": (1, 100)    # Min/max attractiveness for mating
+}
+
 # --- Food Configuration ---
-FOOD_MAX_LIFETIME = 2000  # Maximum lifetime of food before it rots
+FOOD_MAX_LIFETIME = 500  # Maximum lifetime of food before it rots
 FOOD_MIN_HEALTH_FACTOR = 0.1  # Minimum health value of rotting food
 
 # --- Creature Configuration ---
-HERBIVORE_HEALTH = 1500  # Initial health of herbivores
-CARNIVORE_HEALTH = 1500  # Initial health of carnivores
+HERBIVORE_HEALTH = 2000  # Initial health of herbivores
+CARNIVORE_HEALTH = 2000  # Initial health of carnivores
 HERBIVORE_HEALTH_PER_FOOD = 1000  # Health gained by herbivores per food
 CARNIVORE_HEALTH_PER_FOOD = 1000  # Health gained by carnivores per prey
 CREATURE_ROTATION_SPEED = 0.8  # Rotation speed of creatures
 HEALTH_LOST_ON_HIT = 50  # Health lost when colliding with obstacles
-CARNIVORE_BITE_ANGLE = math.radians(60) # NEW: The angle of the carnivore's attack cone
+CARNIVORE_BITE_ANGLE = math.radians(60) # The angle of the carnivore's attack cone
 REPRODUCTION_HEALTH_THRESHOLD = 0.2  # Minimum health ratio for reproduction
 MAX_REPRODUCTIONS = 50  # Maximum number of reproductions per creature
 HEALTH_LOSS_PER_TICK = 2  # Health lost per tick
@@ -56,9 +66,14 @@ SMELL_DISTANCE = 400  # Maximum distance for smell perception
 MAX_NORMALIZED_SIGHT_DISTANCE = 2000  # Normalization factor for sight distance
 HEALTH_GAIN_SIZE_PENALTY = 0.01  # Penalty for health gain based on size
 
+# --- Trait Dependency Factors ---
+SIZE_SPEED_PENALTY_FACTOR = 0.08  # For every point of size above default, effective_max_speed is reduced.
+SPEED_STAMINA_EXPONENT = 1.5      # Exponent for stamina depletion. >1 means faster speeds cost exponentially more stamina.
+SIZE_STAMINA_FACTOR = 80          # Each point of genetic size adds this much to the creature's max_stamina.
+
 # --- Life Stage Configuration ---
-ADULTHOOD_AGE = 100  # Ticks until a creature becomes an adult
-JUVENILE_SIZE_FACTOR = 0.4  # Juvenile size as a fraction of adult size
+ADULTHOOD_AGE = 200  # Ticks until a creature becomes an adult
+JUVENILE_SIZE_FACTOR = 0.2  # Juvenile size as a fraction of adult size
 
 # --- Stamina Configuration ---
 STAMINA_DEPLETION_SPEED_THRESHOLD = 0.7  # Speed threshold for stamina depletion
@@ -218,22 +233,32 @@ class Creature:
         if genes: self.genes = genes
         else: self.genes = DEFAULT_CARNIVORE_GENES.copy() if is_carnivore else DEFAULT_HERBIVORE_GENES.copy()
         
-        base_size = (DEFAULT_CARNIVORE_GENES['size'] if self.is_carnivore else DEFAULT_HERBIVORE_GENES['size'])
-        self.max_size_cap = base_size * 3.0
-        self.genes["size"] = max(0.1, min(self.genes["size"], self.max_size_cap))
+        # Clamp initial genes to their defined min/max values
+        for key, value in self.genes.items():
+            if key in GENE_MIN_MAX:
+                min_val, max_val = GENE_MIN_MAX[key]
+                self.genes[key] = np.clip(value, min_val, max_val)
 
-        # --- Distinguish Genetic Traits from Current Physical Traits ---
+        # --- Distinguish Genetic Traits from Effective Physical Traits ---
         self.genetic_size = self.genes["size"]
         self.genetic_max_speed = self.genes["max_speed"]
         self.sight_distance = self.genes["sight_distance"]
         self.sight_angle = self.genes["sight_angle"]
-        self.max_stamina = self.genes.get("max_stamina", 1000)
         self.attractiveness = self.genes.get("attractiveness", 10)
+
+        # Calculate effective max stamina based on size gene
+        base_stamina = self.genes.get("max_stamina", 1000)
+        self.max_stamina = base_stamina + (self.genetic_size * SIZE_STAMINA_FACTOR)
         self.stamina = self.max_stamina
+
+        # Calculate effective max speed, penalized by size
+        base_size = (DEFAULT_CARNIVORE_GENES['size'] if self.is_carnivore else DEFAULT_HERBIVORE_GENES['size'])
+        size_diff = self.genetic_size - base_size
+        self.effective_max_speed = self.genetic_max_speed / (1 + max(0, size_diff * SIZE_SPEED_PENALTY_FACTOR))
 
         # --- Initialize as a Juvenile ---
         self.size = self.genetic_size * JUVENILE_SIZE_FACTOR
-        self.max_speed = self.genetic_max_speed * JUVENILE_SIZE_FACTOR
+        self.max_speed = self.effective_max_speed * JUVENILE_SIZE_FACTOR
 
         self.whiskers = [0.0] * NUM_WHISKERS
         self.whisker_angles = np.linspace(-self.sight_angle / 2, self.sight_angle / 2, NUM_WHISKERS)
@@ -243,8 +268,6 @@ class Creature:
         inputs = self.see(local_food, obstacles, local_herbivores, local_carnivores)
         return self.think(inputs)
 
-# ... inside the Creature class ...
-
     def act(self, outputs, global_food_list, global_herbivore_list, obstacles, grid):
         # --- Aging and Growth ---
         self.age += 1
@@ -252,12 +275,12 @@ class Creature:
             if self.age >= ADULTHOOD_AGE:
                 self.is_adult = True
                 self.size = self.genetic_size
-                self.max_speed = self.genetic_max_speed
+                self.max_speed = self.effective_max_speed
             else:
                 growth_ratio = self.age / ADULTHOOD_AGE
                 growth_factor = JUVENILE_SIZE_FACTOR + (1 - JUVENILE_SIZE_FACTOR) * growth_ratio
                 self.size = self.genetic_size * growth_factor
-                self.max_speed = self.genetic_max_speed * growth_factor
+                self.max_speed = self.effective_max_speed * growth_factor
 
         self.angle = (self.angle + outputs[0] * CREATURE_ROTATION_SPEED) % (2 * math.pi)
         speed_multiplier = max(0.1, self.health / self.max_health)
@@ -266,7 +289,9 @@ class Creature:
         new_speed = max(0, outputs[1]) * self.max_speed * speed_multiplier * speed_penalty
         
         if self.max_speed > 0 and new_speed / self.max_speed > STAMINA_DEPLETION_SPEED_THRESHOLD:
-            depletion_amount = (new_speed / self.max_speed) * STAMINA_DEPLETION_RATE
+            speed_ratio = new_speed / self.max_speed
+            # Exponential stamina depletion based on speed ratio
+            depletion_amount = (speed_ratio ** SPEED_STAMINA_EXPONENT) * STAMINA_DEPLETION_RATE
             self.stamina -= depletion_amount
         else:
             self.stamina += STAMINA_REGEN_RATE
@@ -279,7 +304,6 @@ class Creature:
         self.current_speed = new_speed
 
         # --- CORRECTED & EFFICIENT INTERACTION LOGIC ---
-        # Query a SMALL area for physical interactions like eating.
         interaction_radius = self.size * 2 
         nearby_objects = grid.query(self.pos, interaction_radius)
 
@@ -295,7 +319,6 @@ class Creature:
                             angle_to_prey = math.atan2(vec_to_prey.y, vec_to_prey.x)
                             angle_diff = (angle_to_prey - self.angle + math.pi) % (2 * math.pi) - math.pi
                             if abs(angle_diff) <= CARNIVORE_BITE_ANGLE / 2:
-                                # FIX: Check if prey still exists before removing to prevent crash
                                 if prey in global_herbivore_list:
                                     global_herbivore_list.remove(prey)
                                     base_health_gain = CARNIVORE_HEALTH_PER_FOOD
@@ -303,14 +326,13 @@ class Creature:
                                     actual_health_gain = base_health_gain / max(0.1, size_penalty_denominator)
                                     self.health = min(self.max_health, self.health + actual_health_gain)
                                     self.score += 1
-                                    break # Eat one prey per frame
+                                    break 
         else: # Is Herbivore
             base_size = DEFAULT_HERBIVORE_GENES['size']
             for obj in nearby_objects:
                 if isinstance(obj, Food):
                     food = obj
                     if self.pos.distance_to(food.pos) < (self.size + FOOD_RADIUS):
-                        # FIX: Check if food still exists before removing
                         if food in global_food_list:
                             global_food_list.remove(food)
                             base_health_gain = food.get_health_value()
@@ -318,10 +340,9 @@ class Creature:
                             actual_health_gain = base_health_gain / max(0.1, size_penalty_denominator)
                             self.health = min(self.max_health, self.health + actual_health_gain)
                             self.score += 1
-                            break # Eat one food per frame
+                            break 
 
         # --- CORRECTED OBSTACLE COLLISION ---
-        # Revert to checking against the global list, which is physically correct and cheap.
         for obs in obstacles:
             creature_rect = pygame.Rect(self.pos.x - self.size, self.pos.y - self.size, self.size * 2, self.size * 2)
             if obs.rect.colliderect(creature_rect):
@@ -383,7 +404,7 @@ class Creature:
         inputs.append(self.health / self.max_health)
         inputs.append(math.sin(self.angle))
         inputs.append(math.cos(self.angle))
-        inputs.append(self.size / self.max_size_cap)
+        inputs.append(self.size / GENE_MIN_MAX["size"][1]) # Normalize size by absolute max
         inputs.append(self.current_speed / self.genetic_max_speed if self.genetic_max_speed > 0 else 0)
         inputs.append(self.sight_distance / MAX_NORMALIZED_SIGHT_DISTANCE)
         inputs.append(self.sight_angle / (2 * math.pi))
@@ -485,31 +506,30 @@ def combine_brains(brain1, brain2):
         child.biases[i][mask_b] = brain2.biases[i][mask_b]
     return child
 
-# --- FIX: Made gene functions forward-compatible ---
 def combine_genes(genes1, genes2, default_genes):
     child_genes = {}
-    # Iterate over the default gene set to ensure all genes are processed
     for key, default_value in default_genes.items():
-        # Safely get parent genes, falling back to the default value if missing
         p1_gene = genes1.get(key, default_value)
         p2_gene = genes2.get(key, default_value)
         avg_gene = (p1_gene + p2_gene) / 2.0
-        # FIX: The mutation amount should be proportional to the new average gene, not the default.
         base_value = avg_gene
         mutation = base_value * random.uniform(-GENE_MUTATION_AMOUNT, GENE_MUTATION_AMOUNT)
-        child_genes[key] = max(0.1, avg_gene + mutation)
+        
+        # Clamp the new gene value within its defined min/max bounds
+        min_val, max_val = GENE_MIN_MAX[key]
+        child_genes[key] = np.clip(avg_gene + mutation, min_val, max_val)
     return child_genes
 
 def mutate_genes(genes, default_genes):
     mutated_genes = {}
-    # Iterate over the default gene set to ensure all genes are processed
     for key, default_value in default_genes.items():
-        # Safely get parent gene, falling back to the default value if missing
         parent_value = genes.get(key, default_value)
-        # FIX: The mutation is now proportional to the PARENT's value.
         base_value = parent_value
         mutation = base_value * random.uniform(-GENE_MUTATION_AMOUNT, GENE_MUTATION_AMOUNT)
-        mutated_genes[key] = max(0.1, parent_value + mutation)
+        
+        # Clamp the new gene value within its defined min/max bounds
+        min_val, max_val = GENE_MIN_MAX[key]
+        mutated_genes[key] = np.clip(parent_value + mutation, min_val, max_val)
     return mutated_genes
 
 def draw_score_chart(screen, font, history, position, size, color, title):
