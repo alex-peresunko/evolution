@@ -493,9 +493,9 @@ def combine_genes(genes1, genes2, default_genes):
         # Safely get parent genes, falling back to the default value if missing
         p1_gene = genes1.get(key, default_value)
         p2_gene = genes2.get(key, default_value)
-        
         avg_gene = (p1_gene + p2_gene) / 2.0
-        base_value = default_value
+        # FIX: The mutation amount should be proportional to the new average gene, not the default.
+        base_value = avg_gene
         mutation = base_value * random.uniform(-GENE_MUTATION_AMOUNT, GENE_MUTATION_AMOUNT)
         child_genes[key] = max(0.1, avg_gene + mutation)
     return child_genes
@@ -506,8 +506,8 @@ def mutate_genes(genes, default_genes):
     for key, default_value in default_genes.items():
         # Safely get parent gene, falling back to the default value if missing
         parent_value = genes.get(key, default_value)
-        
-        base_value = default_value
+        # FIX: The mutation is now proportional to the PARENT's value.
+        base_value = parent_value
         mutation = base_value * random.uniform(-GENE_MUTATION_AMOUNT, GENE_MUTATION_AMOUNT)
         mutated_genes[key] = max(0.1, parent_value + mutation)
     return mutated_genes
