@@ -13,12 +13,12 @@ from prometheus_client import Counter, Gauge
 SCREEN_WIDTH = 2400  # Width of the simulation screen
 SCREEN_HEIGHT = 1300  # Height of the simulation screen
 NUM_HERBIVOROUS = 80  # Initial number of herbivores
-NUM_CARNIVORES = 35  # Initial number of carnivores
+NUM_CARNIVORES = 50  # Initial number of carnivores
 NUM_FOOD = 60  # Initial number of food items
 FOOD_RADIUS = 5  # Radius of food items
 FOOD_RESPAWN_RATE = 0.2  # Probability of food respawning per tick
 NUM_OBSTACLES = 5  # Number of obstacles in the world
-GENERATION_TIME = 400  # Duration of one generation in ticks
+GENERATION_TIME = 10000  # Duration of one generation in ticks
 
 # --- Spatial Grid Configuration ---
 GRID_CELL_SIZE = 200  # Size of each cell in the spatial grid for optimization
@@ -178,7 +178,10 @@ class NeuralNetwork:
             "biases": [b.tolist() for b in self.biases]
         }
         if generation is not None: data["generation"] = generation
-        if genes is not None: data["genes"] = genes
+        if genes is not None:
+            # Convert numpy types (like int64) to native Python types for JSON serialization
+            serializable_genes = {k: float(v) for k, v in genes.items()}
+            data["genes"] = serializable_genes
         if prometheus_metrics.metric_game_uptime_seconds._value.get() is not None: 
             data["metric_game_uptime_seconds"] = prometheus_metrics.metric_game_uptime_seconds._value.get()
         with open(os.path.join(save_dir, filename), 'w') as f: json.dump(data, f, indent=4, sort_keys=True)
