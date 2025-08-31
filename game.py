@@ -13,12 +13,12 @@ from prometheus_client import Counter, Gauge
 SCREEN_WIDTH = 2400  # Width of the simulation screen
 SCREEN_HEIGHT = 1300  # Height of the simulation screen
 NUM_HERBIVOROUS = 80  # Initial number of herbivores
-NUM_CARNIVORES = 50  # Initial number of carnivores
+NUM_CARNIVORES = 80  # Initial number of carnivores
 NUM_FOOD = 60  # Initial number of food items
 FOOD_RADIUS = 5  # Radius of food items
 FOOD_RESPAWN_RATE = 0.2  # Probability of food respawning per tick
 NUM_OBSTACLES = 5  # Number of obstacles in the world
-GENERATION_TIME = 10000  # Duration of one generation in ticks
+GENERATION_TIME = 1500  # Duration of one generation in ticks
 
 # --- Spatial Grid Configuration ---
 GRID_CELL_SIZE = 200  # Size of each cell in the spatial grid for optimization
@@ -29,7 +29,7 @@ DEFAULT_HERBIVORE_GENES = {  # Default genetic traits for herbivores
     "max_stamina": 1000, "attractiveness": 10
 }
 DEFAULT_CARNIVORE_GENES = {  # Default genetic traits for carnivores
-    "size": 6, "max_speed": 5, "sight_distance": 500, "sight_angle": math.radians(30), 
+    "size": 6, "max_speed": 7, "sight_distance": 600, "sight_angle": math.radians(30), 
     "max_stamina": 1200, "attractiveness": 10
 }
 
@@ -44,21 +44,21 @@ GENE_MIN_MAX = {
 }
 
 # --- Food Configuration ---
-FOOD_MAX_LIFETIME = 500  # Maximum lifetime of food before it rots
-FOOD_MIN_HEALTH_FACTOR = 0.1  # Minimum health value of rotting food
+FOOD_MAX_LIFETIME = 700  # Maximum lifetime of food before it rots
+FOOD_MIN_HEALTH_FACTOR = 0.2  # Minimum health value of rotting food
 
 # --- Creature Configuration ---
-HERBIVORE_HEALTH = 2000  # Initial health of herbivores
-CARNIVORE_HEALTH = 2000  # Initial health of carnivores
-HERBIVORE_HEALTH_PER_FOOD = 1000  # Health gained by herbivores per food
-CARNIVORE_HEALTH_PER_FOOD = 1000  # Health gained by carnivores per prey
+HERBIVORE_HEALTH = 1000  # Initial health of herbivores
+CARNIVORE_HEALTH = 1000  # Initial health of carnivores
+HERBIVORE_HEALTH_PER_FOOD = 500  # Health gained by herbivores per food
+CARNIVORE_HEALTH_PER_FOOD = 1200  # Health gained by carnivores per prey
 CREATURE_ROTATION_SPEED = 0.8  # Rotation speed of creatures
 HEALTH_LOST_ON_HIT = 50  # Health lost when colliding with obstacles
 CARNIVORE_BITE_ANGLE = math.radians(60) # The angle of the carnivore's attack cone
-REPRODUCTION_HEALTH_THRESHOLD = 0.2  # Minimum health ratio for reproduction
+REPRODUCTION_HEALTH_THRESHOLD = 0.6  # Minimum health ratio for reproduction
 MAX_REPRODUCTIONS = 50  # Maximum number of reproductions per creature
-HEALTH_LOSS_PER_TICK = 2  # Health lost per tick
-HEALTH_LOSS_SPEED_FACTOR = 1  # Additional health loss based on speed
+HEALTH_LOSS_PER_TICK = 3  # Health lost per tick
+HEALTH_LOSS_SPEED_FACTOR = 0.5  # Additional health loss based on speed
 REPRODUCTION_COOLDOWN = 3  # Cooldown (in seconds) between reproductions
 REPRODUCTION_POP_CAP_FACTOR = 10  # Population cap multiplier for reproduction
 MATE_SELECTION_RADIUS = 50  # Radius for finding mates
@@ -68,7 +68,7 @@ HEALTH_GAIN_SIZE_PENALTY = 0.01  # Penalty for health gain based on size
 
 # --- Trait Dependency Factors ---
 SIZE_SPEED_PENALTY_FACTOR = 0.08  # For every point of size above default, effective_max_speed is reduced.
-SPEED_STAMINA_EXPONENT = 1.5      # Exponent for stamina depletion. >1 means faster speeds cost exponentially more stamina.
+SPEED_STAMINA_EXPONENT = 1.2      # Exponent for stamina depletion. >1 means faster speeds cost exponentially more stamina.
 SIZE_STAMINA_FACTOR = 80          # Each point of genetic size adds this much to the creature's max_stamina.
 
 # --- Life Stage Configuration ---
