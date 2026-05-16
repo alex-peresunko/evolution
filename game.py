@@ -944,12 +944,7 @@ def main():
     }
     prometheus_metrics = GameMetrics(sim_state)
     while sim_state['running']:
-        if not sim_state['background_mode']:
-            handle_events(sim_state, prometheus_metrics)
-        else: # Minimal event check to prevent window freeze
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    sim_state['running'] = False
+        handle_events(sim_state, prometheus_metrics)
 
         if not sim_state['paused']:
             update_world(sim_state)
