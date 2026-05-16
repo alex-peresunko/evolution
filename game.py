@@ -83,13 +83,13 @@ STAMINA_EXHAUSTION_PENALTY = 0.2  # Speed penalty when stamina is exhausted
 
 # --- Neural Network Configuration ---
 NUM_WHISKERS = 3  # Number of whiskers for obstacle detection
-BRAIN_TOPOLOGY = [NUM_WHISKERS + 2 + 2 + 3 + 4 + 1, 8, 2]  # Neural network structure
+BRAIN_TOPOLOGY = [NUM_WHISKERS + 2 + 2 + 3 + 4 + 1, 16, 8, 2]  # Neural network structure
 
 # --- Evolution Configuration ---
-MUTATION_RATE = 0.02  # Probability of mutation per gene
-MUTATION_AMOUNT = 0.02  # Magnitude of mutation
+MUTATION_RATE = 0.08  # Probability of mutation per gene
+MUTATION_AMOUNT = 0.15  # Magnitude of mutation
 GENE_MUTATION_AMOUNT = 0.10  # Mutation magnitude for genes
-SURVIVAL_RATE = 0.05  # Fraction of creatures that survive each generation
+SURVIVAL_RATE = 0.15  # Fraction of creatures that survive each generation
 AUTOSAVE_INTERVAL = 100  # Interval for autosaving brains
 
 # --- Colors ---
@@ -228,6 +228,7 @@ class Creature:
         self.birth_time: Optional[float] = None
         self.last_reproduction_time: Optional[float] = None
         self.current_speed = 0.0
+        self._nearest_target_dist: Optional[float] = None
 
         # --- Life Stage Attributes ---
         self.age = 0
@@ -351,7 +352,10 @@ class Creature:
             if obs.rect.colliderect(creature_rect):
                 self.health -= HEALTH_LOST_ON_HIT
                 self.pos -= pygame.math.Vector2(math.cos(self.angle), math.sin(self.angle)) * self.current_speed * 3
-                break 
+                break
+
+        if self._nearest_target_dist is not None:
+            self.score += 0.001 * (1.0 - self._nearest_target_dist)
 
     def see(self, food_items, obstacles, herbivores=None, carnivores=None):
         inputs = []
@@ -374,10 +378,13 @@ class Creature:
 
         if self.is_carnivore:
             visible_prey = [h for h in herbivores or [] if in_sight(h)]
-            inputs.extend(self.get_target_info(min(visible_prey, key=lambda h: self.pos.distance_to(h.pos))) if visible_prey else [0, 1])
+            target_info = self.get_target_info(min(visible_prey, key=lambda h: self.pos.distance_to(h.pos))) if visible_prey else (0, 1)
+            self._nearest_target_dist = target_info[1] if visible_prey else None
+            inputs.extend(target_info)
         else:
             visible_food = [f for f in food_items if in_sight(f)]
             food_angle, food_dist = self.get_target_info(min(visible_food, key=lambda f: self.pos.distance_to(f.pos))) if visible_food else (0, 1)
+            self._nearest_target_dist = food_dist if visible_food else None
             visible_preds = [c for c in carnivores or [] if in_sight(c)]
             predator_angle, predator_dist = self.get_target_info(min(visible_preds, key=lambda c: self.pos.distance_to(c.pos))) if visible_preds else (0, 1)
             avoid_angle = food_angle - predator_angle * (1 - predator_dist)**2
@@ -761,10 +768,14 @@ def evolve_population(sim_state, prometheus_metrics):
         # Standard reproduction from survivors
         new_pop = []
         for _ in range(count):
-            parent = random.choice(survivors)
-            new_brain = parent.brain.copy()
+            parent1 = random.choice(survivors)
+            if len(survivors) > 1 and random.random() < 0.7:
+                parent2 = random.choice(survivors)
+                new_brain = combine_brains(parent1.brain, parent2.brain)
+            else:
+                new_brain = parent1.brain.copy()
             new_brain.mutate(MUTATION_RATE, MUTATION_AMOUNT)
-            new_genes = mutate_genes(parent.genes, default_genes)
+            new_genes = mutate_genes(parent1.genes, default_genes)
             new_pop.append(Creature(sim_state['world_bounds'], brain=new_brain, is_carnivore=is_carnivore, genes=new_genes))
         return new_pop
     

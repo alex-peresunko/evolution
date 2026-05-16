@@ -166,13 +166,13 @@ STAMINA_EXHAUSTION_PENALTY = 0.2
 
 # --- Neural Network Configuration ---
 NUM_WHISKERS = 3
-BRAIN_TOPOLOGY = [NUM_WHISKERS + 2 + 2 + 3 + 4 + 1, 8, 2]
+BRAIN_TOPOLOGY = [NUM_WHISKERS + 2 + 2 + 3 + 4 + 1, 16, 8, 2]
 
 # --- Evolution Configuration ---
-MUTATION_RATE = 0.02
-MUTATION_AMOUNT = 0.02
+MUTATION_RATE = 0.08
+MUTATION_AMOUNT = 0.15
 GENE_MUTATION_AMOUNT = 0.10
-SURVIVAL_RATE = 0.05
+SURVIVAL_RATE = 0.15
 AUTOSAVE_INTERVAL = 100
 
 # =============================================================================
@@ -651,10 +651,14 @@ def evolve_population(sim_state, prometheus_metrics):
             return new_pop
         new_pop = []
         for _ in range(count):
-            parent = random.choice(survivors)
-            new_brain = parent.brain.copy()
+            parent1 = random.choice(survivors)
+            if len(survivors) > 1 and random.random() < 0.7:
+                parent2 = random.choice(survivors)
+                new_brain = combine_brains(parent1.brain, parent2.brain)
+            else:
+                new_brain = parent1.brain.copy()
             new_brain.mutate(MUTATION_RATE, MUTATION_AMOUNT)
-            new_genes = mutate_genes(parent.genes, default_genes)
+            new_genes = mutate_genes(parent1.genes, default_genes)
             new_pop.append(Creature(sim_state['world_bounds'], brain=new_brain, is_carnivore=is_carnivore, genes=new_genes))
         return new_pop
     sim_state['creatures'].sort(key=lambda c: c.score, reverse=True)
