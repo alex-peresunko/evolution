@@ -17,8 +17,8 @@ NUM_CARNIVORES = 80  # Initial number of carnivores
 NUM_FOOD = 60  # Initial number of food items
 FOOD_RADIUS = 5  # Radius of food items
 FOOD_RESPAWN_RATE = 0.2  # Probability of food respawning per tick
-NUM_OBSTACLES = 5  # Number of obstacles in the world
-GENERATION_TIME = 1500  # Duration of one generation in ticks
+NUM_OBSTACLES = 2  # Number of obstacles in the world
+GENERATION_TIME = 800  # Duration of one generation in ticks
 
 # --- Spatial Grid Configuration ---
 GRID_CELL_SIZE = 200  # Size of each cell in the spatial grid for optimization
@@ -57,7 +57,7 @@ HEALTH_LOST_ON_HIT = 50  # Health lost when colliding with obstacles
 CARNIVORE_BITE_ANGLE = math.radians(60) # The angle of the carnivore's attack cone
 REPRODUCTION_HEALTH_THRESHOLD = 0.6  # Minimum health ratio for reproduction
 MAX_REPRODUCTIONS = 50  # Maximum number of reproductions per creature
-HEALTH_LOSS_PER_TICK = 3  # Health lost per tick
+HEALTH_LOSS_PER_TICK = 1  # Health lost per tick
 HEALTH_LOSS_SPEED_FACTOR = 0.5  # Additional health loss based on speed
 REPRODUCTION_COOLDOWN = 3  # Cooldown (in seconds) between reproductions
 REPRODUCTION_POP_CAP_FACTOR = 10  # Population cap multiplier for reproduction
