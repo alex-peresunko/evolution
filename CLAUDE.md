@@ -5,22 +5,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Running the Simulation
 
 ```bash
+# Install dependencies
+poetry install
+
 # Graphical (requires display)
-python game.py
+poetry run python game.py
 
 # Headless (fastest, auto-loads saved brains on start)
-python game_headless.py
+poetry run python game_headless.py
 
 # Headless + multi-core (uses ProcessPoolExecutor)
-python game_headless_multiproc.py
+poetry run python game_headless_multiproc.py
 
 # Profile any script
-profile.bat <script.py>   # wraps: python -m cProfile -s time <script.py>
-```
-
-**Install dependencies:**
-```bash
-pip install pygame numpy prometheus_client
+poetry run python -m cProfile -s time <script.py>
 ```
 
 **Docker:**
