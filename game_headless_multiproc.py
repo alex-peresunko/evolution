@@ -176,6 +176,7 @@ MUTATION_AMOUNT = 0.15
 GENE_MUTATION_AMOUNT = 0.10
 SURVIVAL_RATE = 0.15
 AUTOSAVE_INTERVAL = 100
+RESPAWN_IMMUNITY_TICKS = 500  # Ticks extinction-spawned carnivores cannot eat prey
 
 # =============================================================================
 # CLASS: SpatialHashGrid (FOR PERFORMANCE)
@@ -295,6 +296,7 @@ class Creature:
         self.last_reproduction_time: Optional[float] = None
         self.current_speed = 0.0
         self.age = 0
+        self.respawn_immunity_ticks = 0
         self.is_adult = False
         if genes: self.genes = genes
         else: self.genes = DEFAULT_CARNIVORE_GENES.copy() if is_carnivore else DEFAULT_HERBIVORE_GENES.copy()
@@ -320,6 +322,8 @@ class Creature:
 
     def act(self, outputs, obstacles):
         self.age += 1
+        if self.respawn_immunity_ticks > 0:
+            self.respawn_immunity_ticks -= 1
         if not self.is_adult:
             if self.age >= ADULTHOOD_AGE:
                 self.is_adult = True
@@ -493,7 +497,7 @@ def process_creature_chunk(args: Tuple) -> Tuple[List[Creature], set, set]:
         interaction_radius = c.size * 2
         nearby_objects = grid.query(c.pos, interaction_radius)
         
-        if c.is_carnivore:
+        if c.is_carnivore and c.respawn_immunity_ticks == 0:
             base_size = DEFAULT_CARNIVORE_GENES['size']
             for obj in nearby_objects:
                 if isinstance(obj, LeanCreature) and not obj.is_carnivore:
@@ -650,6 +654,8 @@ def evolve_population(sim_state, prometheus_metrics):
             num_defaults = count - len(new_pop)
             for _ in range(num_defaults):
                 new_pop.append(Creature(sim_state['world_bounds'], is_carnivore=is_carnivore, genes=default_genes))
+            for c in new_pop:
+                c.respawn_immunity_ticks = RESPAWN_IMMUNITY_TICKS
             return new_pop
         new_pop = []
         for _ in range(count):

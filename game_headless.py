@@ -182,6 +182,7 @@ MUTATION_AMOUNT = 0.15  # Magnitude of mutation
 GENE_MUTATION_AMOUNT = 0.10  # Mutation magnitude for genes
 SURVIVAL_RATE = 0.15  # Unused legacy constant
 AUTOSAVE_INTERVAL = 100  # Minimum ticks between autosaves (throttle)
+RESPAWN_IMMUNITY_TICKS = 500  # Ticks extinction-spawned carnivores cannot eat prey
 
 
 # =============================================================================
@@ -309,6 +310,7 @@ class Creature:
         self._nearest_smell_strength: float = 0.0
         self.dead = False
         self.hunger = 0
+        self.respawn_immunity_ticks = 0
 
         # --- Life Stage Attributes ---
         self.age = 0
@@ -346,6 +348,8 @@ class Creature:
             food_grid=None, herb_grid=None):
         # --- Aging and Growth ---
         self.age += 1
+        if self.respawn_immunity_ticks > 0:
+            self.respawn_immunity_ticks -= 1
         if not self.is_adult:
             if self.age >= ADULTHOOD_AGE:
                 self.is_adult = True
@@ -381,7 +385,7 @@ class Creature:
         # --- INTERACTION LOGIC ---
         interaction_radius = self.size * 2
 
-        if self.is_carnivore:
+        if self.is_carnivore and self.respawn_immunity_ticks == 0:
             base_size = DEFAULT_CARNIVORE_GENES['size']
             nearby_prey = (herb_grid or grid).query(self.pos, interaction_radius)
             for prey in nearby_prey:
@@ -635,6 +639,8 @@ def _repopulate_from_hof(is_carnivore, count, default_genes, sim_state):
     while len(new_pop) < count:
         new_pop.append(Creature(sim_state['world_bounds'], is_carnivore=is_carnivore,
                                 genes=default_genes.copy()))
+    for c in new_pop:
+        c.respawn_immunity_ticks = RESPAWN_IMMUNITY_TICKS
     return new_pop
 
 
