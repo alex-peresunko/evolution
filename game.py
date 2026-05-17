@@ -21,7 +21,8 @@ NUM_FOOD = 60  # Initial number of food items
 FOOD_RADIUS = 5  # Radius of food items
 FOOD_RESPAWN_RATE = 0.2  # Probability of food respawning per tick
 NUM_OBSTACLES = 10  # Number of obstacles in the world
-GENERATION_TIME = 800  # Duration of one generation in ticks
+SCORE_SAMPLE_INTERVAL = 200   # ticks between score-history snapshots for the chart
+WORKER_SYNC_INTERVAL  = 300   # ticks between island-worker brain syncs
 
 # --- Spatial Grid Configuration ---
 GRID_CELL_SIZE = 200  # Size of each cell in the spatial grid for optimization
@@ -95,8 +96,8 @@ BRAIN_TOPOLOGY = [NUM_WHISKERS + 2 + 2 + 3 + 4 + 1 + 2 + 1, 16, 8, 2]  # +2 prey
 MUTATION_RATE = 0.08  # Probability of mutation per gene
 MUTATION_AMOUNT = 0.15  # Magnitude of mutation
 GENE_MUTATION_AMOUNT = 0.10  # Mutation magnitude for genes
-SURVIVAL_RATE = 0.15  # Fraction of creatures that survive each generation
-AUTOSAVE_INTERVAL = 100  # Interval for autosaving brains
+SURVIVAL_RATE = 0.15  # Unused legacy constant
+AUTOSAVE_INTERVAL = 100  # Minimum ticks between autosaves (throttle)
 
 # --- Colors ---
 COLOR_BACKGROUND = (20, 20, 30)  # Background color
@@ -722,8 +723,40 @@ def batch_forward(creatures, inputs_list):
             X = np.tanh(X)
     return np.tanh(X)
 
-def update_world(sim_state):
-    sim_state['generation_timer'] += 1
+def _retire_creature(c, sim_state, prometheus_metrics):
+    species = 'carnivore' if c.is_carnivore else 'herbivore'
+    hof = sim_state['hall_of_fame']
+    if c.score > hof[species]['score']:
+        hof[species] = {'score': c.score, 'brain': c.brain.copy(), 'genes': c.genes.copy()}
+        tick = sim_state['tick']
+        if tick - sim_state['last_autosave_tick'] >= AUTOSAVE_INTERVAL:
+            c.brain.save(f"best_brain_{species}.json", prometheus_metrics,
+                         generation=sim_state['generation'], genes=c.genes, score=c.score)
+            sim_state['last_autosave_tick'] = tick
+
+
+def _repopulate_from_hof(is_carnivore, count, default_genes, sim_state):
+    species = 'carnivore' if is_carnivore else 'herbivore'
+    constraints = CARNIVORE_GENE_MIN_MAX if is_carnivore else GENE_MIN_MAX
+    hof = sim_state['hall_of_fame'][species]
+    new_pop = []
+    if hof['brain'] and hof['genes']:
+        new_pop.append(Creature(sim_state['world_bounds'], brain=hof['brain'].copy(),
+                                is_carnivore=is_carnivore, genes=hof['genes'].copy()))
+        for _ in range((count - 1) // 2):
+            b = hof['brain'].copy()
+            b.mutate(MUTATION_RATE, MUTATION_AMOUNT)
+            g = mutate_genes(hof['genes'], default_genes, gene_constraints=constraints)
+            new_pop.append(Creature(sim_state['world_bounds'], brain=b,
+                                    is_carnivore=is_carnivore, genes=g))
+    while len(new_pop) < count:
+        new_pop.append(Creature(sim_state['world_bounds'], is_carnivore=is_carnivore,
+                                genes=default_genes.copy()))
+    return new_pop
+
+
+def update_world(sim_state, prometheus_metrics=None):
+    sim_state['tick'] += 1
     grid = sim_state['grid']
     for food in sim_state['food_items']: food.update()
     sim_state['food_items'][:] = [f for f in sim_state['food_items'] if not f.is_rotten() and not f.consumed]
@@ -748,8 +781,36 @@ def update_world(sim_state):
     for c, outputs in zip(all_creatures, all_outputs):
         c.act(outputs, sim_state['food_items'], sim_state['creatures'], sim_state['obstacles'], grid,
               food_grid=food_grid, herb_grid=herb_grid)
-    sim_state['creatures'][:] = [c for c in sim_state['creatures'] if c.is_alive() and not c.dead]
-    sim_state['carnivores'][:] = [c for c in sim_state['carnivores'] if c.is_alive()]
+    alive_herbs, alive_carns = [], []
+    for c in sim_state['creatures']:
+        if c.is_alive() and not c.dead:
+            alive_herbs.append(c)
+        else:
+            _retire_creature(c, sim_state, prometheus_metrics)
+    for c in sim_state['carnivores']:
+        if c.is_alive():
+            alive_carns.append(c)
+        else:
+            _retire_creature(c, sim_state, prometheus_metrics)
+    sim_state['creatures']  = alive_herbs
+    sim_state['carnivores'] = alive_carns
+
+    for is_carn, key, count, def_genes in [
+        (False, 'creatures',  NUM_HERBIVOROUS, DEFAULT_HERBIVORE_GENES),
+        (True,  'carnivores', NUM_CARNIVORES,  DEFAULT_CARNIVORE_GENES),
+    ]:
+        if len(sim_state[key]) == 0:
+            sp = 'carnivore' if is_carn else 'herbivore'
+            print(f"--- {sp.capitalize()} EXTINCTION tick={sim_state['tick']} gen={sim_state['generation']} ---")
+            sim_state[key] = _repopulate_from_hof(is_carn, count, def_genes, sim_state)
+            sim_state['generation'] += 1
+
+    if sim_state['tick'] % SCORE_SAMPLE_INTERVAL == 0:
+        best_h = max((c.score for c in sim_state['creatures']),  default=0.0)
+        best_c = max((c.score for c in sim_state['carnivores']), default=0.0)
+        sim_state['herbivore_score_history'].append(best_h)
+        sim_state['carnivore_score_history'].append(best_c)
+
     if sim_state['creatures']:
         for c in sim_state['creatures']: c.is_best = False
         best_herbivore = max(sim_state['creatures'], key=lambda c: c.score, default=None)
@@ -797,6 +858,7 @@ def update_world(sim_state):
                 constraints = CARNIVORE_GENE_MIN_MAX if p1.is_carnivore else GENE_MIN_MAX
                 child_genes = combine_genes(p1.genes, best_mate.genes, default_genes, gene_constraints=constraints)
                 child_brain = combine_brains(p1.brain, best_mate.brain)
+                child_brain.mutate(MUTATION_RATE, MUTATION_AMOUNT)
                 child = Creature(sim_state['world_bounds'], brain=child_brain, is_carnivore=p1.is_carnivore, genes=child_genes)
                 child.pos = (p1.pos + best_mate.pos) / 2
                 child.birth_time = now
@@ -820,110 +882,6 @@ def _fmt_genes(genes):
     return (f"spd:{g.get('max_speed',0):.2f}  sz:{g.get('size',0):.1f}"
             f"  sight:{g.get('sight_distance',0):.0f}  stam:{g.get('max_stamina',0):.0f}")
 
-def evolve_population(sim_state, prometheus_metrics):
-    creatures  = sim_state['creatures']
-    carnivores = sim_state['carnivores']
-    gen        = sim_state['generation']
-    hall_of_fame = sim_state['hall_of_fame']
-
-    herb_scores = [c.score for c in creatures]
-    carn_scores = [c.score for c in carnivores]
-    best_herb_score = max(herb_scores) if herb_scores else 0.0
-    avg_herb_score  = (sum(herb_scores) / len(herb_scores)) if herb_scores else 0.0
-    best_carn_score = max(carn_scores) if carn_scores else 0.0
-    avg_carn_score  = (sum(carn_scores) / len(carn_scores)) if carn_scores else 0.0
-
-    sim_state['herbivore_score_history'].append(best_herb_score)
-    sim_state['carnivore_score_history'].append(best_carn_score)
-
-    hof_herb_updated = False
-    best_herbivore_of_gen = max(creatures, key=lambda c: c.score, default=None)
-    if best_herbivore_of_gen and best_herbivore_of_gen.score > hall_of_fame['herbivore']['score']:
-        hall_of_fame['herbivore']['score'] = best_herbivore_of_gen.score
-        hall_of_fame['herbivore']['genes'] = best_herbivore_of_gen.genes.copy()
-        hall_of_fame['herbivore']['brain'] = best_herbivore_of_gen.brain.copy()
-        hof_herb_updated = True
-
-    hof_carn_updated = False
-    best_carnivore_of_gen = max(carnivores, key=lambda c: c.score, default=None)
-    if best_carnivore_of_gen and best_carnivore_of_gen.score > hall_of_fame['carnivore']['score']:
-        hall_of_fame['carnivore']['score'] = best_carnivore_of_gen.score
-        hall_of_fame['carnivore']['genes'] = best_carnivore_of_gen.genes.copy()
-        hall_of_fame['carnivore']['brain'] = best_carnivore_of_gen.brain.copy()
-        hof_carn_updated = True
-
-    def get_new_population(survivors, count, is_carnivore, default_genes):
-        species = 'carnivore' if is_carnivore else 'herbivore'
-        constraints = CARNIVORE_GENE_MIN_MAX if is_carnivore else GENE_MIN_MAX
-        if not survivors:
-            print(f"--- {species.capitalize()} EXTINCTION — repopulating from Hall of Fame ---")
-            progenitor_record = hall_of_fame[species]
-            new_pop = []
-            if progenitor_record['genes'] and progenitor_record['brain']:
-                progenitor = Creature(sim_state['world_bounds'], brain=progenitor_record['brain'].copy(),
-                                      is_carnivore=is_carnivore, genes=progenitor_record['genes'].copy())
-                new_pop.append(progenitor)
-                num_mutated_descendants = (count - 1) // 2
-                for _ in range(num_mutated_descendants):
-                    new_brain = progenitor_record['brain'].copy()
-                    new_brain.mutate(MUTATION_RATE, MUTATION_AMOUNT)
-                    new_genes = mutate_genes(progenitor_record['genes'], default_genes, gene_constraints=constraints)
-                    new_pop.append(Creature(sim_state['world_bounds'], brain=new_brain, is_carnivore=is_carnivore, genes=new_genes))
-            num_defaults = count - len(new_pop)
-            for _ in range(num_defaults):
-                new_pop.append(Creature(sim_state['world_bounds'], is_carnivore=is_carnivore, genes=default_genes))
-            return new_pop
-        new_pop = []
-        for _ in range(count):
-            parent1 = random.choice(survivors)
-            if len(survivors) > 1 and random.random() < 0.7:
-                parent2 = random.choice(survivors)
-                new_brain = combine_brains(parent1.brain, parent2.brain)
-            else:
-                new_brain = parent1.brain.copy()
-            new_brain.mutate(MUTATION_RATE, MUTATION_AMOUNT)
-            new_genes = mutate_genes(parent1.genes, default_genes, gene_constraints=constraints)
-            new_pop.append(Creature(sim_state['world_bounds'], brain=new_brain, is_carnivore=is_carnivore, genes=new_genes))
-        return new_pop
-
-    sim_state['creatures'].sort(key=lambda c: c.score, reverse=True)
-    num_to_select_h = max(1, int(len(creatures) * SURVIVAL_RATE)) if creatures else 0
-    survivors_h = sim_state['creatures'][:num_to_select_h]
-
-    sim_state['carnivores'].sort(key=lambda c: c.score, reverse=True)
-    num_to_select_c = max(1, int(len(carnivores) * SURVIVAL_RATE)) if carnivores else 0
-    survivors_c = sim_state['carnivores'][:num_to_select_c]
-
-    if gen % AUTOSAVE_INTERVAL == 0:
-        print(f"--- AUTOSAVE gen {gen} ---")
-        if survivors_h:
-            survivors_h[0].brain.save(f"autosave_herbivore_gen_{gen}.json", prometheus_metrics,
-                                      generation=gen, genes=survivors_h[0].genes)
-        if survivors_c:
-            survivors_c[0].brain.save(f"autosave_carnivore_gen_{gen}.json", prometheus_metrics,
-                                      generation=gen, genes=survivors_c[0].genes)
-
-    sim_state['creatures'] = get_new_population(survivors_h, NUM_HERBIVOROUS, False, DEFAULT_HERBIVORE_GENES)
-    sim_state['carnivores'] = get_new_population(survivors_c, NUM_CARNIVORES, True, DEFAULT_CARNIVORE_GENES)
-
-    hof_h_score = hall_of_fame['herbivore']['score']
-    hof_c_score = hall_of_fame['carnivore']['score']
-    h_new = " *** NEW RECORD ***" if hof_herb_updated else ""
-    c_new = " *** NEW RECORD ***" if hof_carn_updated else ""
-    top_h_genes = _fmt_genes(survivors_h[0].genes if survivors_h else hall_of_fame['herbivore']['genes'])
-    top_c_genes = _fmt_genes(survivors_c[0].genes if survivors_c else hall_of_fame['carnivore']['genes'])
-    bar = "-" * 62
-    print(f"\n{bar}")
-    print(f"  Gen {gen}  |  Herb pop:{len(creatures)}  Carn pop:{len(carnivores)}")
-    print(f"  Herbivores  surv:{len(survivors_h)}  best:{best_herb_score:.3f}  avg:{avg_herb_score:.3f}  HoF:{hof_h_score:.3f}{h_new}")
-    print(f"    genes -> {top_h_genes}")
-    print(f"  Carnivores  surv:{len(survivors_c)}  best:{best_carn_score:.3f}  avg:{avg_carn_score:.3f}  HoF:{hof_c_score:.3f}{c_new}")
-    print(f"    genes -> {top_c_genes}")
-    print(f"{bar}")
-
-    sim_state['generation'] += 1
-    sim_state['generation_timer'] = 0
-
 def draw_elements(screen, font, sim_state):
     screen.fill(COLOR_BACKGROUND)
     all_drawable_objects = sim_state['obstacles'] + sim_state['food_items'] + sim_state['creatures'] + sim_state['carnivores']
@@ -934,7 +892,7 @@ def draw_elements(screen, font, sim_state):
             item.draw(screen)
     text_y = 10
     limit_status = "Limited (60)" if sim_state['fps_limited'] else "Unlimited"
-    stats = [f"Generation: {sim_state['generation']}", f"Time: {GENERATION_TIME - sim_state['generation_timer']}",
+    stats = [f"Generation: {sim_state['generation']}", f"Tick: {sim_state['tick']}",
              f"Herbivores: {len(sim_state['creatures'])}", f"Carnivores: {len(sim_state['carnivores'])}",
              f"Food: {len(sim_state['food_items'])}",
              f"Top Herbivore Score: {max([c.score for c in sim_state['creatures']] + [0])}",
@@ -1058,7 +1016,7 @@ def main():
         'food_items': [Food((SCREEN_WIDTH, SCREEN_HEIGHT)) for _ in range(NUM_FOOD)],
         'obstacles': [Obstacle(random.randint(100, SCREEN_WIDTH-100), random.randint(100, SCREEN_HEIGHT-100), random.randint(50, 150), random.randint(50, 150)) for _ in range(NUM_OBSTACLES)],
         'herbivore_score_history': [], 'carnivore_score_history': [],
-        'generation': 1, 'generation_timer': 0, 'selected_creature': None,
+        'generation': 1, 'tick': 0, 'last_autosave_tick': 0, 'selected_creature': None,
         'hall_of_fame': {
             'herbivore': {'score': -1, 'genes': None, 'brain': None},
             'carnivore': {'score': -1, 'genes': None, 'brain': None}
@@ -1073,9 +1031,8 @@ def main():
         handle_events(sim_state, prometheus_metrics)
 
         if not sim_state['paused']:
-            update_world(sim_state)
-            if sim_state['generation_timer'] > GENERATION_TIME:
-                evolve_population(sim_state, prometheus_metrics)
+            update_world(sim_state, prometheus_metrics)
+            if sim_state.get('background_mode') and sim_state['tick'] % WORKER_SYNC_INTERVAL == 0:
                 if sim_state['worker_processes']:
                     _sync_worker_brains(sim_state)
         if sim_state['drawing_enabled']:
