@@ -676,15 +676,11 @@ def handle_events(sim_state, prometheus_metrics):
             if event.key == pygame.K_b:
                 sim_state['background_mode'] = not sim_state['background_mode']
                 if sim_state['background_mode']:
-                    sim_state['drawing_enabled'] = False
-                    sim_state['fps_limited'] = False
                     _start_worker_processes(sim_state)
-                    print("--- BACKGROUND MODE + ISLAND WORKERS ENGAGED ---")
+                    print("--- ISLAND WORKERS ENGAGED (display running normally) ---")
                 else:
-                    sim_state['drawing_enabled'] = True
-                    sim_state['fps_limited'] = True
                     _stop_worker_processes(sim_state)
-                    print("--- Background Mode Disengaged ---")
+                    print("--- Island Workers Stopped ---")
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mx, my = event.pos; found = False
