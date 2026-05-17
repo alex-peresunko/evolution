@@ -15,6 +15,12 @@ from prometheus_client import Counter, Gauge
 # --- Main Simulation Configuration ---
 SCREEN_WIDTH = 2400  # Width of the simulation screen
 SCREEN_HEIGHT = 1300  # Height of the simulation screen
+WORLD_WIDTH = 4800   # Simulation world width (larger than screen)
+WORLD_HEIGHT = 2600  # Simulation world height (larger than screen)
+MINIMAP_WIDTH = 300
+MINIMAP_HEIGHT = int(WORLD_HEIGHT / WORLD_WIDTH * MINIMAP_WIDTH)
+MINIMAP_X, MINIMAP_Y = 10, 10
+MINIMAP_RECT = None  # initialized after pygame.init()
 NUM_HERBIVOROUS = 80  # Initial number of herbivores
 NUM_CARNIVORES = 40  # Initial number of carnivores
 NUM_FOOD = 60  # Initial number of food items
@@ -220,7 +226,7 @@ class NeuralNetwork:
 # =============================================================================
 class Obstacle:
     def __init__(self, x, y, width, height): self.rect = pygame.Rect(x, y, width, height)
-    def draw(self, screen): pygame.draw.rect(screen, COLOR_OBSTACLE, self.rect)
+    def draw(self, screen, cam_offset=(0, 0)): pygame.draw.rect(screen, COLOR_OBSTACLE, self.rect.move(-cam_offset[0], -cam_offset[1]))
 
 class Creature:
     _id_counter = 1
@@ -460,7 +466,8 @@ class Creature:
     def think(self, inputs): return self.brain.forward(inputs)
     def is_alive(self): return self.health > 0
     
-    def draw(self, screen, is_selected=False):
+    def draw(self, screen, is_selected=False, cam_offset=(0, 0)):
+        sp = pygame.math.Vector2(self.pos.x - cam_offset[0], self.pos.y - cam_offset[1])
         if self.birth_time and time.time() - self.birth_time < 3:
             color = COLOR_BIRTH
         else:
@@ -471,29 +478,29 @@ class Creature:
             if self.is_best: color = COLOR_BEST_CREATURE
 
         if self.is_carnivore:
-            p_nose = self.pos + pygame.math.Vector2(math.cos(self.angle), math.sin(self.angle)) * self.size
-            p_back_left = self.pos + pygame.math.Vector2(math.cos(self.angle + math.pi * 0.85), math.sin(self.angle + math.pi * 0.85)) * self.size
-            p_back_right = self.pos + pygame.math.Vector2(math.cos(self.angle - math.pi * 0.85), math.sin(self.angle - math.pi * 0.85)) * self.size
+            p_nose = sp + pygame.math.Vector2(math.cos(self.angle), math.sin(self.angle)) * self.size
+            p_back_left = sp + pygame.math.Vector2(math.cos(self.angle + math.pi * 0.85), math.sin(self.angle + math.pi * 0.85)) * self.size
+            p_back_right = sp + pygame.math.Vector2(math.cos(self.angle - math.pi * 0.85), math.sin(self.angle - math.pi * 0.85)) * self.size
             pygame.draw.polygon(screen, color, [p_nose, p_back_left, p_back_right])
         else:
             body_radius = int(self.size)
-            pygame.draw.circle(screen, color, self.pos, body_radius)
+            pygame.draw.circle(screen, color, sp, body_radius)
             eye_color = (0, 0, 0)
             eye_radius = int(self.size * 0.2)
             eye_forward_offset = self.size * 0.4
             eye_side_offset = self.size * 0.35
             forward_vec = pygame.math.Vector2(math.cos(self.angle), math.sin(self.angle))
             side_vec = pygame.math.Vector2(-math.sin(self.angle), math.cos(self.angle))
-            eye1_pos = self.pos + forward_vec * eye_forward_offset + side_vec * eye_side_offset
-            eye2_pos = self.pos + forward_vec * eye_forward_offset - side_vec * eye_side_offset
+            eye1_pos = sp + forward_vec * eye_forward_offset + side_vec * eye_side_offset
+            eye2_pos = sp + forward_vec * eye_forward_offset - side_vec * eye_side_offset
             pygame.draw.circle(screen, eye_color, eye1_pos, eye_radius)
             pygame.draw.circle(screen, eye_color, eye2_pos, eye_radius)
 
         if self.is_best or is_selected:
             whisker_color = COLOR_CARNIVORE_WHISKER if self.is_carnivore else COLOR_WHISKER
             for i, angle in enumerate(self.whisker_angles):
-                end = self.pos + pygame.math.Vector2(math.cos(self.angle + angle), math.sin(self.angle + angle)) * self.whiskers[i]
-                pygame.draw.line(screen, whisker_color, self.pos, end, 1)
+                end = sp + pygame.math.Vector2(math.cos(self.angle + angle), math.sin(self.angle + angle)) * self.whiskers[i]
+                pygame.draw.line(screen, whisker_color, sp, end, 1)
     
     def get_info(self):
         status = "Adult" if self.is_adult else f"Juvenile ({self.age}/{ADULTHOOD_AGE})"
@@ -530,11 +537,11 @@ class Food:
         freshness = 1.0 - (self.lifetime / self.max_lifetime)
         return int(self.health_value_base * (self.min_health_factor + (1 - self.min_health_factor) * freshness))
 
-    def draw(self, screen):
+    def draw(self, screen, cam_offset=(0, 0)):
         alpha = int(50 + 205 * (1.0 - (self.lifetime / self.max_lifetime)))
         temp_surface = pygame.Surface((FOOD_RADIUS * 2, FOOD_RADIUS * 2), pygame.SRCALPHA)
         pygame.draw.circle(temp_surface, (*COLOR_FOOD, alpha), (FOOD_RADIUS, FOOD_RADIUS), FOOD_RADIUS)
-        screen.blit(temp_surface, (self.pos.x - FOOD_RADIUS, self.pos.y - FOOD_RADIUS))
+        screen.blit(temp_surface, (self.pos.x - FOOD_RADIUS - cam_offset[0], self.pos.y - FOOD_RADIUS - cam_offset[1]))
 
 # =============================================================================
 # HELPER FUNCTIONS
@@ -702,13 +709,28 @@ def handle_events(sim_state, prometheus_metrics):
                     print("--- Island Workers Stopped ---")
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-            mx, my = event.pos; found = False
-            for c in sim_state['creatures'] + sim_state['carnivores']:
-                if c.pos.distance_to((mx, my)) < c.size:
-                    sim_state['selected_creature'] = c if sim_state['selected_creature'] != c else None; found = True; break
-            if not found:
-                sim_state['selected_creature'] = None
-                food = Food(sim_state['world_bounds']); food.pos = pygame.math.Vector2(mx, my); sim_state['food_items'].append(food)
+            if MINIMAP_RECT and MINIMAP_RECT.collidepoint(event.pos):
+                sim_state['minimap_dragging'] = True
+                wx = (event.pos[0] - MINIMAP_X) / MINIMAP_WIDTH * WORLD_WIDTH
+                wy = (event.pos[1] - MINIMAP_Y) / MINIMAP_HEIGHT * WORLD_HEIGHT
+                _set_viewport_center(wx, wy, sim_state)
+            else:
+                world_mx = event.pos[0] + sim_state['cam_x']
+                world_my = event.pos[1] + sim_state['cam_y']
+                found = False
+                for c in sim_state['creatures'] + sim_state['carnivores']:
+                    if c.pos.distance_to((world_mx, world_my)) < c.size:
+                        sim_state['selected_creature'] = c if sim_state['selected_creature'] != c else None; found = True; break
+                if not found:
+                    sim_state['selected_creature'] = None
+                    food = Food(sim_state['world_bounds']); food.pos = pygame.math.Vector2(world_mx, world_my); sim_state['food_items'].append(food)
+        elif event.type == pygame.MOUSEMOTION:
+            if sim_state.get('minimap_dragging'):
+                wx = (event.pos[0] - MINIMAP_X) / MINIMAP_WIDTH * WORLD_WIDTH
+                wy = (event.pos[1] - MINIMAP_Y) / MINIMAP_HEIGHT * WORLD_HEIGHT
+                _set_viewport_center(wx, wy, sim_state)
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            sim_state['minimap_dragging'] = False
 
 def batch_forward(creatures, inputs_list):
     if not creatures:
@@ -887,15 +909,41 @@ def _fmt_genes(genes):
     return (f"spd:{g.get('max_speed',0):.2f}  sz:{g.get('size',0):.1f}"
             f"  sight:{g.get('sight_distance',0):.0f}  stam:{g.get('max_stamina',0):.0f}")
 
+def _set_viewport_center(wx, wy, sim_state):
+    sim_state['cam_x'] = max(0.0, min(float(WORLD_WIDTH - SCREEN_WIDTH), wx - SCREEN_WIDTH / 2))
+    sim_state['cam_y'] = max(0.0, min(float(WORLD_HEIGHT - SCREEN_HEIGHT), wy - SCREEN_HEIGHT / 2))
+
+def draw_minimap(screen, sim_state):
+    mmap = pygame.Surface((MINIMAP_WIDTH, MINIMAP_HEIGHT), pygame.SRCALPHA)
+    mmap.fill((20, 20, 30, 190))
+    sx = MINIMAP_WIDTH / WORLD_WIDTH
+    sy = MINIMAP_HEIGHT / WORLD_HEIGHT
+    for obs in sim_state['obstacles']:
+        mr = pygame.Rect(int(obs.rect.x * sx), int(obs.rect.y * sy),
+                         max(2, int(obs.rect.width * sx)), max(2, int(obs.rect.height * sy)))
+        pygame.draw.rect(mmap, COLOR_OBSTACLE, mr)
+    vr = pygame.Rect(int(sim_state['cam_x'] * sx), int(sim_state['cam_y'] * sy),
+                     max(1, int(SCREEN_WIDTH * sx)), max(1, int(SCREEN_HEIGHT * sy)))
+    pygame.draw.rect(mmap, COLOR_TEXT, vr, 1)
+    screen.blit(mmap, (MINIMAP_X, MINIMAP_Y))
+    pygame.draw.rect(screen, COLOR_TEXT, (MINIMAP_X, MINIMAP_Y, MINIMAP_WIDTH, MINIMAP_HEIGHT), 1)
+
 def draw_elements(screen, font, sim_state):
     screen.fill(COLOR_BACKGROUND)
-    all_drawable_objects = sim_state['obstacles'] + sim_state['food_items'] + sim_state['creatures'] + sim_state['carnivores']
-    for item in all_drawable_objects:
-        if isinstance(item, Creature):
-            item.draw(screen, item == sim_state.get('selected_creature'))
-        else:
-            item.draw(screen)
-    text_y = 10
+    cam = (sim_state['cam_x'], sim_state['cam_y'])
+    vx, vy = cam
+    for item in sim_state['obstacles']:
+        if item.rect.colliderect((vx, vy, SCREEN_WIDTH, SCREEN_HEIGHT)):
+            item.draw(screen, cam_offset=cam)
+    for item in sim_state['food_items']:
+        if vx - 10 <= item.pos.x <= vx + SCREEN_WIDTH + 10 and vy - 10 <= item.pos.y <= vy + SCREEN_HEIGHT + 10:
+            item.draw(screen, cam_offset=cam)
+    for c in sim_state['creatures'] + sim_state['carnivores']:
+        r = c.size + 5
+        if vx - r <= c.pos.x <= vx + SCREEN_WIDTH + r and vy - r <= c.pos.y <= vy + SCREEN_HEIGHT + r:
+            c.draw(screen, c == sim_state.get('selected_creature'), cam_offset=cam)
+    draw_minimap(screen, sim_state)
+    text_y = MINIMAP_Y + MINIMAP_HEIGHT + 15
     limit_status = "Limited (60)" if sim_state['fps_limited'] else "Unlimited"
     stats = [f"Generation: {sim_state['generation']}", f"Tick: {sim_state['tick']}",
              f"Herbivores: {len(sim_state['creatures'])}", f"Carnivores: {len(sim_state['carnivores'])}",
@@ -1009,21 +1057,23 @@ class GameMetrics:
 # Main Simulation
 # =============================================================================
 def main():
+    global MINIMAP_RECT
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("Evolution Sim | S to Save, L to Load, SPACE to Pause")
     font = pygame.font.Font(None, 30)
+    MINIMAP_RECT = pygame.Rect(MINIMAP_X, MINIMAP_Y, MINIMAP_WIDTH, MINIMAP_HEIGHT)
     sim_state = {
         'running': True, 'paused': False, 'clock': pygame.time.Clock(),
-        'world_bounds': (SCREEN_WIDTH, SCREEN_HEIGHT),
-        'grid': SpatialHashGrid(SCREEN_WIDTH, SCREEN_HEIGHT, GRID_CELL_SIZE),
-        'food_grid': SpatialHashGrid(SCREEN_WIDTH, SCREEN_HEIGHT, GRID_CELL_SIZE),
-        'herb_grid': SpatialHashGrid(SCREEN_WIDTH, SCREEN_HEIGHT, GRID_CELL_SIZE),
-        'carn_grid': SpatialHashGrid(SCREEN_WIDTH, SCREEN_HEIGHT, GRID_CELL_SIZE),
-        'creatures': [Creature((SCREEN_WIDTH, SCREEN_HEIGHT)) for _ in range(NUM_HERBIVOROUS)],
-        'carnivores': [Creature((SCREEN_WIDTH, SCREEN_HEIGHT), is_carnivore=True) for _ in range(NUM_CARNIVORES)],
-        'food_items': [Food((SCREEN_WIDTH, SCREEN_HEIGHT)) for _ in range(NUM_FOOD)],
-        'obstacles': [Obstacle(random.randint(100, SCREEN_WIDTH-100), random.randint(100, SCREEN_HEIGHT-100), random.randint(50, 150), random.randint(50, 150)) for _ in range(NUM_OBSTACLES)],
+        'world_bounds': (WORLD_WIDTH, WORLD_HEIGHT),
+        'grid': SpatialHashGrid(WORLD_WIDTH, WORLD_HEIGHT, GRID_CELL_SIZE),
+        'food_grid': SpatialHashGrid(WORLD_WIDTH, WORLD_HEIGHT, GRID_CELL_SIZE),
+        'herb_grid': SpatialHashGrid(WORLD_WIDTH, WORLD_HEIGHT, GRID_CELL_SIZE),
+        'carn_grid': SpatialHashGrid(WORLD_WIDTH, WORLD_HEIGHT, GRID_CELL_SIZE),
+        'creatures': [Creature((WORLD_WIDTH, WORLD_HEIGHT)) for _ in range(NUM_HERBIVOROUS)],
+        'carnivores': [Creature((WORLD_WIDTH, WORLD_HEIGHT), is_carnivore=True) for _ in range(NUM_CARNIVORES)],
+        'food_items': [Food((WORLD_WIDTH, WORLD_HEIGHT)) for _ in range(NUM_FOOD)],
+        'obstacles': [Obstacle(random.randint(100, WORLD_WIDTH-100), random.randint(100, WORLD_HEIGHT-100), random.randint(50, 150), random.randint(50, 150)) for _ in range(NUM_OBSTACLES)],
         'herbivore_score_history': [], 'carnivore_score_history': [],
         'max_age_herbivore': 0, 'max_age_carnivore': 0,
         'herbivore_longevity_history': [], 'carnivore_longevity_history': [],
@@ -1035,7 +1085,9 @@ def main():
         'fps_limited': True,
         'drawing_enabled': True,
         'background_mode': False,
-        'worker_processes': []
+        'worker_processes': [],
+        'cam_x': 0.0, 'cam_y': 0.0,
+        'minimap_dragging': False,
     }
     prometheus_metrics = GameMetrics(sim_state)
     while sim_state['running']:

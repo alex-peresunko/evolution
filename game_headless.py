@@ -106,6 +106,8 @@ class SimpleRect:
 # --- Main Simulation Configuration ---
 SCREEN_WIDTH = 2400  # Width of the simulation world
 SCREEN_HEIGHT = 1300  # Height of the simulation world
+WORLD_WIDTH = 4800   # Simulation world width (larger than screen)
+WORLD_HEIGHT = 2600  # Simulation world height (larger than screen)
 NUM_HERBIVOROUS = 80  # Initial number of herbivores
 NUM_CARNIVORES = 35  # Initial number of carnivores
 NUM_FOOD = 60  # Initial number of food items
@@ -876,20 +878,20 @@ def create_initial_population(count, is_carnivore, world_bounds, brain_file):
         return [Creature(world_bounds, is_carnivore=is_carnivore) for _ in range(count)], 1
 
 def main(worker_id=None):
-    herbivores, h_gen = create_initial_population(NUM_HERBIVOROUS, False, (SCREEN_WIDTH, SCREEN_HEIGHT), "best_brain_herbivore.json")
-    carnivores, c_gen = create_initial_population(NUM_CARNIVORES, True, (SCREEN_WIDTH, SCREEN_HEIGHT), "best_brain_carnivore.json")
+    herbivores, h_gen = create_initial_population(NUM_HERBIVOROUS, False, (WORLD_WIDTH, WORLD_HEIGHT), "best_brain_herbivore.json")
+    carnivores, c_gen = create_initial_population(NUM_CARNIVORES, True, (WORLD_WIDTH, WORLD_HEIGHT), "best_brain_carnivore.json")
 
     sim_state = {
         'running': True,
-        'world_bounds': (SCREEN_WIDTH, SCREEN_HEIGHT),
-        'grid': SpatialHashGrid(SCREEN_WIDTH, SCREEN_HEIGHT, GRID_CELL_SIZE),
-        'food_grid': SpatialHashGrid(SCREEN_WIDTH, SCREEN_HEIGHT, GRID_CELL_SIZE),
-        'herb_grid': SpatialHashGrid(SCREEN_WIDTH, SCREEN_HEIGHT, GRID_CELL_SIZE),
-        'carn_grid': SpatialHashGrid(SCREEN_WIDTH, SCREEN_HEIGHT, GRID_CELL_SIZE),
+        'world_bounds': (WORLD_WIDTH, WORLD_HEIGHT),
+        'grid': SpatialHashGrid(WORLD_WIDTH, WORLD_HEIGHT, GRID_CELL_SIZE),
+        'food_grid': SpatialHashGrid(WORLD_WIDTH, WORLD_HEIGHT, GRID_CELL_SIZE),
+        'herb_grid': SpatialHashGrid(WORLD_WIDTH, WORLD_HEIGHT, GRID_CELL_SIZE),
+        'carn_grid': SpatialHashGrid(WORLD_WIDTH, WORLD_HEIGHT, GRID_CELL_SIZE),
         'creatures': herbivores,
         'carnivores': carnivores,
-        'food_items': [Food((SCREEN_WIDTH, SCREEN_HEIGHT)) for _ in range(NUM_FOOD)],
-        'obstacles': [Obstacle(random.randint(100, SCREEN_WIDTH-100), random.randint(100, SCREEN_HEIGHT-100), random.randint(50, 150), random.randint(50, 150)) for _ in range(NUM_OBSTACLES)],
+        'food_items': [Food((WORLD_WIDTH, WORLD_HEIGHT)) for _ in range(NUM_FOOD)],
+        'obstacles': [Obstacle(random.randint(100, WORLD_WIDTH-100), random.randint(100, WORLD_HEIGHT-100), random.randint(50, 150), random.randint(50, 150)) for _ in range(NUM_OBSTACLES)],
         'herbivore_score_history': [], 'carnivore_score_history': [],
         'max_age_herbivore': 0, 'max_age_carnivore': 0,
         'herbivore_longevity_history': [], 'carnivore_longevity_history': [],

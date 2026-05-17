@@ -110,6 +110,8 @@ class SimpleRect:
 # --- Main Simulation Configuration ---
 SCREEN_WIDTH = 2400
 SCREEN_HEIGHT = 1300
+WORLD_WIDTH = 4800
+WORLD_HEIGHT = 2600
 NUM_HERBIVOROUS = 80
 NUM_CARNIVORES = 35
 NUM_FOOD = 60
@@ -732,13 +734,13 @@ def create_initial_population(count, is_carnivore, world_bounds, brain_file):
         return [Creature(world_bounds, is_carnivore=is_carnivore) for _ in range(count)], 1
 
 def main():
-    herbivores, h_gen = create_initial_population(NUM_HERBIVOROUS, False, (SCREEN_WIDTH, SCREEN_HEIGHT), "best_brain_herbivore.json")
-    carnivores, c_gen = create_initial_population(NUM_CARNIVORES, True, (SCREEN_WIDTH, SCREEN_HEIGHT), "best_brain_carnivore.json")
+    herbivores, h_gen = create_initial_population(NUM_HERBIVOROUS, False, (WORLD_WIDTH, WORLD_HEIGHT), "best_brain_herbivore.json")
+    carnivores, c_gen = create_initial_population(NUM_CARNIVORES, True, (WORLD_WIDTH, WORLD_HEIGHT), "best_brain_carnivore.json")
     sim_state = {
-        'running': True, 'world_bounds': (SCREEN_WIDTH, SCREEN_HEIGHT),
+        'running': True, 'world_bounds': (WORLD_WIDTH, WORLD_HEIGHT),
         'creatures': herbivores, 'carnivores': carnivores,
-        'food_items': [Food((SCREEN_WIDTH, SCREEN_HEIGHT)) for _ in range(NUM_FOOD)],
-        'obstacles': [Obstacle(random.randint(100, SCREEN_WIDTH-100), random.randint(100, SCREEN_HEIGHT-100), random.randint(50, 150), random.randint(50, 150)) for _ in range(NUM_OBSTACLES)],
+        'food_items': [Food((WORLD_WIDTH, WORLD_HEIGHT)) for _ in range(NUM_FOOD)],
+        'obstacles': [Obstacle(random.randint(100, WORLD_WIDTH-100), random.randint(100, WORLD_HEIGHT-100), random.randint(50, 150), random.randint(50, 150)) for _ in range(NUM_OBSTACLES)],
         'herbivore_score_history': [], 'carnivore_score_history': [],
         'generation': max(h_gen, c_gen), 'generation_timer': 0,
         'hall_of_fame': {
