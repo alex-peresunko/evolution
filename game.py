@@ -21,7 +21,7 @@ NUM_FOOD = 60  # Initial number of food items
 FOOD_RADIUS = 5  # Radius of food items
 FOOD_RESPAWN_RATE = 0.2  # Probability of food respawning per tick
 NUM_OBSTACLES = 2  # Number of obstacles in the world
-GENERATION_TIME = 800  # Duration of one generation in ticks
+GENERATION_TIME = 1000  # Duration of one generation in ticks
 
 # --- Spatial Grid Configuration ---
 GRID_CELL_SIZE = 200  # Size of each cell in the spatial grid for optimization
