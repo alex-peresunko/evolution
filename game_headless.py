@@ -123,7 +123,7 @@ DEFAULT_HERBIVORE_GENES = {  # Default genetic traits for herbivores
     "max_stamina": 1000, "attractiveness": 10
 }
 DEFAULT_CARNIVORE_GENES = {  # Default genetic traits for carnivores
-    "size": 6, "max_speed": 5, "sight_distance": 500, "sight_angle": math.radians(30), 
+    "size": 6, "max_speed": 5, "sight_distance": 500, "sight_angle": math.radians(120),
     "max_stamina": 1200, "attractiveness": 10
 }
 
@@ -294,6 +294,7 @@ class Creature:
         self.last_reproduction_time: Optional[float] = None
         self.current_speed = 0.0
         self._nearest_target_dist: Optional[float] = None
+        self._nearest_smell_strength: float = 0.0
         self.dead = False
 
         # --- Life Stage Attributes ---
@@ -408,6 +409,8 @@ class Creature:
 
         if self._nearest_target_dist is not None:
             self.score += 0.001 * (1.0 - self._nearest_target_dist)
+        elif self.is_carnivore and self._nearest_smell_strength > 0:
+            self.score += 0.0005 * self._nearest_smell_strength
 
     def see(self, food_items, obstacles, herbivores=None, carnivores=None):
         inputs = []
@@ -443,6 +446,7 @@ class Creature:
             inputs.extend([np.clip(avoid_angle, -1, 1), food_dist])
 
         smell_angle, smell_strength = 0.0, 0.0
+        self._nearest_smell_strength = 0.0
         if self.is_carnivore:
             smellable_prey = [h for h in herbivores or [] if h.id != self.id]
             if smellable_prey:
@@ -452,6 +456,7 @@ class Creature:
                     angle = (math.atan2(closest_prey.pos.y - self.pos.y, closest_prey.pos.x - self.pos.x) - self.angle + math.pi) % (2 * math.pi) - math.pi
                     smell_angle = angle / math.pi
                     smell_strength = 1.0 - (dist / SMELL_DISTANCE)
+                    self._nearest_smell_strength = smell_strength
         else: # Herbivore
             smellable_predators = [c for c in carnivores or [] if c.id != self.id]
             if smellable_predators:

@@ -16,7 +16,7 @@ from prometheus_client import Counter, Gauge
 SCREEN_WIDTH = 2400  # Width of the simulation screen
 SCREEN_HEIGHT = 1300  # Height of the simulation screen
 NUM_HERBIVOROUS = 80  # Initial number of herbivores
-NUM_CARNIVORES = 80  # Initial number of carnivores
+NUM_CARNIVORES = 40  # Initial number of carnivores
 NUM_FOOD = 60  # Initial number of food items
 FOOD_RADIUS = 5  # Radius of food items
 FOOD_RESPAWN_RATE = 0.2  # Probability of food respawning per tick
@@ -32,7 +32,7 @@ DEFAULT_HERBIVORE_GENES = {  # Default genetic traits for herbivores
     "max_stamina": 1000, "attractiveness": 10
 }
 DEFAULT_CARNIVORE_GENES = {  # Default genetic traits for carnivores
-    "size": 6, "max_speed": 7, "sight_distance": 600, "sight_angle": math.radians(30), 
+    "size": 6, "max_speed": 7, "sight_distance": 600, "sight_angle": math.radians(120),
     "max_stamina": 1200, "attractiveness": 10
 }
 
@@ -52,7 +52,7 @@ FOOD_MIN_HEALTH_FACTOR = 0.2  # Minimum health value of rotting food
 
 # --- Creature Configuration ---
 HERBIVORE_HEALTH = 1000  # Initial health of herbivores
-CARNIVORE_HEALTH = 1000  # Initial health of carnivores
+CARNIVORE_HEALTH = 1500  # Initial health of carnivores
 HERBIVORE_HEALTH_PER_FOOD = 500  # Health gained by herbivores per food
 CARNIVORE_HEALTH_PER_FOOD = 1200  # Health gained by carnivores per prey
 CREATURE_ROTATION_SPEED = 0.8  # Rotation speed of creatures
@@ -233,6 +233,7 @@ class Creature:
         self.last_reproduction_time: Optional[float] = None
         self.current_speed = 0.0
         self._nearest_target_dist: Optional[float] = None
+        self._nearest_smell_strength: float = 0.0
         self.dead = False
 
         # --- Life Stage Attributes ---
@@ -359,6 +360,8 @@ class Creature:
 
         if self._nearest_target_dist is not None:
             self.score += 0.001 * (1.0 - self._nearest_target_dist)
+        elif self.is_carnivore and self._nearest_smell_strength > 0:
+            self.score += 0.0005 * self._nearest_smell_strength
 
     def see(self, food_items, obstacles, herbivores=None, carnivores=None):
         inputs = []
@@ -394,6 +397,7 @@ class Creature:
             inputs.extend([np.clip(avoid_angle, -1, 1), food_dist])
 
         smell_angle, smell_strength = 0.0, 0.0
+        self._nearest_smell_strength = 0.0
         if self.is_carnivore:
             smellable_prey = [h for h in herbivores or [] if h.id != self.id]
             if smellable_prey:
@@ -403,6 +407,7 @@ class Creature:
                     angle = (math.atan2(closest_prey.pos.y - self.pos.y, closest_prey.pos.x - self.pos.x) - self.angle + math.pi) % (2 * math.pi) - math.pi
                     smell_angle = angle / math.pi
                     smell_strength = 1.0 - (dist / SMELL_DISTANCE)
+                    self._nearest_smell_strength = smell_strength
         else: # Herbivore
             smellable_predators = [c for c in carnivores or [] if c.id != self.id]
             if smellable_predators:
