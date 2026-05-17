@@ -13,8 +13,8 @@ from prometheus_client import start_http_server
 from prometheus_client import Counter, Gauge
 
 # --- Main Simulation Configuration ---
-SCREEN_WIDTH = 2400  # Width of the simulation screen
-SCREEN_HEIGHT = 1300  # Height of the simulation screen
+SCREEN_WIDTH = 2000  # Width of the simulation screen
+SCREEN_HEIGHT = 1000  # Height of the simulation screen
 WORLD_WIDTH = 10000   # Simulation world width (larger than screen)
 WORLD_HEIGHT = 5000  # Simulation world height (larger than screen)
 MINIMAP_WIDTH = 300
@@ -23,10 +23,10 @@ MINIMAP_X, MINIMAP_Y = 10, 10
 MINIMAP_RECT = None  # initialized after pygame.init()
 NUM_HERBIVOROUS = 80  # Initial number of herbivores
 NUM_CARNIVORES = 40  # Initial number of carnivores
-NUM_FOOD = 700  # Initial number of food items
+NUM_FOOD = 1500  # Initial number of food items
 FOOD_RADIUS = 5  # Radius of food items
-FOOD_RESPAWN_RATE = 0.2  # Probability of food respawning per tick
-NUM_OBSTACLES = 10  # Number of obstacles in the world
+FOOD_RESPAWN_RATE = 0.8  # Probability of food respawning per tick
+NUM_OBSTACLES = 100  # Number of obstacles in the world
 SCORE_SAMPLE_INTERVAL = 200   # ticks between score-history snapshots for the chart
 WORKER_SYNC_INTERVAL  = 300   # ticks between island-worker brain syncs
 
@@ -75,6 +75,11 @@ HEALTH_LOSS_SPEED_FACTOR = 0.1  # Additional health loss based on speed
 REPRODUCTION_COOLDOWN = 3  # Cooldown (in seconds) between reproductions
 REPRODUCTION_POP_CAP_FACTOR = 10  # Population cap multiplier for reproduction
 MATE_SELECTION_RADIUS = 50  # Radius for finding mates
+MATE_ATTRACTION_RADIUS = 300      # How far a creature detects an eligible mate
+MATE_SEEK_HUNGER_THRESHOLD = 0.5  # Mate-seeking active when hunger < HUNGER_MAX * this
+MATE_SEEK_DANGER_THRESHOLD = 0.35 # Herbivore mate-seeking suppressed when predator smell exceeds this
+MATE_SEEK_BLEND = 0.75            # How strongly the drive overrides NN rotation (0=NN only, 1=full)
+MATE_SEEK_MIN_SPEED = 0.4         # Minimum speed fraction applied when mate-seeking
 SMELL_DISTANCE = 400  # Maximum distance for smell perception
 MAX_NORMALIZED_SIGHT_DISTANCE = 2000  # Normalization factor for sight distance
 HEALTH_GAIN_SIZE_PENALTY = 0.01  # Penalty for health gain based on size
@@ -753,6 +758,32 @@ def batch_forward(creatures, inputs_list):
             X = np.tanh(X)
     return np.tanh(X)
 
+def _apply_mate_seeking_drive(c, outputs, herb_grid, carn_grid):
+    if not c.is_adult:
+        return outputs
+    if c.hunger >= HUNGER_MAX * MATE_SEEK_HUNGER_THRESHOLD:
+        return outputs
+    if not c.is_carnivore and c._nearest_smell_strength >= MATE_SEEK_DANGER_THRESHOLD:
+        return outputs
+    if c.health < c.max_health * REPRODUCTION_HEALTH_THRESHOLD:
+        return outputs
+    my_grid = carn_grid if c.is_carnivore else herb_grid
+    nearby = my_grid.query(c.pos, MATE_ATTRACTION_RADIUS)
+    eligible = [m for m in nearby if m.id != c.id and m.is_adult
+                and m.health >= m.max_health * REPRODUCTION_HEALTH_THRESHOLD
+                and m.hunger < HUNGER_MAX * MATE_SEEK_HUNGER_THRESHOLD]
+    if not eligible:
+        return outputs
+    nearest = min(eligible, key=lambda m: c.pos.distance_to(m.pos))
+    if c.pos.distance_to(nearest.pos) < 1:
+        return outputs
+    vec = nearest.pos - c.pos
+    angle_diff = (math.atan2(vec.y, vec.x) - c.angle + math.pi) % (2 * math.pi) - math.pi
+    rotation_drive = angle_diff / math.pi
+    outputs[0] = outputs[0] * (1 - MATE_SEEK_BLEND) + rotation_drive * MATE_SEEK_BLEND
+    outputs[1] = max(outputs[1], MATE_SEEK_MIN_SPEED)
+    return outputs
+
 def _retire_creature(c, sim_state, prometheus_metrics):
     age_key = 'max_age_carnivore' if c.is_carnivore else 'max_age_herbivore'
     if c.age > sim_state.get(age_key, 0):
@@ -814,6 +845,7 @@ def update_world(sim_state, prometheus_metrics=None):
         all_inputs.append(c.see(local_food, sim_state['obstacles'], local_herbivores, local_carnivores))
     all_outputs = batch_forward(all_creatures, all_inputs)
     for c, outputs in zip(all_creatures, all_outputs):
+        outputs = _apply_mate_seeking_drive(c, list(outputs), herb_grid, carn_grid)
         c.act(outputs, sim_state['food_items'], sim_state['creatures'], sim_state['obstacles'], grid,
               food_grid=food_grid, herb_grid=herb_grid)
     alive_herbs, alive_carns = [], []

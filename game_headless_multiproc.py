@@ -152,6 +152,11 @@ HEALTH_LOSS_SPEED_FACTOR = 1
 REPRODUCTION_COOLDOWN = 3
 REPRODUCTION_POP_CAP_FACTOR = 10
 MATE_SELECTION_RADIUS = 50
+MATE_ATTRACTION_RADIUS = 300
+MATE_SEEK_HUNGER_THRESHOLD = 0.5
+MATE_SEEK_DANGER_THRESHOLD = 0.35
+MATE_SEEK_BLEND = 0.75
+MATE_SEEK_MIN_SPEED = 0.4
 SMELL_DISTANCE = 400
 MAX_NORMALIZED_SIGHT_DISTANCE = 2000
 HEALTH_GAIN_SIZE_PENALTY = 0.01
@@ -465,6 +470,32 @@ def mutate_genes(genes, default_genes):
         mutated_genes[key] = max(0.1, parent_value + mutation)
     return mutated_genes
 
+def _apply_mate_seeking_drive(c, outputs, herb_grid, carn_grid):
+    if not c.is_adult:
+        return outputs
+    if c.hunger >= HUNGER_MAX * MATE_SEEK_HUNGER_THRESHOLD:
+        return outputs
+    if not c.is_carnivore and c._nearest_smell_strength >= MATE_SEEK_DANGER_THRESHOLD:
+        return outputs
+    if c.health < c.max_health * REPRODUCTION_HEALTH_THRESHOLD:
+        return outputs
+    my_grid = carn_grid if c.is_carnivore else herb_grid
+    nearby = my_grid.query(c.pos, MATE_ATTRACTION_RADIUS)
+    eligible = [m for m in nearby if m.id != c.id and m.is_adult
+                and m.health >= m.max_health * REPRODUCTION_HEALTH_THRESHOLD
+                and m.hunger < HUNGER_MAX * MATE_SEEK_HUNGER_THRESHOLD]
+    if not eligible:
+        return outputs
+    nearest = min(eligible, key=lambda m: c.pos.distance_to(m.pos))
+    if c.pos.distance_to(nearest.pos) < 1:
+        return outputs
+    vec = nearest.pos - c.pos
+    angle_diff = (math.atan2(vec.y, vec.x) - c.angle + math.pi) % (2 * math.pi) - math.pi
+    rotation_drive = angle_diff / math.pi
+    outputs[0] = outputs[0] * (1 - MATE_SEEK_BLEND) + rotation_drive * MATE_SEEK_BLEND
+    outputs[1] = max(outputs[1], MATE_SEEK_MIN_SPEED)
+    return outputs
+
 # =============================================================================
 # PARALLEL WORKER FUNCTION
 # =============================================================================
@@ -483,6 +514,12 @@ def process_creature_chunk(args: Tuple) -> Tuple[List[Creature], set, set]:
     for obj in lean_herbivores + lean_carnivores + lean_food:
         grid.insert(obj)
 
+    # Grids of full Creature objects for mate-seeking eligibility checks
+    herb_grid_full = SpatialHashGrid(world_bounds[0], world_bounds[1], GRID_CELL_SIZE)
+    carn_grid_full = SpatialHashGrid(world_bounds[0], world_bounds[1], GRID_CELL_SIZE)
+    for h in all_herbivores: herb_grid_full.insert(h)
+    for cn in all_carnivores: carn_grid_full.insert(cn)
+
     # Create a lookup for lean food health values
     lean_food_health_map = {f.id: f.health_value for f in lean_food}
 
@@ -491,8 +528,9 @@ def process_creature_chunk(args: Tuple) -> Tuple[List[Creature], set, set]:
         local_food = [obj for obj in local_objects if isinstance(obj, LeanFood)]
         local_herbivores = [obj for obj in local_objects if isinstance(obj, LeanCreature) and not obj.is_carnivore]
         local_carnivores = [obj for obj in local_objects if isinstance(obj, LeanCreature) and obj.is_carnivore]
-        
+
         outputs = c.perceive_and_think(local_food, local_herbivores, local_carnivores, obstacles)
+        outputs = _apply_mate_seeking_drive(c, list(outputs), herb_grid_full, carn_grid_full)
         
         interaction_radius = c.size * 2
         nearby_objects = grid.query(c.pos, interaction_radius)
