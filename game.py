@@ -21,7 +21,7 @@ NUM_FOOD = 60  # Initial number of food items
 FOOD_RADIUS = 5  # Radius of food items
 FOOD_RESPAWN_RATE = 0.2  # Probability of food respawning per tick
 NUM_OBSTACLES = 10  # Number of obstacles in the world
-GENERATION_TIME = 1000  # Duration of one generation in ticks
+GENERATION_TIME = 800  # Duration of one generation in ticks
 
 # --- Spatial Grid Configuration ---
 GRID_CELL_SIZE = 200  # Size of each cell in the spatial grid for optimization
@@ -32,19 +32,20 @@ DEFAULT_HERBIVORE_GENES = {  # Default genetic traits for herbivores
     "max_stamina": 1000, "attractiveness": 10
 }
 DEFAULT_CARNIVORE_GENES = {  # Default genetic traits for carnivores
-    "size": 6, "max_speed": 7, "sight_distance": 600, "sight_angle": math.radians(120),
+    "size": 6, "max_speed": 10, "sight_distance": 600, "sight_angle": math.radians(120),
     "max_stamina": 1200, "attractiveness": 10
 }
 
 # --- Gene Constraints ---
 GENE_MIN_MAX = {
     "size": (5, 25),              # Min/max radius of a creature
-    "max_speed": (2, 10),         # Min/max potential top speed
+    "max_speed": (2, 10),         # Min/max potential top speed (herbivores)
     "sight_distance": (50, 800),  # Min/max sight distance. It cannot grow infinitely.
     "sight_angle": (math.radians(10), math.radians(360)), # Min/max sight cone angle
     "max_stamina": (500, 2500),   # Min/max base stamina
     "attractiveness": (1, 100)    # Min/max attractiveness for mating
 }
+CARNIVORE_GENE_MIN_MAX = {**GENE_MIN_MAX, "max_speed": (2, 15)}  # Carnivores can evolve faster
 
 # --- Food Configuration ---
 FOOD_MAX_LIFETIME = 700  # Maximum lifetime of food before it rots
@@ -247,9 +248,10 @@ class Creature:
         else: self.genes = DEFAULT_CARNIVORE_GENES.copy() if is_carnivore else DEFAULT_HERBIVORE_GENES.copy()
         
         # Clamp initial genes to their defined min/max values
+        gene_constraints = CARNIVORE_GENE_MIN_MAX if is_carnivore else GENE_MIN_MAX
         for key, value in self.genes.items():
-            if key in GENE_MIN_MAX:
-                min_val, max_val = GENE_MIN_MAX[key]
+            if key in gene_constraints:
+                min_val, max_val = gene_constraints[key]
                 self.genes[key] = np.clip(value, min_val, max_val)
 
         # --- Distinguish Genetic Traits from Effective Physical Traits ---
@@ -545,29 +547,25 @@ def combine_brains(brain1, brain2):
         child.biases[i][mask_b] = brain2.biases[i][mask_b]
     return child
 
-def combine_genes(genes1, genes2, default_genes):
+def combine_genes(genes1, genes2, default_genes, gene_constraints=None):
+    constraints = gene_constraints or GENE_MIN_MAX
     child_genes = {}
     for key, default_value in default_genes.items():
         p1_gene = genes1.get(key, default_value)
         p2_gene = genes2.get(key, default_value)
         avg_gene = (p1_gene + p2_gene) / 2.0
-        base_value = avg_gene
-        mutation = base_value * random.uniform(-GENE_MUTATION_AMOUNT, GENE_MUTATION_AMOUNT)
-        
-        # Clamp the new gene value within its defined min/max bounds
-        min_val, max_val = GENE_MIN_MAX[key]
+        mutation = avg_gene * random.uniform(-GENE_MUTATION_AMOUNT, GENE_MUTATION_AMOUNT)
+        min_val, max_val = constraints[key]
         child_genes[key] = np.clip(avg_gene + mutation, min_val, max_val)
     return child_genes
 
-def mutate_genes(genes, default_genes):
+def mutate_genes(genes, default_genes, gene_constraints=None):
+    constraints = gene_constraints or GENE_MIN_MAX
     mutated_genes = {}
     for key, default_value in default_genes.items():
         parent_value = genes.get(key, default_value)
-        base_value = parent_value
-        mutation = base_value * random.uniform(-GENE_MUTATION_AMOUNT, GENE_MUTATION_AMOUNT)
-        
-        # Clamp the new gene value within its defined min/max bounds
-        min_val, max_val = GENE_MIN_MAX[key]
+        mutation = parent_value * random.uniform(-GENE_MUTATION_AMOUNT, GENE_MUTATION_AMOUNT)
+        min_val, max_val = constraints[key]
         mutated_genes[key] = np.clip(parent_value + mutation, min_val, max_val)
     return mutated_genes
 
@@ -678,7 +676,7 @@ def handle_events(sim_state, prometheus_metrics):
                     for _ in range(NUM_CARNIVORES - 1):
                         mutated_brain = progenitor_brain_c.copy()
                         mutated_brain.mutate(MUTATION_RATE, MUTATION_AMOUNT)
-                        mutated_genes = mutate_genes(progenitor_genes_c, DEFAULT_CARNIVORE_GENES)
+                        mutated_genes = mutate_genes(progenitor_genes_c, DEFAULT_CARNIVORE_GENES, gene_constraints=CARNIVORE_GENE_MIN_MAX)
                         new_carnivores.append(Creature(sim_state['world_bounds'], brain=mutated_brain, is_carnivore=True, genes=mutated_genes))
                     sim_state['carnivores'] = new_carnivores
                     print(f"Loaded new carnivore population.")
@@ -796,7 +794,8 @@ def update_world(sim_state):
 
             if potential_mates:
                 best_mate = max(potential_mates, key=lambda mate: mate.attractiveness)
-                child_genes = combine_genes(p1.genes, best_mate.genes, default_genes)
+                constraints = CARNIVORE_GENE_MIN_MAX if p1.is_carnivore else GENE_MIN_MAX
+                child_genes = combine_genes(p1.genes, best_mate.genes, default_genes, gene_constraints=constraints)
                 child_brain = combine_brains(p1.brain, best_mate.brain)
                 child = Creature(sim_state['world_bounds'], brain=child_brain, is_carnivore=p1.is_carnivore, genes=child_genes)
                 child.pos = (p1.pos + best_mate.pos) / 2
@@ -855,6 +854,7 @@ def evolve_population(sim_state, prometheus_metrics):
 
     def get_new_population(survivors, count, is_carnivore, default_genes):
         species = 'carnivore' if is_carnivore else 'herbivore'
+        constraints = CARNIVORE_GENE_MIN_MAX if is_carnivore else GENE_MIN_MAX
         if not survivors:
             print(f"--- {species.capitalize()} EXTINCTION — repopulating from Hall of Fame ---")
             progenitor_record = hall_of_fame[species]
@@ -867,7 +867,7 @@ def evolve_population(sim_state, prometheus_metrics):
                 for _ in range(num_mutated_descendants):
                     new_brain = progenitor_record['brain'].copy()
                     new_brain.mutate(MUTATION_RATE, MUTATION_AMOUNT)
-                    new_genes = mutate_genes(progenitor_record['genes'], default_genes)
+                    new_genes = mutate_genes(progenitor_record['genes'], default_genes, gene_constraints=constraints)
                     new_pop.append(Creature(sim_state['world_bounds'], brain=new_brain, is_carnivore=is_carnivore, genes=new_genes))
             num_defaults = count - len(new_pop)
             for _ in range(num_defaults):
@@ -882,7 +882,7 @@ def evolve_population(sim_state, prometheus_metrics):
             else:
                 new_brain = parent1.brain.copy()
             new_brain.mutate(MUTATION_RATE, MUTATION_AMOUNT)
-            new_genes = mutate_genes(parent1.genes, default_genes)
+            new_genes = mutate_genes(parent1.genes, default_genes, gene_constraints=constraints)
             new_pop.append(Creature(sim_state['world_bounds'], brain=new_brain, is_carnivore=is_carnivore, genes=new_genes))
         return new_pop
 
