@@ -237,15 +237,16 @@ class NeuralNetwork:
         new_nn.biases = [b.copy() for b in self.biases]
         return new_nn
 
-    def save(self, filename, prometheus_metrics, generation=None, genes=None):
+    def save(self, filename, prometheus_metrics, generation=None, genes=None, score=None):
         save_dir = "saved_brains"
         os.makedirs(save_dir, exist_ok=True)
         data = {
             "layer_sizes": self.layer_sizes,
-            "weights": [w.tolist() for w in self.weights], 
+            "weights": [w.tolist() for w in self.weights],
             "biases": [b.tolist() for b in self.biases]
         }
         if generation is not None: data["generation"] = generation
+        if score is not None: data["score"] = score
         if genes is not None: data["genes"] = genes
         if prometheus_metrics and prometheus_metrics.metric_game_uptime_seconds._value.get() is not None: 
             data["metric_game_uptime_seconds"] = prometheus_metrics.metric_game_uptime_seconds._value.get()
@@ -636,24 +637,59 @@ def update_world(sim_state):
     sim_state['creatures'].extend([c for c in new_offspring if not c.is_carnivore])
     sim_state['carnivores'].extend([c for c in new_offspring if c.is_carnivore])
 
-def evolve_population(sim_state, prometheus_metrics):
-    sim_state['herbivore_score_history'].append(max([c.score for c in sim_state['creatures']] + [0]))
-    sim_state['carnivore_score_history'].append(max([c.score for c in sim_state['carnivores']] + [0]))
+def _fmt_genes(genes):
+    if not genes:
+        return "n/a"
+    g = genes
+    return (f"spd:{g.get('max_speed',0):.2f}  sz:{g.get('size',0):.1f}"
+            f"  sight:{g.get('sight_distance',0):.0f}  stam:{g.get('max_stamina',0):.0f}")
 
+def evolve_population(sim_state, prometheus_metrics, worker_id=None):
+    creatures   = sim_state['creatures']
+    carnivores  = sim_state['carnivores']
+    gen         = sim_state['generation']
     hall_of_fame = sim_state['hall_of_fame']
-    best_herbivore_of_gen = max(sim_state['creatures'], key=lambda c: c.score, default=None)
+    prefix = f"[W{worker_id}] " if worker_id is not None else ""
+
+    herb_scores = [c.score for c in creatures]
+    carn_scores = [c.score for c in carnivores]
+    best_herb_score = max(herb_scores) if herb_scores else 0.0
+    avg_herb_score  = (sum(herb_scores) / len(herb_scores)) if herb_scores else 0.0
+    best_carn_score = max(carn_scores) if carn_scores else 0.0
+    avg_carn_score  = (sum(carn_scores) / len(carn_scores)) if carn_scores else 0.0
+
+    sim_state['herbivore_score_history'].append(best_herb_score)
+    sim_state['carnivore_score_history'].append(best_carn_score)
+
+    hof_herb_updated = False
+    best_herbivore_of_gen = max(creatures, key=lambda c: c.score, default=None)
     if best_herbivore_of_gen and best_herbivore_of_gen.score > hall_of_fame['herbivore']['score']:
-        print(f"\nNew Herbivore record! Gen {sim_state['generation']}, Score: {best_herbivore_of_gen.score}")
         hall_of_fame['herbivore']['score'] = best_herbivore_of_gen.score
         hall_of_fame['herbivore']['genes'] = best_herbivore_of_gen.genes.copy()
         hall_of_fame['herbivore']['brain'] = best_herbivore_of_gen.brain.copy()
+        hof_herb_updated = True
 
-    best_carnivore_of_gen = max(sim_state['carnivores'], key=lambda c: c.score, default=None)
+    hof_carn_updated = False
+    best_carnivore_of_gen = max(carnivores, key=lambda c: c.score, default=None)
     if best_carnivore_of_gen and best_carnivore_of_gen.score > hall_of_fame['carnivore']['score']:
-        print(f"\nNew Carnivore record! Gen {sim_state['generation']}, Score: {best_carnivore_of_gen.score}")
         hall_of_fame['carnivore']['score'] = best_carnivore_of_gen.score
         hall_of_fame['carnivore']['genes'] = best_carnivore_of_gen.genes.copy()
         hall_of_fame['carnivore']['brain'] = best_carnivore_of_gen.brain.copy()
+        hof_carn_updated = True
+
+    if worker_id is not None:
+        if hof_herb_updated and hall_of_fame['herbivore']['brain']:
+            hall_of_fame['herbivore']['brain'].save(
+                f"worker_{worker_id}_herbivore.json", prometheus_metrics,
+                generation=gen, genes=hall_of_fame['herbivore']['genes'],
+                score=hall_of_fame['herbivore']['score']
+            )
+        if hof_carn_updated and hall_of_fame['carnivore']['brain']:
+            hall_of_fame['carnivore']['brain'].save(
+                f"worker_{worker_id}_carnivore.json", prometheus_metrics,
+                generation=gen, genes=hall_of_fame['carnivore']['genes'],
+                score=hall_of_fame['carnivore']['score']
+            )
     
     def get_new_population(survivors, count, is_carnivore, default_genes):
         species = 'carnivore' if is_carnivore else 'herbivore'
@@ -713,7 +749,22 @@ def evolve_population(sim_state, prometheus_metrics):
 
     sim_state['creatures'] = get_new_population(survivors_h, NUM_HERBIVOROUS, False, DEFAULT_HERBIVORE_GENES)
     sim_state['carnivores'] = get_new_population(survivors_c, NUM_CARNIVORES, True, DEFAULT_CARNIVORE_GENES)
-    
+
+    hof_h_score = hall_of_fame['herbivore']['score']
+    hof_c_score = hall_of_fame['carnivore']['score']
+    h_new = " *** NEW RECORD ***" if hof_herb_updated else ""
+    c_new = " *** NEW RECORD ***" if hof_carn_updated else ""
+    top_h_genes = _fmt_genes(survivors_h[0].genes if survivors_h else hall_of_fame['herbivore']['genes'])
+    top_c_genes = _fmt_genes(survivors_c[0].genes if survivors_c else hall_of_fame['carnivore']['genes'])
+    bar = "-" * 62
+    print(f"\n{prefix}{bar}")
+    print(f"{prefix}  Gen {gen}  |  Herb pop:{len(creatures)}  Carn pop:{len(carnivores)}")
+    print(f"{prefix}  Herbivores  surv:{len(survivors_h)}  best:{best_herb_score:.3f}  avg:{avg_herb_score:.3f}  HoF:{hof_h_score:.3f}{h_new}")
+    print(f"{prefix}    genes → {top_h_genes}")
+    print(f"{prefix}  Carnivores  surv:{len(survivors_c)}  best:{best_carn_score:.3f}  avg:{avg_carn_score:.3f}  HoF:{hof_c_score:.3f}{c_new}")
+    print(f"{prefix}    genes → {top_c_genes}")
+    print(f"{prefix}{bar}")
+
     sim_state['generation'] += 1
     sim_state['generation_timer'] = 0
 
@@ -823,8 +874,7 @@ def create_initial_population(count, is_carnivore, world_bounds, brain_file):
         print(f"No saved brain found for {species_name}s. Creating a new random population.")
         return [Creature(world_bounds, is_carnivore=is_carnivore) for _ in range(count)], 1
 
-def main():
-    # --- NEW: Load populations from files or create new ones ---
+def main(worker_id=None):
     herbivores, h_gen = create_initial_population(NUM_HERBIVOROUS, False, (SCREEN_WIDTH, SCREEN_HEIGHT), "best_brain_herbivore.json")
     carnivores, c_gen = create_initial_population(NUM_CARNIVORES, True, (SCREEN_WIDTH, SCREEN_HEIGHT), "best_brain_carnivore.json")
 
@@ -860,12 +910,7 @@ def main():
             update_world(sim_state)
 
             if sim_state['generation_timer'] > GENERATION_TIME:
-                evolve_population(sim_state, prometheus_metrics)
-                print(f"\n--- Generation {sim_state['generation']-1} complete ---")
-                print(f"    Herbivore best score: {sim_state['herbivore_score_history'][-1]}")
-                print(f"    Carnivore best score: {sim_state['carnivore_score_history'][-1]}")
-                print(f"    HoF Herbivore: {sim_state['hall_of_fame']['herbivore']['score']}")
-                print(f"    HoF Carnivore: {sim_state['hall_of_fame']['carnivore']['score']}")
+                evolve_population(sim_state, prometheus_metrics, worker_id=worker_id)
 
             prometheus_metrics.update(sim_state, dt)
 
@@ -875,9 +920,16 @@ def main():
                 ticks_this_second = 0
                 last_tps_report_time = now
                 progress = sim_state['generation_timer'] / GENERATION_TIME
-                progress_bar = '#' * int(progress * 20)
-                progress_bar = progress_bar.ljust(20, '-')
-                sys.stdout.write(f"\rGen {sim_state['generation']} [{progress_bar}] {int(progress*100)}% | TPS: {tps} | Herb: {len(sim_state['creatures'])} | Carn: {len(sim_state['carnivores'])}   ")
+                progress_bar = ('#' * int(progress * 20)).ljust(20, '-')
+                hof_h = sim_state['hall_of_fame']['herbivore']['score']
+                hof_c = sim_state['hall_of_fame']['carnivore']['score']
+                pfx = f"[W{worker_id}] " if worker_id is not None else ""
+                sys.stdout.write(
+                    f"\r{pfx}Gen {sim_state['generation']} [{progress_bar}] {int(progress*100):3d}%"
+                    f" | TPS:{tps:4d}"
+                    f" | H:{len(sim_state['creatures']):3d} C:{len(sim_state['carnivores']):3d}"
+                    f" | HoF H:{hof_h:.3f} C:{hof_c:.3f}   "
+                )
                 sys.stdout.flush()
     
     except KeyboardInterrupt:
@@ -914,5 +966,10 @@ def main():
 
 
 if __name__ == "__main__":
-    start_http_server(8000)
-    main()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--worker-id', type=int, default=None)
+    args = parser.parse_args()
+    if args.worker_id is None:
+        start_http_server(8000)
+    main(worker_id=args.worker_id)
