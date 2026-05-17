@@ -600,6 +600,9 @@ def batch_forward(creatures, inputs_list):
     return np.tanh(X)
 
 def _retire_creature(c, sim_state, prometheus_metrics, worker_id=None):
+    age_key = 'max_age_carnivore' if c.is_carnivore else 'max_age_herbivore'
+    if c.age > sim_state.get(age_key, 0):
+        sim_state[age_key] = c.age
     species = 'carnivore' if c.is_carnivore else 'herbivore'
     hof = sim_state['hall_of_fame']
     if c.score > hof[species]['score']:
@@ -689,6 +692,8 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
         best_c = max((c.score for c in sim_state['carnivores']), default=0.0)
         sim_state['herbivore_score_history'].append(best_h)
         sim_state['carnivore_score_history'].append(best_c)
+        sim_state['herbivore_longevity_history'].append(sim_state['max_age_herbivore'])
+        sim_state['carnivore_longevity_history'].append(sim_state['max_age_carnivore'])
 
     if sim_state['creatures']:
         for c in sim_state['creatures']: c.is_best = False
@@ -886,6 +891,8 @@ def main(worker_id=None):
         'food_items': [Food((SCREEN_WIDTH, SCREEN_HEIGHT)) for _ in range(NUM_FOOD)],
         'obstacles': [Obstacle(random.randint(100, SCREEN_WIDTH-100), random.randint(100, SCREEN_HEIGHT-100), random.randint(50, 150), random.randint(50, 150)) for _ in range(NUM_OBSTACLES)],
         'herbivore_score_history': [], 'carnivore_score_history': [],
+        'max_age_herbivore': 0, 'max_age_carnivore': 0,
+        'herbivore_longevity_history': [], 'carnivore_longevity_history': [],
         'generation': max(h_gen, c_gen),
         'tick': 0, 'last_autosave_tick': 0,
         'hall_of_fame': {
@@ -922,7 +929,8 @@ def main(worker_id=None):
                     f"\r{pfx}Gen {sim_state['generation']} tick={sim_state['tick']:7d}"
                     f" | TPS:{tps:4d}"
                     f" | H:{len(sim_state['creatures']):3d} C:{len(sim_state['carnivores']):3d}"
-                    f" | HoF H:{hof_h:.3f} C:{hof_c:.3f}   "
+                    f" | HoF H:{hof_h:.3f} C:{hof_c:.3f}"
+                    f" | LonH:{sim_state['max_age_herbivore']} LonC:{sim_state['max_age_carnivore']}   "
                 )
                 sys.stdout.flush()
     

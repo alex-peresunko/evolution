@@ -724,6 +724,9 @@ def batch_forward(creatures, inputs_list):
     return np.tanh(X)
 
 def _retire_creature(c, sim_state, prometheus_metrics):
+    age_key = 'max_age_carnivore' if c.is_carnivore else 'max_age_herbivore'
+    if c.age > sim_state.get(age_key, 0):
+        sim_state[age_key] = c.age
     species = 'carnivore' if c.is_carnivore else 'herbivore'
     hof = sim_state['hall_of_fame']
     if c.score > hof[species]['score']:
@@ -810,6 +813,8 @@ def update_world(sim_state, prometheus_metrics=None):
         best_c = max((c.score for c in sim_state['carnivores']), default=0.0)
         sim_state['herbivore_score_history'].append(best_h)
         sim_state['carnivore_score_history'].append(best_c)
+        sim_state['herbivore_longevity_history'].append(sim_state['max_age_herbivore'])
+        sim_state['carnivore_longevity_history'].append(sim_state['max_age_carnivore'])
 
     if sim_state['creatures']:
         for c in sim_state['creatures']: c.is_best = False
@@ -896,7 +901,9 @@ def draw_elements(screen, font, sim_state):
              f"Herbivores: {len(sim_state['creatures'])}", f"Carnivores: {len(sim_state['carnivores'])}",
              f"Food: {len(sim_state['food_items'])}",
              f"Top Herbivore Score: {max([c.score for c in sim_state['creatures']] + [0])}",
-             f"Top Carnivore Score: {max([c.score for c in sim_state['carnivores']] + [0])}", 
+             f"Top Carnivore Score: {max([c.score for c in sim_state['carnivores']] + [0])}",
+             f"Longest H: {sim_state['max_age_herbivore']} ticks",
+             f"Longest C: {sim_state['max_age_carnivore']} ticks",
              f"FPS: {int(sim_state['clock'].get_fps())} [{limit_status}]"]
     for line in stats: screen.blit(font.render(line, True, COLOR_TEXT), (10, text_y)); text_y += 30
     selected = sim_state.get('selected_creature')
@@ -910,6 +917,8 @@ def draw_elements(screen, font, sim_state):
     chart_x_start = SCREEN_WIDTH - chart_width - 10
     draw_score_chart(screen, font, sim_state['carnivore_score_history'], (chart_x_start, SCREEN_HEIGHT - chart_height - 10), (chart_width, chart_height), COLOR_CARNIVORE, "Carnivore Top Score")
     draw_score_chart(screen, font, sim_state['herbivore_score_history'], (chart_x_start, SCREEN_HEIGHT - (chart_height * 2) - chart_spacing - 10), (chart_width, chart_height), COLOR_CREATURE, "Herbivore Top Score")
+    draw_score_chart(screen, font, sim_state['carnivore_longevity_history'], (chart_x_start, SCREEN_HEIGHT - chart_height*3 - chart_spacing*2 - 10), (chart_width, chart_height), COLOR_CARNIVORE, "Carnivore Max Longevity")
+    draw_score_chart(screen, font, sim_state['herbivore_longevity_history'], (chart_x_start, SCREEN_HEIGHT - chart_height*4 - chart_spacing*3 - 10), (chart_width, chart_height), COLOR_CREATURE, "Herbivore Max Longevity")
     if sim_state['paused']:
         screen.blit(font.render("PAUSED", True, (255, 100, 100)), (SCREEN_WIDTH // 2 - 60, 20))
     pygame.display.flip()
@@ -1016,6 +1025,8 @@ def main():
         'food_items': [Food((SCREEN_WIDTH, SCREEN_HEIGHT)) for _ in range(NUM_FOOD)],
         'obstacles': [Obstacle(random.randint(100, SCREEN_WIDTH-100), random.randint(100, SCREEN_HEIGHT-100), random.randint(50, 150), random.randint(50, 150)) for _ in range(NUM_OBSTACLES)],
         'herbivore_score_history': [], 'carnivore_score_history': [],
+        'max_age_herbivore': 0, 'max_age_carnivore': 0,
+        'herbivore_longevity_history': [], 'carnivore_longevity_history': [],
         'generation': 1, 'tick': 0, 'last_autosave_tick': 0, 'selected_creature': None,
         'hall_of_fame': {
             'herbivore': {'score': -1, 'genes': None, 'brain': None},
