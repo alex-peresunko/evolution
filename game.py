@@ -233,6 +233,7 @@ class Creature:
         self.last_reproduction_time: Optional[float] = None
         self.current_speed = 0.0
         self._nearest_target_dist: Optional[float] = None
+        self.dead = False
 
         # --- Life Stage Attributes ---
         self.age = 0
@@ -276,7 +277,8 @@ class Creature:
         inputs = self.see(local_food, obstacles, local_herbivores, local_carnivores)
         return self.think(inputs)
 
-    def act(self, outputs, global_food_list, global_herbivore_list, obstacles, grid):
+    def act(self, outputs, global_food_list, global_herbivore_list, obstacles, grid,
+            food_grid=None, herb_grid=None):
         # --- Aging and Growth ---
         self.age += 1
         if not self.is_adult:
@@ -311,44 +313,41 @@ class Creature:
         self.health -= (HEALTH_LOSS_PER_TICK + (new_speed * HEALTH_LOSS_SPEED_FACTOR))
         self.current_speed = new_speed
 
-        # --- CORRECTED & EFFICIENT INTERACTION LOGIC ---
-        interaction_radius = self.size * 2 
-        nearby_objects = grid.query(self.pos, interaction_radius)
+        # --- INTERACTION LOGIC ---
+        interaction_radius = self.size * 2
 
         if self.is_carnivore:
             base_size = DEFAULT_CARNIVORE_GENES['size']
-            for obj in nearby_objects:
-                if isinstance(obj, Creature) and not obj.is_carnivore:
-                    prey = obj
-                    is_close_enough = self.pos.distance_to(prey.pos) < (self.size + prey.size)
-                    if is_close_enough:
-                        vec_to_prey = prey.pos - self.pos
-                        if vec_to_prey.length() > 0:
-                            angle_to_prey = math.atan2(vec_to_prey.y, vec_to_prey.x)
-                            angle_diff = (angle_to_prey - self.angle + math.pi) % (2 * math.pi) - math.pi
-                            if abs(angle_diff) <= CARNIVORE_BITE_ANGLE / 2:
-                                if prey in global_herbivore_list:
-                                    global_herbivore_list.remove(prey)
-                                    base_health_gain = CARNIVORE_HEALTH_PER_FOOD
-                                    size_penalty_denominator = 1 + (self.genetic_size - base_size) * HEALTH_GAIN_SIZE_PENALTY
-                                    actual_health_gain = base_health_gain / max(0.1, size_penalty_denominator)
-                                    self.health = min(self.max_health, self.health + actual_health_gain)
-                                    self.score += 1
-                                    break 
-        else: # Is Herbivore
-            base_size = DEFAULT_HERBIVORE_GENES['size']
-            for obj in nearby_objects:
-                if isinstance(obj, Food):
-                    food = obj
-                    if self.pos.distance_to(food.pos) < (self.size + FOOD_RADIUS):
-                        if food in global_food_list:
-                            global_food_list.remove(food)
-                            base_health_gain = food.get_health_value()
+            nearby_prey = (herb_grid or grid).query(self.pos, interaction_radius)
+            for prey in nearby_prey:
+                if prey.dead: continue
+                is_close_enough = self.pos.distance_to(prey.pos) < (self.size + prey.size)
+                if is_close_enough:
+                    vec_to_prey = prey.pos - self.pos
+                    if vec_to_prey.length() > 0:
+                        angle_to_prey = math.atan2(vec_to_prey.y, vec_to_prey.x)
+                        angle_diff = (angle_to_prey - self.angle + math.pi) % (2 * math.pi) - math.pi
+                        if abs(angle_diff) <= CARNIVORE_BITE_ANGLE / 2:
+                            prey.dead = True
+                            base_health_gain = CARNIVORE_HEALTH_PER_FOOD
                             size_penalty_denominator = 1 + (self.genetic_size - base_size) * HEALTH_GAIN_SIZE_PENALTY
                             actual_health_gain = base_health_gain / max(0.1, size_penalty_denominator)
                             self.health = min(self.max_health, self.health + actual_health_gain)
                             self.score += 1
-                            break 
+                            break
+        else: # Is Herbivore
+            base_size = DEFAULT_HERBIVORE_GENES['size']
+            nearby_food = (food_grid or grid).query(self.pos, interaction_radius)
+            for food in nearby_food:
+                if food.consumed: continue
+                if self.pos.distance_to(food.pos) < (self.size + FOOD_RADIUS):
+                    food.consumed = True
+                    base_health_gain = food.get_health_value()
+                    size_penalty_denominator = 1 + (self.genetic_size - base_size) * HEALTH_GAIN_SIZE_PENALTY
+                    actual_health_gain = base_health_gain / max(0.1, size_penalty_denominator)
+                    self.health = min(self.max_health, self.health + actual_health_gain)
+                    self.score += 1
+                    break
 
         # --- CORRECTED OBSTACLE COLLISION ---
         for obs in obstacles:
@@ -490,6 +489,7 @@ class Food:
         self.max_lifetime = FOOD_MAX_LIFETIME
         self.health_value_base = HERBIVORE_HEALTH_PER_FOOD
         self.min_health_factor = FOOD_MIN_HEALTH_FACTOR
+        self.consumed = False
 
     def update(self):
         self.lifetime += 1
@@ -609,7 +609,7 @@ def _sync_worker_brains(sim_state):
                     brain, _, genes = NeuralNetwork.load(f"worker_{w['id']}_{suffix}", BRAIN_TOPOLOGY)
                     hof[species] = {'score': worker_score, 'brain': brain, 'genes': genes}
                     delta = worker_score - old_score
-                    print(f"[Island sync] {species.capitalize()} HoF upgraded by worker {w['id']}: {old_score:.3f} → {worker_score:.3f} (+{delta:.3f})")
+                    print(f"[Island sync] {species.capitalize()} HoF upgraded by worker {w['id']}: {old_score:.3f} -> {worker_score:.3f} (+{delta:.3f})")
             except (FileNotFoundError, json.JSONDecodeError, Exception):
                 pass
 
@@ -690,25 +690,46 @@ def handle_events(sim_state, prometheus_metrics):
                 sim_state['selected_creature'] = None
                 food = Food(sim_state['world_bounds']); food.pos = pygame.math.Vector2(mx, my); sim_state['food_items'].append(food)
 
+def batch_forward(creatures, inputs_list):
+    if not creatures:
+        return []
+    X = np.array(inputs_list, dtype=np.float64)
+    n_layers = len(creatures[0].brain.weights)
+    for layer_idx in range(n_layers):
+        W = np.stack([c.brain.weights[layer_idx] for c in creatures])
+        b = np.stack([c.brain.biases[layer_idx] for c in creatures])
+        X = np.einsum('ni,nij->nj', X, W) + b[:, 0, :]
+        if layer_idx < n_layers - 1:
+            X = np.tanh(X)
+    return np.tanh(X)
+
 def update_world(sim_state):
     sim_state['generation_timer'] += 1
     grid = sim_state['grid']
     for food in sim_state['food_items']: food.update()
-    sim_state['food_items'][:] = [f for f in sim_state['food_items'] if not f.is_rotten()]
+    sim_state['food_items'][:] = [f for f in sim_state['food_items'] if not f.is_rotten() and not f.consumed]
     if random.random() < FOOD_RESPAWN_RATE and len(sim_state['food_items']) < NUM_FOOD * 1.5:
         sim_state['food_items'].append(Food(sim_state['world_bounds']))
     all_creatures = sim_state['creatures'] + sim_state['carnivores']
-    grid.clear()
-    for obj in all_creatures + sim_state['food_items']:
-        grid.insert(obj)
+    food_grid = sim_state['food_grid']
+    herb_grid = sim_state['herb_grid']
+    carn_grid = sim_state['carn_grid']
+    food_grid.clear(); herb_grid.clear(); carn_grid.clear()
+    for f in sim_state['food_items']: food_grid.insert(f)
+    for h in sim_state['creatures']:   herb_grid.insert(h)
+    for cn in sim_state['carnivores']: carn_grid.insert(cn)
+    all_inputs = []
     for c in all_creatures:
-        local_objects = grid.query(c.pos, max(c.sight_distance, SMELL_DISTANCE))
-        local_food = [obj for obj in local_objects if isinstance(obj, Food)]
-        local_herbivores = [obj for obj in local_objects if isinstance(obj, Creature) and not obj.is_carnivore]
-        local_carnivores = [obj for obj in local_objects if isinstance(obj, Creature) and obj.is_carnivore]
-        outputs = c.perceive_and_think(local_food, local_herbivores, local_carnivores, sim_state['obstacles'])
-        c.act(outputs, sim_state['food_items'], sim_state['creatures'], sim_state['obstacles'], grid)
-    sim_state['creatures'][:] = [c for c in sim_state['creatures'] if c.is_alive()]
+        q_radius = max(c.sight_distance, SMELL_DISTANCE)
+        local_food       = food_grid.query(c.pos, q_radius)
+        local_herbivores = herb_grid.query(c.pos, q_radius)
+        local_carnivores = carn_grid.query(c.pos, q_radius)
+        all_inputs.append(c.see(local_food, sim_state['obstacles'], local_herbivores, local_carnivores))
+    all_outputs = batch_forward(all_creatures, all_inputs)
+    for c, outputs in zip(all_creatures, all_outputs):
+        c.act(outputs, sim_state['food_items'], sim_state['creatures'], sim_state['obstacles'], grid,
+              food_grid=food_grid, herb_grid=herb_grid)
+    sim_state['creatures'][:] = [c for c in sim_state['creatures'] if c.is_alive() and not c.dead]
     sim_state['carnivores'][:] = [c for c in sim_state['carnivores'] if c.is_alive()]
     if sim_state['creatures']:
         for c in sim_state['creatures']: c.is_best = False
@@ -874,9 +895,9 @@ def evolve_population(sim_state, prometheus_metrics):
     print(f"\n{bar}")
     print(f"  Gen {gen}  |  Herb pop:{len(creatures)}  Carn pop:{len(carnivores)}")
     print(f"  Herbivores  surv:{len(survivors_h)}  best:{best_herb_score:.3f}  avg:{avg_herb_score:.3f}  HoF:{hof_h_score:.3f}{h_new}")
-    print(f"    genes → {top_h_genes}")
+    print(f"    genes -> {top_h_genes}")
     print(f"  Carnivores  surv:{len(survivors_c)}  best:{best_carn_score:.3f}  avg:{avg_carn_score:.3f}  HoF:{hof_c_score:.3f}{c_new}")
-    print(f"    genes → {top_c_genes}")
+    print(f"    genes -> {top_c_genes}")
     print(f"{bar}")
 
     sim_state['generation'] += 1
@@ -1008,6 +1029,9 @@ def main():
         'running': True, 'paused': False, 'clock': pygame.time.Clock(),
         'world_bounds': (SCREEN_WIDTH, SCREEN_HEIGHT),
         'grid': SpatialHashGrid(SCREEN_WIDTH, SCREEN_HEIGHT, GRID_CELL_SIZE),
+        'food_grid': SpatialHashGrid(SCREEN_WIDTH, SCREEN_HEIGHT, GRID_CELL_SIZE),
+        'herb_grid': SpatialHashGrid(SCREEN_WIDTH, SCREEN_HEIGHT, GRID_CELL_SIZE),
+        'carn_grid': SpatialHashGrid(SCREEN_WIDTH, SCREEN_HEIGHT, GRID_CELL_SIZE),
         'creatures': [Creature((SCREEN_WIDTH, SCREEN_HEIGHT)) for _ in range(NUM_HERBIVOROUS)],
         'carnivores': [Creature((SCREEN_WIDTH, SCREEN_HEIGHT), is_carnivore=True) for _ in range(NUM_CARNIVORES)],
         'food_items': [Food((SCREEN_WIDTH, SCREEN_HEIGHT)) for _ in range(NUM_FOOD)],
