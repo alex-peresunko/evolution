@@ -20,7 +20,7 @@ NUM_CARNIVORES = 40  # Initial number of carnivores
 NUM_FOOD = 60  # Initial number of food items
 FOOD_RADIUS = 5  # Radius of food items
 FOOD_RESPAWN_RATE = 0.2  # Probability of food respawning per tick
-NUM_OBSTACLES = 2  # Number of obstacles in the world
+NUM_OBSTACLES = 10  # Number of obstacles in the world
 GENERATION_TIME = 1000  # Duration of one generation in ticks
 
 # --- Spatial Grid Configuration ---
@@ -58,10 +58,12 @@ CARNIVORE_HEALTH_PER_FOOD = 1200  # Health gained by carnivores per prey
 CREATURE_ROTATION_SPEED = 0.8  # Rotation speed of creatures
 HEALTH_LOST_ON_HIT = 50  # Health lost when colliding with obstacles
 CARNIVORE_BITE_ANGLE = math.radians(60) # The angle of the carnivore's attack cone
+HUNGER_MAX = 400  # Ticks before starvation penalty starts
+HUNGER_HEALTH_PENALTY = 5  # Health lost per tick at max starvation
 REPRODUCTION_HEALTH_THRESHOLD = 0.6  # Minimum health ratio for reproduction
 MAX_REPRODUCTIONS = 50  # Maximum number of reproductions per creature
 HEALTH_LOSS_PER_TICK = 1  # Health lost per tick
-HEALTH_LOSS_SPEED_FACTOR = 0.5  # Additional health loss based on speed
+HEALTH_LOSS_SPEED_FACTOR = 0.1  # Additional health loss based on speed
 REPRODUCTION_COOLDOWN = 3  # Cooldown (in seconds) between reproductions
 REPRODUCTION_POP_CAP_FACTOR = 10  # Population cap multiplier for reproduction
 MATE_SELECTION_RADIUS = 50  # Radius for finding mates
@@ -86,7 +88,7 @@ STAMINA_EXHAUSTION_PENALTY = 0.2  # Speed penalty when stamina is exhausted
 
 # --- Neural Network Configuration ---
 NUM_WHISKERS = 3  # Number of whiskers for obstacle detection
-BRAIN_TOPOLOGY = [NUM_WHISKERS + 2 + 2 + 3 + 4 + 1, 16, 8, 2]  # Neural network structure
+BRAIN_TOPOLOGY = [NUM_WHISKERS + 2 + 2 + 3 + 4 + 1 + 2 + 1, 16, 8, 2]  # +2 prey vel, +1 hunger
 
 # --- Evolution Configuration ---
 MUTATION_RATE = 0.08  # Probability of mutation per gene
@@ -235,6 +237,7 @@ class Creature:
         self._nearest_target_dist: Optional[float] = None
         self._nearest_smell_strength: float = 0.0
         self.dead = False
+        self.hunger = 0
 
         # --- Life Stage Attributes ---
         self.age = 0
@@ -311,7 +314,9 @@ class Creature:
         self.pos += pygame.math.Vector2(math.cos(self.angle), math.sin(self.angle)) * new_speed
         self.pos.x %= self.world_bounds[0]
         self.pos.y %= self.world_bounds[1]
-        self.health -= (HEALTH_LOSS_PER_TICK + (new_speed * HEALTH_LOSS_SPEED_FACTOR))
+        self.hunger += 1
+        hunger_penalty = HUNGER_HEALTH_PENALTY * min(1.0, max(0.0, (self.hunger - HUNGER_MAX) / HUNGER_MAX)) if self.hunger > HUNGER_MAX else 0
+        self.health -= (HEALTH_LOSS_PER_TICK + (new_speed * HEALTH_LOSS_SPEED_FACTOR) + hunger_penalty)
         self.current_speed = new_speed
 
         # --- INTERACTION LOGIC ---
@@ -334,6 +339,7 @@ class Creature:
                             size_penalty_denominator = 1 + (self.genetic_size - base_size) * HEALTH_GAIN_SIZE_PENALTY
                             actual_health_gain = base_health_gain / max(0.1, size_penalty_denominator)
                             self.health = min(self.max_health, self.health + actual_health_gain)
+                            self.hunger = 0
                             self.score += 1
                             break
         else: # Is Herbivore
@@ -347,6 +353,7 @@ class Creature:
                     size_penalty_denominator = 1 + (self.genetic_size - base_size) * HEALTH_GAIN_SIZE_PENALTY
                     actual_health_gain = base_health_gain / max(0.1, size_penalty_denominator)
                     self.health = min(self.max_health, self.health + actual_health_gain)
+                    self.hunger = 0
                     self.score += 1
                     break
 
@@ -382,9 +389,14 @@ class Creature:
                 return abs(angle_to_target) <= self.sight_angle / 2
             return False
 
+        nearest_prey = None
         if self.is_carnivore:
             visible_prey = [h for h in herbivores or [] if in_sight(h)]
-            target_info = self.get_target_info(min(visible_prey, key=lambda h: self.pos.distance_to(h.pos))) if visible_prey else (0, 1)
+            if visible_prey:
+                nearest_prey = min(visible_prey, key=lambda h: self.pos.distance_to(h.pos))
+                target_info = self.get_target_info(nearest_prey)
+            else:
+                target_info = (0, 1)
             self._nearest_target_dist = target_info[1] if visible_prey else None
             inputs.extend(target_info)
         else:
@@ -419,6 +431,13 @@ class Creature:
                     smell_strength = 1.0 - (dist / SMELL_DISTANCE)
         inputs.extend([smell_angle, smell_strength])
 
+        pvx, pvy = 0.0, 0.0
+        if nearest_prey is not None:
+            spd_norm = nearest_prey.current_speed / nearest_prey.max_speed if nearest_prey.max_speed > 0 else 0
+            pvx = math.cos(nearest_prey.angle) * spd_norm
+            pvy = math.sin(nearest_prey.angle) * spd_norm
+        inputs.extend([pvx, pvy])
+
         inputs.append(self.health / self.max_health)
         inputs.append(math.sin(self.angle))
         inputs.append(math.cos(self.angle))
@@ -427,6 +446,7 @@ class Creature:
         inputs.append(self.sight_distance / MAX_NORMALIZED_SIGHT_DISTANCE)
         inputs.append(self.sight_angle / (2 * math.pi))
         inputs.append(self.stamina / self.max_stamina if self.max_stamina > 0 else 0)
+        inputs.append(min(1.0, self.hunger / HUNGER_MAX))
         return inputs
 
     def get_target_info(self, target):
