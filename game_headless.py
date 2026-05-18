@@ -728,10 +728,8 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
             sim_state['generation'] += 1
 
     if sim_state['tick'] % SCORE_SAMPLE_INTERVAL == 0:
-        best_h = max((c.score for c in sim_state['creatures']),  default=0.0)
-        best_c = max((c.score for c in sim_state['carnivores']), default=0.0)
-        sim_state['herbivore_score_history'].append(best_h)
-        sim_state['carnivore_score_history'].append(best_c)
+        sim_state['herbivore_score_history'].append(sim_state['hall_of_fame']['herbivore']['score'])
+        sim_state['carnivore_score_history'].append(sim_state['hall_of_fame']['carnivore']['score'])
         sim_state['herbivore_longevity_history'].append(sim_state['max_age_herbivore'])
         sim_state['carnivore_longevity_history'].append(sim_state['max_age_carnivore'])
 

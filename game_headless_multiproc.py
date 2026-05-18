@@ -659,8 +659,8 @@ def update_world(sim_state, executor):
     sim_state['carnivores'].extend([c for c in new_offspring if c.is_carnivore])
 
 def evolve_population(sim_state, prometheus_metrics):
-    sim_state['herbivore_score_history'].append(max([c.score for c in sim_state['creatures']] + [0]))
-    sim_state['carnivore_score_history'].append(max([c.score for c in sim_state['carnivores']] + [0]))
+    sim_state['herbivore_score_history'].append(sim_state['hall_of_fame']['herbivore']['score'])
+    sim_state['carnivore_score_history'].append(sim_state['hall_of_fame']['carnivore']['score'])
     hall_of_fame = sim_state['hall_of_fame']
     best_herbivore_of_gen = max(sim_state['creatures'], key=lambda c: c.score, default=None)
     if best_herbivore_of_gen and best_herbivore_of_gen.score > hall_of_fame['herbivore']['score']:

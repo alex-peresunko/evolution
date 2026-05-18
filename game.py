@@ -22,7 +22,7 @@ MINIMAP_HEIGHT = int(WORLD_HEIGHT / WORLD_WIDTH * MINIMAP_WIDTH)
 MINIMAP_X, MINIMAP_Y = 10, 10
 MINIMAP_RECT = None  # initialized after pygame.init()
 NUM_HERBIVOROUS = 80  # Initial number of herbivores
-NUM_CARNIVORES = 40  # Initial number of carnivores
+NUM_CARNIVORES = 80  # Initial number of carnivores
 NUM_FOOD = 1500  # Initial number of food items
 FOOD_RADIUS = 5  # Radius of food items
 FOOD_RESPAWN_RATE = 0.8  # Probability of food respawning per tick
@@ -59,8 +59,8 @@ FOOD_MAX_LIFETIME = 700  # Maximum lifetime of food before it rots
 FOOD_MIN_HEALTH_FACTOR = 0.2  # Minimum health value of rotting food
 
 # --- Creature Configuration ---
-HERBIVORE_HEALTH = 1000  # Initial health of herbivores
-CARNIVORE_HEALTH = 1500  # Initial health of carnivores
+HERBIVORE_HEALTH = 3000  # Initial health of herbivores
+CARNIVORE_HEALTH = 4500  # Initial health of carnivores
 HERBIVORE_HEALTH_PER_FOOD = 500  # Health gained by herbivores per food
 CARNIVORE_HEALTH_PER_FOOD = 1200  # Health gained by carnivores per prey
 CREATURE_ROTATION_SPEED = 0.8  # Rotation speed of creatures
@@ -873,10 +873,8 @@ def update_world(sim_state, prometheus_metrics=None):
             sim_state['generation'] += 1
 
     if sim_state['tick'] % SCORE_SAMPLE_INTERVAL == 0:
-        best_h = max((c.score for c in sim_state['creatures']),  default=0.0)
-        best_c = max((c.score for c in sim_state['carnivores']), default=0.0)
-        sim_state['herbivore_score_history'].append(best_h)
-        sim_state['carnivore_score_history'].append(best_c)
+        sim_state['herbivore_score_history'].append(sim_state['hall_of_fame']['herbivore']['score'])
+        sim_state['carnivore_score_history'].append(sim_state['hall_of_fame']['carnivore']['score'])
         sim_state['herbivore_longevity_history'].append(sim_state['max_age_herbivore'])
         sim_state['carnivore_longevity_history'].append(sim_state['max_age_carnivore'])
 
@@ -964,6 +962,11 @@ def draw_minimap(screen, sim_state):
         mr = pygame.Rect(int(obs.rect.x * sx), int(obs.rect.y * sy),
                          max(2, int(obs.rect.width * sx)), max(2, int(obs.rect.height * sy)))
         pygame.draw.rect(mmap, COLOR_OBSTACLE, mr)
+    for c in sim_state['creatures'] + sim_state['carnivores']:
+        if c.is_best:
+            dot_x = int(c.pos.x * sx)
+            dot_y = int(c.pos.y * sy)
+            pygame.draw.circle(mmap, COLOR_BEST_CREATURE, (dot_x, dot_y), 3)
     vr = pygame.Rect(int(sim_state['cam_x'] * sx), int(sim_state['cam_y'] * sy),
                      max(1, int(SCREEN_WIDTH * sx)), max(1, int(SCREEN_HEIGHT * sy)))
     pygame.draw.rect(mmap, COLOR_TEXT, vr, 1)
@@ -1005,8 +1008,8 @@ def draw_elements(screen, font, sim_state):
     else: sim_state['selected_creature'] = None
     chart_width, chart_height, chart_spacing = 300, 120, 10
     chart_x_start = SCREEN_WIDTH - chart_width - 10
-    draw_score_chart(screen, font, sim_state['carnivore_score_history'], (chart_x_start, SCREEN_HEIGHT - chart_height - 10), (chart_width, chart_height), COLOR_CARNIVORE, "Carnivore Top Score")
-    draw_score_chart(screen, font, sim_state['herbivore_score_history'], (chart_x_start, SCREEN_HEIGHT - (chart_height * 2) - chart_spacing - 10), (chart_width, chart_height), COLOR_CREATURE, "Herbivore Top Score")
+    draw_score_chart(screen, font, sim_state['carnivore_score_history'], (chart_x_start, SCREEN_HEIGHT - chart_height - 10), (chart_width, chart_height), COLOR_CARNIVORE, "Carnivore HoF Score")
+    draw_score_chart(screen, font, sim_state['herbivore_score_history'], (chart_x_start, SCREEN_HEIGHT - (chart_height * 2) - chart_spacing - 10), (chart_width, chart_height), COLOR_CREATURE, "Herbivore HoF Score")
     draw_score_chart(screen, font, sim_state['carnivore_longevity_history'], (chart_x_start, SCREEN_HEIGHT - chart_height*3 - chart_spacing*2 - 10), (chart_width, chart_height), COLOR_CARNIVORE, "Carnivore Max Longevity")
     draw_score_chart(screen, font, sim_state['herbivore_longevity_history'], (chart_x_start, SCREEN_HEIGHT - chart_height*4 - chart_spacing*3 - 10), (chart_width, chart_height), COLOR_CREATURE, "Herbivore Max Longevity")
     if sim_state['paused']:
