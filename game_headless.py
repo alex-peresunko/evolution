@@ -388,7 +388,7 @@ class Creature:
         self.current_speed = new_speed
 
         # --- INTERACTION LOGIC ---
-        interaction_radius = self.size * 2
+        interaction_radius = self.size + GENE_MIN_MAX['size'][1]
 
         if self.is_carnivore and self.respawn_immunity_ticks == 0:
             base_size = DEFAULT_CARNIVORE_GENES['size']

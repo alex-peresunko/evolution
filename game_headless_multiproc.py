@@ -532,7 +532,7 @@ def process_creature_chunk(args: Tuple) -> Tuple[List[Creature], set, set]:
         outputs = c.perceive_and_think(local_food, local_herbivores, local_carnivores, obstacles)
         outputs = _apply_mate_seeking_drive(c, list(outputs), herb_grid_full, carn_grid_full)
         
-        interaction_radius = c.size * 2
+        interaction_radius = c.size + GENE_MIN_MAX['size'][1]
         nearby_objects = grid.query(c.pos, interaction_radius)
         
         if c.is_carnivore and c.respawn_immunity_ticks == 0:

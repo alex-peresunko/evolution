@@ -21,8 +21,8 @@ MINIMAP_WIDTH = 300
 MINIMAP_HEIGHT = int(WORLD_HEIGHT / WORLD_WIDTH * MINIMAP_WIDTH)
 MINIMAP_X, MINIMAP_Y = 10, 10
 MINIMAP_RECT = None  # initialized after pygame.init()
-NUM_HERBIVOROUS = 80  # Initial number of herbivores
-NUM_CARNIVORES = 80  # Initial number of carnivores
+NUM_HERBIVOROUS = 120  # Initial number of herbivores
+NUM_CARNIVORES = 120  # Initial number of carnivores
 NUM_FOOD = 1500  # Initial number of food items
 FOOD_RADIUS = 5  # Radius of food items
 FOOD_RESPAWN_RATE = 0.8  # Probability of food respawning per tick
@@ -338,7 +338,7 @@ class Creature:
         self.current_speed = new_speed
 
         # --- INTERACTION LOGIC ---
-        interaction_radius = self.size * 2
+        interaction_radius = self.size + GENE_MIN_MAX['size'][1]
 
         if self.is_carnivore and self.respawn_immunity_ticks == 0:
             base_size = DEFAULT_CARNIVORE_GENES['size']
