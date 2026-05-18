@@ -541,17 +541,12 @@ def process_creature_chunk(args: Tuple) -> Tuple[List[Creature], set, set]:
                 if isinstance(obj, LeanCreature) and not obj.is_carnivore:
                     if obj.id in prey_eaten_ids: continue
                     if c.pos.distance_to(obj.pos) < (c.size + obj.size):
-                        vec_to_prey = obj.pos - c.pos
-                        if vec_to_prey.length() > 0:
-                            angle_to_prey = math.atan2(vec_to_prey.y, vec_to_prey.x)
-                            angle_diff = (angle_to_prey - c.angle + math.pi) % (2 * math.pi) - math.pi
-                            if abs(angle_diff) <= CARNIVORE_BITE_ANGLE / 2:
-                                prey_eaten_ids.add(obj.id)
-                                base_health_gain = CARNIVORE_HEALTH_PER_FOOD
-                                size_penalty = 1 + (c.genetic_size - base_size) * HEALTH_GAIN_SIZE_PENALTY
-                                c.health = min(c.max_health, c.health + base_health_gain / max(0.1, size_penalty))
-                                c.score += 1
-                                break
+                        prey_eaten_ids.add(obj.id)
+                        base_health_gain = CARNIVORE_HEALTH_PER_FOOD
+                        size_penalty = 1 + (c.genetic_size - base_size) * HEALTH_GAIN_SIZE_PENALTY
+                        c.health = min(c.max_health, c.health + base_health_gain / max(0.1, size_penalty))
+                        c.score += 1
+                        break
         else: # Herbivore
             base_size = DEFAULT_HERBIVORE_GENES['size']
             for obj in nearby_objects:

@@ -395,21 +395,15 @@ class Creature:
             nearby_prey = (herb_grid or grid).query(self.pos, interaction_radius)
             for prey in nearby_prey:
                 if prey.dead: continue
-                is_close_enough = self.pos.distance_to(prey.pos) < (self.size + prey.size)
-                if is_close_enough:
-                    vec_to_prey = prey.pos - self.pos
-                    if vec_to_prey.length() > 0:
-                        angle_to_prey = math.atan2(vec_to_prey.y, vec_to_prey.x)
-                        angle_diff = (angle_to_prey - self.angle + math.pi) % (2 * math.pi) - math.pi
-                        if abs(angle_diff) <= CARNIVORE_BITE_ANGLE / 2:
-                            prey.dead = True
-                            base_health_gain = CARNIVORE_HEALTH_PER_FOOD
-                            size_penalty_denominator = 1 + (self.genetic_size - base_size) * HEALTH_GAIN_SIZE_PENALTY
-                            actual_health_gain = base_health_gain / max(0.1, size_penalty_denominator)
-                            self.health = min(self.max_health, self.health + actual_health_gain)
-                            self.hunger = 0
-                            self.score += 1
-                            break
+                if self.pos.distance_to(prey.pos) < (self.size + prey.size):
+                    prey.dead = True
+                    base_health_gain = CARNIVORE_HEALTH_PER_FOOD
+                    size_penalty_denominator = 1 + (self.genetic_size - base_size) * HEALTH_GAIN_SIZE_PENALTY
+                    actual_health_gain = base_health_gain / max(0.1, size_penalty_denominator)
+                    self.health = min(self.max_health, self.health + actual_health_gain)
+                    self.hunger = 0
+                    self.score += 1
+                    break
         else: # Is Herbivore
             base_size = DEFAULT_HERBIVORE_GENES['size']
             nearby_food = (food_grid or grid).query(self.pos, interaction_radius)
