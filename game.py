@@ -15,17 +15,17 @@ from prometheus_client import Counter, Gauge
 # --- Main Simulation Configuration ---
 SCREEN_WIDTH = 2000  # Width of the simulation screen
 SCREEN_HEIGHT = 1000  # Height of the simulation screen
-WORLD_WIDTH = 10000   # Simulation world width (larger than screen)
-WORLD_HEIGHT = 5000  # Simulation world height (larger than screen)
+WORLD_WIDTH = 5000   # Simulation world width (larger than screen)
+WORLD_HEIGHT = 3000  # Simulation world height (larger than screen)
 MINIMAP_WIDTH = 300
 MINIMAP_HEIGHT = int(WORLD_HEIGHT / WORLD_WIDTH * MINIMAP_WIDTH)
 MINIMAP_X, MINIMAP_Y = 10, 10
 MINIMAP_RECT = None  # initialized after pygame.init()
 NUM_HERBIVOROUS = 120  # Initial number of herbivores
 NUM_CARNIVORES = 120  # Initial number of carnivores
-NUM_FOOD = 1500  # Initial number of food items
+NUM_FOOD = 2000  # Initial number of food items
 FOOD_RADIUS = 5  # Radius of food items
-FOOD_RESPAWN_RATE = 0.8  # Probability of food respawning per tick
+FOOD_RESPAWN_RATE = 10  # Probability of food respawning per tick
 NUM_OBSTACLES = 100  # Number of obstacles in the world
 SCORE_SAMPLE_INTERVAL = 200   # ticks between score-history snapshots for the chart
 WORKER_SYNC_INTERVAL  = 300   # ticks between island-worker brain syncs
@@ -55,12 +55,12 @@ GENE_MIN_MAX = {
 CARNIVORE_GENE_MIN_MAX = {**GENE_MIN_MAX, "max_speed": (2, 15)}  # Carnivores can evolve faster
 
 # --- Food Configuration ---
-FOOD_MAX_LIFETIME = 700  # Maximum lifetime of food before it rots
+FOOD_MAX_LIFETIME = 1500  # Maximum lifetime of food before it rots
 FOOD_MIN_HEALTH_FACTOR = 0.2  # Minimum health value of rotting food
 
 # --- Creature Configuration ---
-HERBIVORE_HEALTH = 3000  # Initial health of herbivores
-CARNIVORE_HEALTH = 4500  # Initial health of carnivores
+HERBIVORE_HEALTH = 5000  # Initial health of herbivores
+CARNIVORE_HEALTH = 5000  # Initial health of carnivores
 HERBIVORE_HEALTH_PER_FOOD = 500  # Health gained by herbivores per food
 CARNIVORE_HEALTH_PER_FOOD = 1200  # Health gained by carnivores per prey
 CREATURE_ROTATION_SPEED = 0.8  # Rotation speed of creatures
