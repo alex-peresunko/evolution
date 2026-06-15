@@ -24,48 +24,65 @@ poetry run python -m cProfile -s time <script.py>
 **Docker:**
 ```bash
 docker compose up   # builds image, exposes Prometheus metrics on port 8000
+# Dockerfile uses game_headless.py (no display required) and requirements-headless.txt (no pygame)
 ```
-
-> Note: The Dockerfile runs `game.py` by default, which needs a display. In containers, prefer `game_headless.py`.
 
 ## Architecture
 
-### Three simulation variants
+### Package layout
 
-All three files share the same core classes and logic but differ in execution mode:
+```
+src/evolution/         # shared library
+  config.py            # all simulation constants (single source of truth)
+  math_types.py        # headless Vector2 / SimpleRect (pygame-free)
+  neural_network.py    # NeuralNetwork class
+  genetics.py          # combine_brains, combine_genes, mutate_genes
+  spatial.py           # SpatialHashGrid
+  entities.py          # Creature, Food, Obstacle (with vec2/rect factory injection)
+  simulation.py        # update_world, create_initial_population, build_sim_state
+  metrics.py           # GameMetrics (Prometheus)
+  brain_store.py       # save_brain / load_brain
+```
+
+Entry scripts are thin wrappers (~60–150 lines each):
 
 | File | Mode |
 |------|------|
-| `game.py` | Graphical via pygame |
-| `game_headless.py` | Console-only; replaces pygame with custom `Vector2`/`SimpleRect` |
-| `game_headless_multiproc.py` | Console + multiprocessing; uses `LeanCreature`/`LeanFood` frozen dataclasses for pickling |
+| `game.py` | Graphical via pygame; passes `pygame.math.Vector2` factory to entities |
+| `game_headless.py` | Console-only; uses headless `Vector2`/`SimpleRect` (the default) |
+| `game_headless_multiproc.py` | Console + ProcessPoolExecutor; keeps local `LeanCreature`/`LeanFood` for IPC |
 
-### Core classes (defined per-file, not shared modules)
+### Vector type injection
 
-- **`NeuralNetwork`** — Feed-forward NN, topology `[16, 8, 2]`, tanh activations. `forward()`, `mutate()`, `crossover()`, `save()`/`load()` (JSON). Load is topology-resilient: weights copy into the overlap region if architecture changes.
-- **`Creature`** — Single agent. Has a `NeuralNetwork` brain and a `genes` dict. `see()` builds the 16-input vector; `think()` runs the NN; `act()` applies movement, eating, collision. The `is_carnivore` flag distinguishes species.
+`Creature`/`Food`/`Obstacle` accept `vec2_factory=` / `rect_factory=` kwargs. Default: headless `Vector2`/`SimpleRect`. `game.py` passes `pygame.math.Vector2` / `pygame.Rect`. Child creatures inherit the factory from parent 1 during reproduction inside `simulation.py`.
+
+### Core classes
+
+- **`NeuralNetwork`** — Feed-forward NN, topology `[18, 16, 8, 2]`, tanh activations. `forward()`, `mutate()`, `copy()`, `save()`/`load()` (JSON). Load is topology-resilient.
+- **`Creature`** — Single agent with `NeuralNetwork` brain and `genes` dict. `see()` builds 18-input vector; `think()` runs the NN; `act()` applies movement, eating, collision.
 - **`Food`** — Passive resource with freshness/lifetime decay.
 - **`Obstacle`** — Static rectangle; collision via `clipline`/`colliderect`.
-- **`SpatialHashGrid`** — Bucketed spatial lookup, O(1) neighbor queries; critical for populations of 80–160+ creatures.
-- **`GameMetrics`** — Prometheus `Counter`/`Gauge` wrappers; updated each tick; served on port 8000.
+- **`SpatialHashGrid`** — Bucketed spatial lookup, O(1) neighbor queries.
+- **`GameMetrics`** — Prometheus `Counter`/`Gauge` wrappers; served on port 8000.
 
-### Neural network inputs (16 values)
+### Neural network inputs (18 values)
 
 ```
 whisker[0..2]          obstacle proximity
 target_angle, dist     nearest food (herbivore) or prey (carnivore)
 pred_angle, dist       nearest predator / smell direction
 smell_angle, strength  omnidirectional scent
+prey_vel_x, prey_vel_y prey velocity vector (carnivores)
 health_ratio           current health normalized
 sin(angle), cos(angle) heading
-size, speed, sight_dist, sight_angle, stamina
+size, speed, sight_dist, sight_angle, stamina, hunger
 ```
 
 Outputs: `[rotation_delta, speed]` — both tanh-clamped.
 
-### Evolution loop (800 ticks per generation)
+### Evolution
 
-Each tick: `see()` → `think()` → `act()`. Eligible nearby creatures reproduce sexually (brain crossover + gene averaging + mutation). End of generation: top 5% survive; new population bred from survivors. A **Hall of Fame** preserves all-time best individuals per species and repopulates after extinction.
+Continuous sexual reproduction: eligible nearby creatures reproduce (brain crossover + gene averaging + mutation). **Hall of Fame** preserves all-time best individuals per species and repopulates after extinction.
 
 ### Genetic traits
 
@@ -73,11 +90,17 @@ Each tick: `see()` → `think()` → `act()`. Eligible nearby creatures reproduc
 
 ### Saved brains
 
-Best brains auto-save as JSON to `saved_brains/` every 100 generations. Headless mode loads them on startup. The JSON format stores weights as nested lists with topology metadata, enabling cross-architecture loading.
+Best brains auto-save as JSON to `saved_brains/`. Headless mode loads them on startup. The JSON format stores weights as nested lists with topology metadata, enabling cross-architecture loading.
 
-### Prototype / legacy files
+### Tests
 
-`main.py`, `sprite.py`, `sprite_demo.py`, `neural_network.py`, `neural_network_sample.py`, `test.py` are early prototypes not used by the main simulation.
+```bash
+poetry run pytest tests/ -v   # 24 tests, no pygame required
+```
+
+### Legacy / prototype files
+
+Early prototypes moved to `archive/` — not used by the main simulation.
 
 ## Metrics
 
