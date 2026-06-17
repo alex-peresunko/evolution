@@ -165,24 +165,25 @@ def draw_elements(screen, font, sim_state):
         f"Herbivores: {len(sim_state['creatures'])}",
         f"Carnivores: {len(sim_state['carnivores'])}",
         f"Food: {len(sim_state['food_items'])}",
-        f"Top Herbivore Score: {max([c.score for c in sim_state['creatures']] + [0])}",
-        f"Top Carnivore Score: {max([c.score for c in sim_state['carnivores']] + [0])}",
+        f"Top Herbivore Score: {max([c.score for c in sim_state['creatures']] + [0]):.2f}",
+        f"Top Carnivore Score: {max([c.score for c in sim_state['carnivores']] + [0]):.2f}",
         f"Longest H: {sim_state['max_age_herbivore']} ticks",
         f"Longest C: {sim_state['max_age_carnivore']} ticks",
         f"FPS: {int(sim_state['clock'].get_fps())} [{limit_status}]",
     ]
+    line_h = font.get_linesize()
     for line in stats:
         screen.blit(font.render(line, True, config.COLOR_TEXT), (10, text_y))
-        text_y += 30
+        text_y += line_h
     selected = sim_state.get("selected_creature")
     if selected and selected.is_alive():
         info_lines = [f"{k}: {v}" for k, v in selected.get_info().items()]
         x, y = config.SCREEN_WIDTH - 450, 10
         screen.blit(font.render("Selected Creature", True, config.COLOR_TEXT), (x, y))
-        y += 30
+        y += line_h
         for line in info_lines:
             screen.blit(font.render(line, True, config.COLOR_TEXT), (x, y))
-            y += 25
+            y += line_h
     else:
         sim_state["selected_creature"] = None
     chart_width, chart_height, chart_spacing = 150, 60, 5
@@ -328,7 +329,7 @@ def main():
     pygame.init()
     screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
     pygame.display.set_caption("Evolution Sim | S to Save, L to Load, SPACE to Pause")
-    font = pygame.font.Font(None, 30)
+    font = pygame.font.Font(None, config.HUD_FONT_SIZE)
     MINIMAP_RECT = pygame.Rect(
         config.MINIMAP_X, config.MINIMAP_Y, config.MINIMAP_WIDTH, config.MINIMAP_HEIGHT
     )
