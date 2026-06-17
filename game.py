@@ -5,6 +5,8 @@ import os
 import subprocess
 import sys
 import time
+import ctypes
+import ctypes.util
 from multiprocessing import cpu_count
 
 import pygame
@@ -89,28 +91,25 @@ def _sync_worker_brains(sim_state):
 # Rendering helpers
 # =============================================================================
 def draw_score_chart(screen, font, history, position, size, color, title):
-    chart_rect = pygame.Rect(position, size)
-    pygame.draw.rect(screen, (40, 40, 50), chart_rect)
-    pygame.draw.rect(screen, config.COLOR_TEXT, chart_rect, 1)
-    title_surf = font.render(title, True, color)
-    screen.blit(title_surf, (position[0] + 5, position[1] + 5))
-    if len(history) < 2:
-        return
-    max_score = max(history) if history else 1
-    if max_score == 0:
-        max_score = 1
-    points = [
-        (position[0] + (i / (len(history) - 1)) * size[0],
-         position[1] + size[1] - (score / max_score) * (size[1] - 30))
-        for i, score in enumerate(history)
-    ]
-    if len(points) >= 2:
-        pygame.draw.lines(screen, color, False, points, 2)
-    screen.blit(font.render(f"Peak: {int(max_score)}", True, config.COLOR_TEXT),
-                (position[0] + 5, position[1] + 25))
-    gen_label_surf = font.render(f"Gens: {len(history)}", True, config.COLOR_TEXT)
-    screen.blit(gen_label_surf,
-                (position[0] + size[0] - gen_label_surf.get_width() - 5, position[1] + 5))
+    small_font = pygame.font.Font(None, config.CHART_FONT_SIZE)
+    line_h = small_font.get_linesize()
+    surf = pygame.Surface(size)
+    surf.set_alpha(config.CHART_OPACITY)
+    surf.fill((40, 40, 50))
+    pygame.draw.rect(surf, config.COLOR_TEXT, surf.get_rect(), 1)
+    surf.blit(small_font.render(title, True, color), (3, 3))
+    if len(history) >= 2:
+        max_score = max(history) or 1
+        points = [
+            (i / (len(history) - 1) * size[0],
+             size[1] - (score / max_score) * (size[1] - line_h * 2 - 4))
+            for i, score in enumerate(history)
+        ]
+        pygame.draw.lines(surf, color, False, points, 1)
+        surf.blit(small_font.render(f"Peak: {int(max_score)}", True, config.COLOR_TEXT), (3, line_h + 4))
+        gen_label_surf = small_font.render(f"Gens: {len(history)}", True, config.COLOR_TEXT)
+        surf.blit(gen_label_surf, (size[0] - gen_label_surf.get_width() - 3, 3))
+    screen.blit(surf, position)
 
 
 def _set_viewport_center(wx, wy, sim_state):
@@ -186,7 +185,7 @@ def draw_elements(screen, font, sim_state):
             y += 25
     else:
         sim_state["selected_creature"] = None
-    chart_width, chart_height, chart_spacing = 300, 120, 10
+    chart_width, chart_height, chart_spacing = 150, 60, 5
     chart_x_start = config.SCREEN_WIDTH - chart_width - 10
     draw_score_chart(screen, font, sim_state["carnivore_score_history"],
                      (chart_x_start, config.SCREEN_HEIGHT - chart_height - 10),
@@ -313,7 +312,18 @@ def handle_events(sim_state, prometheus_metrics):
 # =============================================================================
 # Main
 # =============================================================================
+def _set_performance_qos():
+    try:
+        libc = ctypes.CDLL(ctypes.util.find_library('c'))
+        QOS_CLASS_USER_INTERACTIVE = 0x21
+        libc.pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0)
+        print("QoS set to USER_INTERACTIVE (P-cores preferred).")
+    except Exception:
+        pass
+
+
 def main():
+    _set_performance_qos()
     global MINIMAP_RECT
     pygame.init()
     screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
