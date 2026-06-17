@@ -307,13 +307,15 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
     sim_state["carnivores"].extend([c for c in new_offspring if c.is_carnivore])
 
 
-def create_initial_population(count, is_carnivore, world_bounds, brain_file,
+def create_initial_population(count, is_carnivore, world_bounds, brain_file=None,
                                *, vec2_factory=None, rect_factory=None):
     default_genes = DEFAULT_CARNIVORE_GENES if is_carnivore else DEFAULT_HERBIVORE_GENES
     species_name = "carnivore" if is_carnivore else "herbivore"
     constraints = CARNIVORE_GENE_MIN_MAX if is_carnivore else GENE_MIN_MAX
     kwargs = {"vec2_factory": vec2_factory, "rect_factory": rect_factory}
     try:
+        if brain_file is None:
+            raise FileNotFoundError
         progenitor_brain, gen, progenitor_genes = NeuralNetwork.load(brain_file, BRAIN_TOPOLOGY)
         if progenitor_genes is None:
             progenitor_genes = default_genes

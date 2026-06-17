@@ -325,11 +325,11 @@ def main():
 
     world_bounds = (config.WORLD_WIDTH, config.WORLD_HEIGHT)
     herbivores, h_gen = create_initial_population(
-        config.NUM_HERBIVOROUS, False, world_bounds, "best_brain_herbivore.json",
+        config.NUM_HERBIVOROUS, False, world_bounds,
         vec2_factory=_vec2, rect_factory=_rect,
     )
     carnivores, c_gen = create_initial_population(
-        config.NUM_CARNIVORES, True, world_bounds, "best_brain_carnivore.json",
+        config.NUM_CARNIVORES, True, world_bounds,
         vec2_factory=_vec2, rect_factory=_rect,
     )
     food_items = [Food(world_bounds, vec2_factory=_vec2) for _ in range(config.NUM_FOOD)]
