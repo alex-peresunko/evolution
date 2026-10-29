@@ -26,7 +26,7 @@ _vec2 = pygame.math.Vector2
 def _rect(x, y, w, h): return pygame.Rect(x, y, w, h)
 
 MINIMAP_RECT = None  # initialized after pygame.init()
-_CHART_FONT = None
+_CHART_FONTS = {}
 SPEEDS = (1, 2, 4, 8, 16, 32)  # simulation ticks per drawn frame
 _PANELS = {}
 
@@ -123,29 +123,34 @@ def _draw_text_block(screen, font, lines, x, y, title=None):
         y += line_h
 
 
-def draw_score_chart(screen, font, history, position, size, color, title):
-    global _CHART_FONT
-    if _CHART_FONT is None:
-        _CHART_FONT = pygame.font.Font(None, config.CHART_FONT_SIZE)
-    small_font = _CHART_FONT
-    line_h = small_font.get_linesize()
-    surf = pygame.Surface(size)
-    surf.set_alpha(config.CHART_OPACITY)
-    surf.fill((40, 40, 50))
-    pygame.draw.rect(surf, config.COLOR_TEXT, surf.get_rect(), 1)
-    surf.blit(small_font.render(title, True, color), (3, 3))
-    if len(history) >= 2:
-        max_score = max(history) or 1
-        points = [
-            (i / (len(history) - 1) * size[0],
-             size[1] - (score / max_score) * (size[1] - line_h * 2 - 4))
-            for i, score in enumerate(history)
-        ]
-        pygame.draw.lines(surf, color, False, points, 1)
-        surf.blit(small_font.render(f"Peak: {int(max_score)}", True, config.COLOR_TEXT), (3, line_h + 4))
-        gen_label_surf = small_font.render(f"Gens: {len(history)}", True, config.COLOR_TEXT)
-        surf.blit(gen_label_surf, (size[0] - gen_label_surf.get_width() - 3, 3))
-    screen.blit(surf, position)
+def _chart_font(size):
+    font = _CHART_FONTS.get(size)
+    if font is None:
+        font = _CHART_FONTS[size] = pygame.font.Font(None, size)
+    return font
+
+
+def draw_score_chart(screen, history, rect, color, title, scale):
+    """Translucent panel with opaque text and line, sized by the zoomable chart scale."""
+    font = _chart_font(round(config.CHART_FONT_SIZE * scale))
+    line_h = font.get_linesize()
+    pad = round(4 * scale)
+    _draw_panel(screen, rect)
+    screen.blit(font.render(title, True, color), (rect.x + pad, rect.y + pad))
+    if len(history) < 2:
+        return
+    max_score = max(history) or 1
+    info_y = rect.y + pad + line_h
+    screen.blit(font.render(f"Peak: {int(max_score)}", True, config.COLOR_TEXT), (rect.x + pad, info_y))
+    gens = font.render(f"Gens: {len(history)}", True, config.COLOR_TEXT)
+    screen.blit(gens, (rect.right - gens.get_width() - pad, info_y))
+    top, bottom = info_y + line_h + pad, rect.bottom - pad
+    left, width = rect.x + pad, rect.width - pad * 2
+    points = [
+        (left + i / (len(history) - 1) * width, bottom - (score / max_score) * (bottom - top))
+        for i, score in enumerate(history)
+    ]
+    pygame.draw.lines(screen, color, False, points, max(1, round(scale)))
 
 
 def _set_viewport_center(wx, wy, sim_state):
@@ -202,20 +207,20 @@ def draw_elements(screen, font, sim_state):
                          title="Selected Creature")
     else:
         sim_state["selected_creature"] = None
-    chart_width, chart_height, chart_spacing = 150, 60, 5
-    chart_x_start = config.SCREEN_WIDTH - chart_width - 10
-    draw_score_chart(screen, font, sim_state["carnivore_score_history"],
-                     (chart_x_start, config.SCREEN_HEIGHT - chart_height - 10),
-                     (chart_width, chart_height), config.COLOR_CARNIVORE, "Carnivore HoF Score")
-    draw_score_chart(screen, font, sim_state["herbivore_score_history"],
-                     (chart_x_start, config.SCREEN_HEIGHT - (chart_height * 2) - chart_spacing - 10),
-                     (chart_width, chart_height), config.COLOR_CREATURE, "Herbivore HoF Score")
-    draw_score_chart(screen, font, sim_state["carnivore_longevity_history"],
-                     (chart_x_start, config.SCREEN_HEIGHT - chart_height * 3 - chart_spacing * 2 - 10),
-                     (chart_width, chart_height), config.COLOR_CARNIVORE, "Carnivore Max Longevity")
-    draw_score_chart(screen, font, sim_state["herbivore_longevity_history"],
-                     (chart_x_start, config.SCREEN_HEIGHT - chart_height * 4 - chart_spacing * 3 - 10),
-                     (chart_width, chart_height), config.COLOR_CREATURE, "Herbivore Max Longevity")
+    scale = sim_state["chart_scale"]
+    chart_w, chart_h = round(config.CHART_SIZE[0] * scale), round(config.CHART_SIZE[1] * scale)
+    spacing = round(5 * scale)
+    charts = [
+        ("carnivore_score_history", config.COLOR_CARNIVORE, "Carnivore HoF Score"),
+        ("herbivore_score_history", config.COLOR_CREATURE, "Herbivore HoF Score"),
+        ("carnivore_longevity_history", config.COLOR_CARNIVORE, "Carnivore Max Longevity"),
+        ("herbivore_longevity_history", config.COLOR_CREATURE, "Herbivore Max Longevity"),
+    ]
+    for i, (key, color, title) in enumerate(charts):
+        rect = pygame.Rect(config.SCREEN_WIDTH - chart_w - 10,
+                           config.SCREEN_HEIGHT - 10 - chart_h * (i + 1) - spacing * i,
+                           chart_w, chart_h)
+        draw_score_chart(screen, sim_state[key], rect, color, title, scale)
     if sim_state["paused"]:
         screen.blit(font.render("PAUSED", True, (255, 100, 100)),
                     (config.SCREEN_WIDTH // 2 - 60, 20))
@@ -285,6 +290,10 @@ def handle_events(sim_state, prometheus_metrics):
                 step = -1 if event.key in (pygame.K_MINUS, pygame.K_KP_MINUS) else 1
                 i = SPEEDS.index(sim_state["ticks_per_frame"]) + step
                 sim_state["ticks_per_frame"] = SPEEDS[max(0, min(len(SPEEDS) - 1, i))]
+            if event.key in (pygame.K_LEFTBRACKET, pygame.K_RIGHTBRACKET):
+                step = config.CHART_SCALE_STEP * (1 if event.key == pygame.K_RIGHTBRACKET else -1)
+                sim_state["chart_scale"] = max(config.CHART_SCALE_MIN, min(
+                    config.CHART_SCALE_MAX, sim_state["chart_scale"] + step))
             if event.key == pygame.K_RETURN:
                 sim_state["fps_limited"] = not sim_state["fps_limited"]
                 print(f"FPS Limiting {'Enabled' if sim_state['fps_limited'] else 'Disabled'}")
@@ -390,6 +399,7 @@ def main():
         "cam_y": 0.0,
         "minimap_dragging": False,
         "ticks_per_frame": 1,
+        "chart_scale": config.CHART_SCALE_DEFAULT,
         "tps": 0,
         "renderer": Renderer(config.WORLD_WIDTH, config.WORLD_HEIGHT, obstacles),
     })

@@ -87,7 +87,7 @@ Outputs: `[rotation_delta, speed, signal, memory...]`. `_apply_mate_seeking_driv
 
 ## game.py controls
 
-Space pause · +/- simulation speed (1–32 ticks per frame) · S save brains · L load brains · Enter toggle FPS cap · D toggle drawing · B background mode + island workers · left-click: spawn food / select creature · minimap drag to pan.
+Space pause · +/- simulation speed (1–32 ticks per frame) · S save brains · L load brains · Enter toggle FPS cap · [ / ] shrink/grow the score charts · D toggle drawing · B background mode + island workers · left-click: spawn food / select creature · minimap drag to pan.
 
 ## Metrics
 

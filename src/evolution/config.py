@@ -152,8 +152,10 @@ COLOR_WHISKER = (0, 125, 0)
 COLOR_CARNIVORE_WHISKER = (125, 0, 0)
 COLOR_TEXT = (255, 255, 255)
 COLOR_BIRTH = (0, 255, 255)
-CHART_OPACITY = 100
-CHART_FONT_SIZE = 15
+CHART_FONT_SIZE = 15         # at chart scale 1.0
+CHART_SIZE = (150, 60)       # at chart scale 1.0
+CHART_SCALE_DEFAULT = 2.0    # [ / ] in game.py zoom the charts
+CHART_SCALE_MIN, CHART_SCALE_MAX, CHART_SCALE_STEP = 1.0, 3.0, 0.25
 HUD_FONT_SIZE = 18
 
 # --- Sprite rendering (render.py) ---
