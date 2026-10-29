@@ -29,6 +29,9 @@ class LeanCreature:
     pos: object
     size: float
     is_carnivore: bool
+    angle: float
+    current_speed: float
+    max_speed: float
 
 
 @dataclass(frozen=True)
@@ -44,8 +47,8 @@ class LeanFood:
 def process_creature_chunk(args):
     creature_chunk, all_herbivores, all_carnivores, all_food, obstacles, world_bounds = args
 
-    lean_herbivores = [LeanCreature(c.id, c.pos, c.size, c.is_carnivore) for c in all_herbivores]
-    lean_carnivores = [LeanCreature(c.id, c.pos, c.size, c.is_carnivore) for c in all_carnivores]
+    lean_herbivores = [LeanCreature(c.id, c.pos, c.size, c.is_carnivore, c.angle, c.current_speed, c.max_speed) for c in all_herbivores]
+    lean_carnivores = [LeanCreature(c.id, c.pos, c.size, c.is_carnivore, c.angle, c.current_speed, c.max_speed) for c in all_carnivores]
     lean_food = [LeanFood(f.id, f.pos, f.get_health_value()) for f in all_food]
 
     food_eaten_ids = set()
@@ -116,6 +119,7 @@ def process_creature_chunk(args):
 # =============================================================================
 def update_world(sim_state, executor):
     sim_state["generation_timer"] += 1
+    sim_state["tick"] += 1
 
     for food in sim_state["food_items"]:
         food.update()
@@ -168,6 +172,7 @@ def update_world(sim_state, executor):
 
     new_offspring = []
     reproduced_ids = set()
+    tick = sim_state["tick"]
     now = time.time()
     for group, pop_limit, max_health, default_genes in [
         (sim_state["creatures"], config.NUM_HERBIVOROUS, config.HERBIVORE_HEALTH, config.DEFAULT_HERBIVORE_GENES),
@@ -181,8 +186,8 @@ def update_world(sim_state, executor):
                 p1.is_adult
                 and p1.health > max_health * config.REPRODUCTION_HEALTH_THRESHOLD
                 and p1.reproductions < config.MAX_REPRODUCTIONS
-                and (p1.last_reproduction_time is None
-                     or now - p1.last_reproduction_time > config.REPRODUCTION_COOLDOWN)
+                and (p1.last_reproduction_tick is None
+                     or tick - p1.last_reproduction_tick > config.REPRODUCTION_COOLDOWN_TICKS)
             )
             if not p1_is_eligible:
                 continue
@@ -192,8 +197,8 @@ def update_world(sim_state, executor):
                 and p2.is_adult
                 and p2.health > max_health * config.REPRODUCTION_HEALTH_THRESHOLD
                 and p2.reproductions < config.MAX_REPRODUCTIONS
-                and (p2.last_reproduction_time is None
-                     or now - p2.last_reproduction_time > config.REPRODUCTION_COOLDOWN)
+                and (p2.last_reproduction_tick is None
+                     or tick - p2.last_reproduction_tick > config.REPRODUCTION_COOLDOWN_TICKS)
                 and p1.pos.distance_to(p2.pos) < config.MATE_SELECTION_RADIUS
             ]
             if potential_mates:
@@ -209,8 +214,8 @@ def update_world(sim_state, executor):
                 best_mate.health *= 0.7
                 p1.reproductions += 1
                 best_mate.reproductions += 1
-                p1.last_reproduction_time = now
-                best_mate.last_reproduction_time = now
+                p1.last_reproduction_tick = tick
+                best_mate.last_reproduction_tick = tick
                 reproduced_ids.add(p1.id)
                 reproduced_ids.add(best_mate.id)
 
@@ -330,6 +335,7 @@ def main():
         "carnivore_score_history": [],
         "generation": max(h_gen, c_gen),
         "generation_timer": 0,
+        "tick": 0,
         "hall_of_fame": {
             "herbivore": {"score": -1, "genes": None, "brain": None},
             "carnivore": {"score": -1, "genes": None, "brain": None},

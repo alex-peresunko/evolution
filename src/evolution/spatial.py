@@ -14,16 +14,22 @@ class SpatialHashGrid:
         self.grid = {}
 
     def insert(self, obj):
-        key = (int(obj.pos.x / self.cell_size), int(obj.pos.y / self.cell_size))
+        # Clamped so entities slightly outside the world (e.g. after an obstacle bounce)
+        # stay reachable by the clamped query below.
+        key = (min(self.cols - 1, max(0, int(obj.pos.x / self.cell_size))),
+               min(self.rows - 1, max(0, int(obj.pos.y / self.cell_size))))
         self.grid.setdefault(key, []).append(obj)
 
     def query(self, pos, radius):
-        min_x = int((pos.x - radius) / self.cell_size)
-        max_x = int((pos.x + radius) / self.cell_size)
-        min_y = int((pos.y - radius) / self.cell_size)
-        max_y = int((pos.y + radius) / self.cell_size)
+        min_x = max(0, int((pos.x - radius) / self.cell_size))
+        max_x = min(self.cols - 1, int((pos.x + radius) / self.cell_size))
+        min_y = max(0, int((pos.y - radius) / self.cell_size))
+        max_y = min(self.rows - 1, int((pos.y + radius) / self.cell_size))
+        grid = self.grid
         results = []
         for x in range(min_x, max_x + 1):
             for y in range(min_y, max_y + 1):
-                results.extend(self.grid.get((x, y), []))
+                cell = grid.get((x, y))
+                if cell:
+                    results.extend(cell)
         return results

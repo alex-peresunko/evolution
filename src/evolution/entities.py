@@ -11,13 +11,14 @@ from .config import (
     HEALTH_LOSS_PER_TICK, HEALTH_LOSS_SPEED_FACTOR, HEALTH_LOST_ON_HIT,
     GENE_MIN_MAX, CARNIVORE_GENE_MIN_MAX, DEFAULT_HERBIVORE_GENES, DEFAULT_CARNIVORE_GENES,
     CARNIVORE_HEALTH_PER_FOOD, HERBIVORE_HEALTH_PER_FOOD, FOOD_RADIUS,
-    HEALTH_GAIN_SIZE_PENALTY, SMELL_DISTANCE, MAX_NORMALIZED_SIGHT_DISTANCE,
+    HEALTH_GAIN_SIZE_PENALTY,
     NUM_WHISKERS, BRAIN_TOPOLOGY, SIZE_SPEED_PENALTY_FACTOR, SPEED_STAMINA_EXPONENT,
     SIZE_STAMINA_FACTOR, RESPAWN_IMMUNITY_TICKS,
     FOOD_MAX_LIFETIME, FOOD_MIN_HEALTH_FACTOR,
 )
 from .math_types import Vector2 as _HeadlessVector2, SimpleRect as _HeadlessRect
 from .neural_network import NeuralNetwork
+from .perception import perceive_all
 
 
 class Obstacle:
@@ -44,7 +45,7 @@ class Creature:
         self.max_health = self.health
         self.score, self.is_best, self.reproductions = 0, False, 0
         self.birth_time: Optional[float] = None
-        self.last_reproduction_time: Optional[float] = None
+        self.last_reproduction_tick: Optional[int] = None
         self.current_speed = 0.0
         self._nearest_target_dist: Optional[float] = None
         self._nearest_smell_strength: float = 0.0
@@ -162,10 +163,10 @@ class Creature:
                     self.score += 1
                     break
 
+        creature_rect = self._rect(
+            self.pos.x - self.size, self.pos.y - self.size, self.size * 2, self.size * 2
+        )
         for obs in obstacles:
-            creature_rect = self._rect(
-                self.pos.x - self.size, self.pos.y - self.size, self.size * 2, self.size * 2
-            )
             if obs.rect.colliderect(creature_rect):
                 self.health -= HEALTH_LOST_ON_HIT
                 self.pos -= self._vec2(math.cos(self.angle), math.sin(self.angle)) * self.current_speed * 3
@@ -177,111 +178,7 @@ class Creature:
             self.score += 0.0005 * self._nearest_smell_strength
 
     def see(self, food_items, obstacles, herbivores=None, carnivores=None):
-        inputs = []
-        for i, whisker_angle in enumerate(self.whisker_angles):
-            end_point = self.pos + self._vec2(
-                math.cos(self.angle + whisker_angle),
-                math.sin(self.angle + whisker_angle),
-            ) * self.sight_distance
-            closest_dist = self.sight_distance
-            for obs in obstacles:
-                clipped_line = obs.rect.clipline(self.pos, end_point)
-                if clipped_line:
-                    closest_dist = min(closest_dist, self.pos.distance_to(clipped_line[0]))
-            self.whiskers[i] = closest_dist
-            inputs.append(1.0 - (closest_dist / self.sight_distance if self.sight_distance > 0 else 1))
-
-        def in_sight(target):
-            if target.id == self.id:
-                return False
-            vec = target.pos - self.pos
-            if 0 < vec.length() <= self.sight_distance:
-                angle_to_target = (math.atan2(vec.y, vec.x) - self.angle + math.pi) % (2 * math.pi) - math.pi
-                return abs(angle_to_target) <= self.sight_angle / 2
-            return False
-
-        nearest_prey = None
-        if self.is_carnivore:
-            visible_prey = [h for h in (herbivores or []) if in_sight(h)]
-            if visible_prey:
-                nearest_prey = min(visible_prey, key=lambda h: self.pos.distance_to(h.pos))
-                target_info = self.get_target_info(nearest_prey)
-            else:
-                target_info = (0, 1)
-            self._nearest_target_dist = target_info[1] if visible_prey else None
-            inputs.extend(target_info)
-        else:
-            visible_food = [f for f in food_items if in_sight(f)]
-            food_angle, food_dist = (
-                self.get_target_info(min(visible_food, key=lambda f: self.pos.distance_to(f.pos)))
-                if visible_food else (0, 1)
-            )
-            self._nearest_target_dist = food_dist if visible_food else None
-            visible_preds = [c for c in (carnivores or []) if in_sight(c)]
-            predator_angle, predator_dist = (
-                self.get_target_info(min(visible_preds, key=lambda c: self.pos.distance_to(c.pos)))
-                if visible_preds else (0, 1)
-            )
-            avoid_angle = food_angle - predator_angle * (1 - predator_dist) ** 2
-            inputs.extend([np.clip(avoid_angle, -1, 1), food_dist])
-
-        smell_angle, smell_strength = 0.0, 0.0
-        self._nearest_smell_strength = 0.0
-        if self.is_carnivore:
-            smellable_prey = [h for h in (herbivores or []) if h.id != self.id]
-            if smellable_prey:
-                closest_prey = min(smellable_prey, key=lambda p: self.pos.distance_to(p.pos))
-                dist = self.pos.distance_to(closest_prey.pos)
-                if dist < SMELL_DISTANCE:
-                    angle = (
-                        math.atan2(closest_prey.pos.y - self.pos.y, closest_prey.pos.x - self.pos.x)
-                        - self.angle + math.pi
-                    ) % (2 * math.pi) - math.pi
-                    smell_angle = angle / math.pi
-                    smell_strength = 1.0 - (dist / SMELL_DISTANCE)
-                    self._nearest_smell_strength = smell_strength
-        else:
-            smellable_predators = [c for c in (carnivores or []) if c.id != self.id]
-            if smellable_predators:
-                closest_predator = min(smellable_predators, key=lambda p: self.pos.distance_to(p.pos))
-                dist = self.pos.distance_to(closest_predator.pos)
-                if dist < SMELL_DISTANCE:
-                    angle = (
-                        math.atan2(closest_predator.pos.y - self.pos.y, closest_predator.pos.x - self.pos.x)
-                        - self.angle + math.pi
-                    ) % (2 * math.pi) - math.pi
-                    smell_angle = angle / math.pi
-                    smell_strength = 1.0 - (dist / SMELL_DISTANCE)
-        inputs.extend([smell_angle, smell_strength])
-
-        pvx, pvy = 0.0, 0.0
-        if nearest_prey is not None:
-            spd_norm = nearest_prey.current_speed / nearest_prey.max_speed if nearest_prey.max_speed > 0 else 0
-            pvx = math.cos(nearest_prey.angle) * spd_norm
-            pvy = math.sin(nearest_prey.angle) * spd_norm
-        inputs.extend([pvx, pvy])
-
-        inputs.append(self.health / self.max_health)
-        inputs.append(math.sin(self.angle))
-        inputs.append(math.cos(self.angle))
-        inputs.append(self.size / GENE_MIN_MAX["size"][1])
-        inputs.append(self.current_speed / self.genetic_max_speed if self.genetic_max_speed > 0 else 0)
-        inputs.append(self.sight_distance / MAX_NORMALIZED_SIGHT_DISTANCE)
-        inputs.append(self.sight_angle / (2 * math.pi))
-        inputs.append(self.stamina / self.max_stamina if self.max_stamina > 0 else 0)
-        inputs.append(min(1.0, self.hunger / HUNGER_MAX))
-        return inputs
-
-    def get_target_info(self, target):
-        dist = self.pos.distance_to(target.pos)
-        angle = (
-            math.atan2(target.pos.y - self.pos.y, target.pos.x - self.pos.x)
-            - self.angle + math.pi
-        ) % (2 * math.pi) - math.pi
-        return (
-            angle / (self.sight_angle / 2 if self.sight_angle > 0 else 1),
-            dist / (self.sight_distance if self.sight_distance > 0 else 1),
-        )
+        return perceive_all([self], food_items, herbivores or [], carnivores or [], obstacles)[0].tolist()
 
     def think(self, inputs):
         return self.brain.forward(inputs)

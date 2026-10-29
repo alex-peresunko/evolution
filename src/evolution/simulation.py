@@ -11,14 +11,15 @@ from .config import (
     BRAIN_TOPOLOGY, MUTATION_RATE, MUTATION_AMOUNT, AUTOSAVE_INTERVAL,
     MATE_SELECTION_RADIUS, MATE_ATTRACTION_RADIUS, MATE_SEEK_HUNGER_THRESHOLD,
     MATE_SEEK_DANGER_THRESHOLD, MATE_SEEK_BLEND, MATE_SEEK_MIN_SPEED,
-    REPRODUCTION_HEALTH_THRESHOLD, MAX_REPRODUCTIONS, REPRODUCTION_COOLDOWN,
-    REPRODUCTION_POP_CAP_FACTOR, SMELL_DISTANCE, RESPAWN_IMMUNITY_TICKS,
+    REPRODUCTION_HEALTH_THRESHOLD, MAX_REPRODUCTIONS, REPRODUCTION_COOLDOWN_TICKS,
+    REPRODUCTION_POP_CAP_FACTOR, RESPAWN_IMMUNITY_TICKS,
     SCORE_SAMPLE_INTERVAL,
 )
 from .entities import Creature, Food, Obstacle
 from .spatial import SpatialHashGrid
 from .genetics import combine_brains, combine_genes, mutate_genes
 from .neural_network import NeuralNetwork
+from .perception import perceive_all
 from .brain_store import save_brain, save_brain_if_better
 
 
@@ -51,15 +52,32 @@ def build_sim_state(world_bounds, creatures, carnivores, food_items, obstacles):
     }
 
 
+_stacked_weights = {"key": None, "layers": None}
+
+
+def _stacked_layers(creatures):
+    """Per-layer (W, b) stacked across creatures; rebuilt only when the population changes
+    (a creature's brain never changes after it is created)."""
+    key = tuple((c.id, id(c.brain)) for c in creatures)
+    if _stacked_weights["key"] != key:
+        n_layers = len(creatures[0].brain.weights)
+        _stacked_weights["layers"] = [
+            (np.stack([c.brain.weights[i] for c in creatures]),
+             np.stack([c.brain.biases[i] for c in creatures])[:, 0, :])
+            for i in range(n_layers)
+        ]
+        _stacked_weights["key"] = key
+    return _stacked_weights["layers"]
+
+
 def batch_forward(creatures, inputs_list):
     if not creatures:
         return []
-    X = np.array(inputs_list, dtype=np.float64)
-    n_layers = len(creatures[0].brain.weights)
-    for layer_idx in range(n_layers):
-        W = np.stack([c.brain.weights[layer_idx] for c in creatures])
-        b = np.stack([c.brain.biases[layer_idx] for c in creatures])
-        X = np.einsum("ni,nij->nj", X, W) + b[:, 0, :]
+    X = np.asarray(inputs_list, dtype=np.float64)
+    layers = _stacked_layers(creatures)
+    n_layers = len(layers)
+    for layer_idx, (W, b) in enumerate(layers):
+        X = np.einsum("ni,nij->nj", X, W) + b
         if layer_idx < n_layers - 1:
             X = np.tanh(X)
     return np.tanh(X)
@@ -184,14 +202,8 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
     for cn in sim_state["carnivores"]:
         carn_grid.insert(cn)
 
-    all_inputs = []
-    for c in all_creatures:
-        q_radius = max(c.sight_distance, SMELL_DISTANCE)
-        local_food = food_grid.query(c.pos, q_radius)
-        local_herbivores = herb_grid.query(c.pos, q_radius)
-        local_carnivores = carn_grid.query(c.pos, q_radius)
-        all_inputs.append(c.see(local_food, sim_state["obstacles"], local_herbivores, local_carnivores))
-
+    all_inputs = perceive_all(all_creatures, sim_state["food_items"], sim_state["creatures"],
+                              sim_state["carnivores"], sim_state["obstacles"])
     all_outputs = batch_forward(all_creatures, all_inputs)
     for c, outputs in zip(all_creatures, all_outputs):
         outputs = _apply_mate_seeking_drive(c, list(outputs), herb_grid, carn_grid)
@@ -254,35 +266,34 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
 
     new_offspring = []
     reproduced_ids = set()
+    tick = sim_state["tick"]
     now = time.time()
     for group, pop_limit, max_health, default_genes in [
         (sim_state["creatures"], NUM_HERBIVOROUS, HERBIVORE_HEALTH, DEFAULT_HERBIVORE_GENES),
         (sim_state["carnivores"], NUM_CARNIVORES, CARNIVORE_HEALTH, DEFAULT_CARNIVORE_GENES),
     ]:
         pop_cap = pop_limit * REPRODUCTION_POP_CAP_FACTOR
-        for p1 in group:
+        # Eligibility only changes for creatures that reproduce this tick, and those are
+        # excluded via reproduced_ids, so it can be computed once up front.
+        eligible = [
+            p for p in group
+            if p.is_adult
+            and p.health > max_health * REPRODUCTION_HEALTH_THRESHOLD
+            and p.reproductions < MAX_REPRODUCTIONS
+            and (p.last_reproduction_tick is None
+                 or tick - p.last_reproduction_tick > REPRODUCTION_COOLDOWN_TICKS)
+        ]
+        if len(eligible) < 2:
+            continue
+        xy = np.array([(p.pos.x, p.pos.y) for p in eligible])
+        close = np.hypot(xy[:, None, 0] - xy[None, :, 0],
+                         xy[:, None, 1] - xy[None, :, 1]) < MATE_SELECTION_RADIUS
+        np.fill_diagonal(close, False)
+        for i, p1 in enumerate(eligible):
             if p1.id in reproduced_ids or len(group) + len(new_offspring) >= pop_cap:
                 continue
-            p1_is_eligible = (
-                p1.is_adult
-                and p1.health > max_health * REPRODUCTION_HEALTH_THRESHOLD
-                and p1.reproductions < MAX_REPRODUCTIONS
-                and (p1.last_reproduction_time is None or now - p1.last_reproduction_time > REPRODUCTION_COOLDOWN)
-            )
-            if not p1_is_eligible:
-                continue
-            potential_mates = []
-            for p2 in group:
-                if p1.id == p2.id or p2.id in reproduced_ids:
-                    continue
-                p2_is_eligible = (
-                    p2.is_adult
-                    and p2.health > max_health * REPRODUCTION_HEALTH_THRESHOLD
-                    and p2.reproductions < MAX_REPRODUCTIONS
-                    and (p2.last_reproduction_time is None or now - p2.last_reproduction_time > REPRODUCTION_COOLDOWN)
-                )
-                if p2_is_eligible and p1.pos.distance_to(p2.pos) < MATE_SELECTION_RADIUS:
-                    potential_mates.append(p2)
+            potential_mates = [eligible[j] for j in np.flatnonzero(close[i])
+                               if eligible[j].id not in reproduced_ids]
             if potential_mates:
                 best_mate = max(potential_mates, key=lambda mate: mate.attractiveness)
                 constraints = CARNIVORE_GENE_MIN_MAX if p1.is_carnivore else GENE_MIN_MAX
@@ -301,8 +312,8 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
                 best_mate.health *= 0.7
                 p1.reproductions += 1
                 best_mate.reproductions += 1
-                p1.last_reproduction_time = now
-                best_mate.last_reproduction_time = now
+                p1.last_reproduction_tick = tick
+                best_mate.last_reproduction_tick = tick
                 reproduced_ids.add(p1.id)
                 reproduced_ids.add(best_mate.id)
 

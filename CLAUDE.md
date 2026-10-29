@@ -27,9 +27,9 @@ Shared library lives in `src/evolution/`; the three `game*.py` entry scripts are
 
 ### Simulation loop
 
-`simulation.build_sim_state()` returns a plain dict (`sim_state`) holding all world state: creature/food lists, four `SpatialHashGrid`s (general, food, herbivore, carnivore), score histories, tick/generation counters, and `hall_of_fame`. `simulation.update_world(sim_state, ...)` advances one tick and is shared by `game.py` and `game_headless.py`. NN inference for all creatures goes through `batch_forward()`, which stacks the per-creature weights and runs one vectorized `np.einsum` per layer. Any change to `NeuralNetwork`'s weight/bias layout has to stay compatible with it.
+`simulation.build_sim_state()` returns a plain dict (`sim_state`) holding all world state: creature/food lists, four `SpatialHashGrid`s (general, food, herbivore, carnivore), score histories, tick/generation counters, and `hall_of_fame`. `simulation.update_world(sim_state, ...)` advances one tick and is shared by `game.py` and `game_headless.py`. Perception for all creatures is one vectorized numpy pass, `perception.perceive_all`, which returns the (N, 18) input matrix and sets `c.whiskers`, `c._nearest_target_dist` and `c._nearest_smell_strength`. `Creature.see()` is a one-creature wrapper around it. `tests/test_perception.py` holds the original scalar implementation as a reference, and the vectorized code must keep matching it. NN inference for all creatures goes through `batch_forward()`, which stacks the per-creature weights and runs one vectorized `np.einsum` per layer. The stacks are cached until the population changes, which assumes a creature's brain never changes in place after it is created. Any change to `NeuralNetwork`'s weight/bias layout has to stay compatible with it.
 
-Evolution is continuous: creatures die and are "retired" (`_retire_creature` updates the Hall of Fame and saves the brain), and eligible nearby adults reproduce (brain crossover + gene averaging + mutation, in `genetics.py`). After an extinction, the species is repopulated from the Hall of Fame.
+Evolution is continuous: creatures die and are "retired" (`_retire_creature` updates the Hall of Fame and saves the brain), and eligible nearby adults reproduce (brain crossover + gene averaging + mutation, in `genetics.py`). The reproduction cooldown is counted in ticks (`REPRODUCTION_COOLDOWN_TICKS`), so behavior doesn't depend on simulation speed. After an extinction, the species is repopulated from the Hall of Fame.
 
 **`game_headless_multiproc.py` diverges:** it has its own `update_world` and a *generational* `evolve_population`, and it ships `LeanCreature`/`LeanFood` dataclasses to worker processes for IPC. Changes to `simulation.update_world` do not carry over to it automatically.
 
@@ -71,7 +71,7 @@ Outputs: `[rotation_delta, speed]`. `_apply_mate_seeking_drive` may override the
 
 ## game.py controls
 
-Space pause · S save brains · L load brains · Enter toggle FPS cap · D toggle drawing · B background mode + island workers · left-click: spawn food / select creature · minimap drag to pan.
+Space pause · +/- simulation speed (1–32 ticks per frame) · S save brains · L load brains · Enter toggle FPS cap · D toggle drawing · B background mode + island workers · left-click: spawn food / select creature · minimap drag to pan.
 
 ## Metrics
 

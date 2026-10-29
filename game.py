@@ -27,6 +27,7 @@ def _rect(x, y, w, h): return pygame.Rect(x, y, w, h)
 
 MINIMAP_RECT = None  # initialized after pygame.init()
 _CHART_FONT = None
+SPEEDS = (1, 2, 4, 8, 16, 32)  # simulation ticks per drawn frame
 _PANELS = {}
 
 
@@ -185,6 +186,7 @@ def draw_elements(screen, font, sim_state):
         f"Longest H: {sim_state['max_age_herbivore']} ticks",
         f"Longest C: {sim_state['max_age_carnivore']} ticks",
         f"FPS: {int(sim_state['clock'].get_fps())} [{limit_status}]",
+        f"Speed: x{sim_state['ticks_per_frame']}  ({sim_state['tps']} ticks/s)",
     ]
     _draw_text_block(screen, font, stats, 10, text_y)
     selected = sim_state.get("selected_creature")
@@ -272,6 +274,11 @@ def handle_events(sim_state, prometheus_metrics):
                     print("No carnivore brain file found to load.")
             if event.key == pygame.K_SPACE:
                 sim_state["paused"] = not sim_state["paused"]
+            if event.key in (pygame.K_EQUALS, pygame.K_PLUS, pygame.K_KP_PLUS,
+                             pygame.K_MINUS, pygame.K_KP_MINUS):
+                step = -1 if event.key in (pygame.K_MINUS, pygame.K_KP_MINUS) else 1
+                i = SPEEDS.index(sim_state["ticks_per_frame"]) + step
+                sim_state["ticks_per_frame"] = SPEEDS[max(0, min(len(SPEEDS) - 1, i))]
             if event.key == pygame.K_RETURN:
                 sim_state["fps_limited"] = not sim_state["fps_limited"]
                 print(f"FPS Limiting {'Enabled' if sim_state['fps_limited'] else 'Disabled'}")
@@ -336,7 +343,7 @@ def main():
     global MINIMAP_RECT
     pygame.init()
     screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
-    pygame.display.set_caption("Evolution Sim | S to Save, L to Load, SPACE to Pause")
+    pygame.display.set_caption("Evolution Sim | S to Save, L to Load, SPACE to Pause, +/- Speed")
     font = pygame.font.Font(None, config.HUD_FONT_SIZE)
     MINIMAP_RECT = pygame.Rect(
         config.MINIMAP_X, config.MINIMAP_Y, config.MINIMAP_WIDTH, config.MINIMAP_HEIGHT
@@ -376,18 +383,26 @@ def main():
         "cam_x": 0.0,
         "cam_y": 0.0,
         "minimap_dragging": False,
+        "ticks_per_frame": 1,
+        "tps": 0,
         "renderer": Renderer(config.WORLD_WIDTH, config.WORLD_HEIGHT, obstacles),
     })
 
     prometheus_metrics = GameMetrics(sim_state)
 
+    tps_window_start, tps_window_tick = time.perf_counter(), sim_state["tick"]
     while sim_state["running"]:
         handle_events(sim_state, prometheus_metrics)
         if not sim_state["paused"]:
-            update_world(sim_state, prometheus_metrics)
-            if sim_state.get("background_mode") and sim_state["tick"] % config.WORKER_SYNC_INTERVAL == 0:
-                if sim_state["worker_processes"]:
+            for _ in range(sim_state["ticks_per_frame"]):
+                update_world(sim_state, prometheus_metrics)
+                if (sim_state.get("background_mode") and sim_state["worker_processes"]
+                        and sim_state["tick"] % config.WORKER_SYNC_INTERVAL == 0):
                     _sync_worker_brains(sim_state)
+        now = time.perf_counter()
+        if now - tps_window_start >= 1.0:
+            sim_state["tps"] = int((sim_state["tick"] - tps_window_tick) / (now - tps_window_start))
+            tps_window_start, tps_window_tick = now, sim_state["tick"]
         if sim_state["drawing_enabled"]:
             draw_elements(screen, font, sim_state)
         if sim_state["fps_limited"]:
