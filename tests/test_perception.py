@@ -77,8 +77,8 @@ def _reference_see(self, food_items, obstacles, herbivores, carnivores):
                      - self.angle + math.pi) % (2 * math.pi) - math.pi
             smell_angle = angle / math.pi
             smell_strength = 1.0 - dist / config.SMELL_DISTANCE
-            if self.is_carnivore:
-                nearest_smell_strength = smell_strength
+            # Fixed vs. the original see(), which only recorded this for carnivores.
+            nearest_smell_strength = smell_strength
     inputs.extend([smell_angle, smell_strength])
 
     pvx, pvy = 0.0, 0.0

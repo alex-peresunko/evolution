@@ -165,9 +165,9 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles):
         out[hi, col] = np.clip(food_angle - pred_angle * (1 - pred_dist) ** 2, -1, 1)
         out[hi, col + 1] = food_dist
         target_dist[hi], target_found[hi] = food_dist, food_found
-        # Herbivores feel predator smell as an input, but (as before) do not record it in
-        # _nearest_smell_strength, so the mate-seeking danger check never fires for them.
-        out[hi, col + 2], out[hi, col + 3] = _smell(to_preds)
+        sm_angle, sm_strength = _smell(to_preds)
+        out[hi, col + 2], out[hi, col + 3] = sm_angle, sm_strength
+        smell_strength_self[hi] = sm_strength  # read by the mate-seeking danger check
 
     col += 6
     out[:, col] = s[:, 3] / s[:, 4]
