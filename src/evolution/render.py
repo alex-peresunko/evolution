@@ -22,6 +22,9 @@ FOOD_LEVELS = 8
 HEALTH_LEVELS = 4
 WALK_FRAMES = 4
 PULSE_LEVELS = 4
+CARCASS_LEVELS = 4
+HIT_FLASH_TICKS = 8
+NIGHT_COLOR = (8, 12, 42)
 
 HERBIVORE_PALETTE = {
     "rim": (34, 100, 68), "core": (150, 228, 140), "leg": (28, 78, 54), "spot": (196, 242, 178),
@@ -272,6 +275,8 @@ class Renderer:
         self._glows = {}
         self._bubbles = {}
         self._phase = {}
+        self._carcasses = {}
+        self._night = None
         self._food = [[self._build_food(v, lvl) for lvl in range(FOOD_LEVELS)]
                       for v in range(FOOD_VARIANTS)]
 
@@ -349,6 +354,41 @@ class Renderer:
             b = self._bubbles[key] = pygame.transform.smoothscale(big, (w, w)).convert_alpha()
         return b
 
+    def _carcass(self, sb, carn, level):
+        key = (sb, carn, level)
+        spr = self._carcasses.get(key)
+        if spr is None:
+            spr = self._carcasses[key] = self._build_carcass(sb, carn, level)
+        return spr
+
+    @staticmethod
+    def _build_carcass(sb, carn, level):
+        """Meat with exposed ribs; `level` 0 is fresh, CARCASS_LEVELS - 1 nearly gone."""
+        rnd = random.Random(sb * 31 + carn)
+        rot = 1 - level / (CARCASS_LEVELS - 1)
+        w = math.ceil(sb * 2.6) + 4
+        big = pygame.Surface((w * SS, w * SS), pygame.SRCALPHA)
+        c, u = w * SS / 2, sb * SS
+        meat = _mix((96, 70, 52), (150, 34, 36) if not carn else (130, 40, 28), rot)
+        rim = _mix(meat, (0, 0, 0), 0.45)
+        bone = _mix((170, 160, 140), (236, 228, 210), rot)
+        shrink = 0.6 + 0.4 * rot
+        tilt = rnd.uniform(0, math.pi)
+        _shaded_ellipse(big, rim, meat, c, c, 1.05 * u * shrink, 0.7 * u * shrink, tilt,
+                        hx=-0.2 * u, hy=-0.2 * u)
+        for i in range(4):
+            off = (i - 1.5) * 0.32 * u * shrink
+            dx, dy = math.cos(tilt) * off, math.sin(tilt) * off
+            nx, ny = -math.sin(tilt) * 0.55 * u, math.cos(tilt) * 0.55 * u
+            pygame.draw.line(big, bone, (c + dx - nx, c + dy - ny), (c + dx + nx, c + dy + ny),
+                             max(1, int(0.14 * u)))
+        pygame.draw.line(big, bone, (c - math.cos(tilt) * 0.8 * u, c - math.sin(tilt) * 0.8 * u),
+                         (c + math.cos(tilt) * 0.8 * u, c + math.sin(tilt) * 0.8 * u),
+                         max(1, int(0.2 * u)))
+        small = pygame.transform.smoothscale(big, (w, w))
+        small.fill((255, 255, 255, int(110 + 145 * rot)), special_flags=pygame.BLEND_RGBA_MULT)
+        return small.convert_alpha(), w / 2
+
     @staticmethod
     def _build_food(variant, level):
         rnd = random.Random(variant * 97 + 3)
@@ -399,6 +439,16 @@ class Renderer:
                 food_blits.append((self._food[f.id % FOOD_VARIANTS][lvl], (x - fo, y - fo)))
         screen.blits(food_blits, doreturn=False)
 
+        carcass_blits = []
+        for cc in sim_state.get("carcasses", ()):
+            x, y = cc.pos.x - cam_x, cc.pos.y - cam_y
+            r = cc.radius * 1.4 + 3
+            if -r <= x <= sw + r and -r <= y <= sh + r:
+                lvl = min(CARCASS_LEVELS - 1, int((1 - cc.meat / cc.max_meat) * CARCASS_LEVELS))
+                spr, half = self._carcass(max(2, int(cc.radius + 0.5)), cc.is_carnivore, lvl)
+                carcass_blits.append((spr, (x - half, y - half)))
+        screen.blits(carcass_blits, doreturn=False)
+
         selected = sim_state.get("selected_creature")
         visible = []
         for c in sim_state["creatures"] + sim_state["carnivores"]:
@@ -412,8 +462,9 @@ class Renderer:
         steps = config.SPRITE_ANGLE_STEPS
         angle_scale = steps / (2 * math.pi)
         rit = config.RESPAWN_IMMUNITY_TICKS
+        tick = sim_state.get("tick", 0)
         rotated, phases = self._rotated, self._phase
-        sprites, bubbles = [], []
+        sprites, bubbles, signallers = [], [], []
         for c, x, y in visible:
             sb = int(c.size + 0.5)
             if sb < 2:
@@ -436,7 +487,9 @@ class Renderer:
             spr, ox, oy = entry
 
             glow_color = None
-            if c.is_best:
+            if c.last_hit_tick is not None and tick - c.last_hit_tick < HIT_FLASH_TICKS:
+                glow_color = config.COLOR_HIT
+            elif c.is_best:
                 glow_color = config.COLOR_BEST_CREATURE
             elif c.birth_time and now - c.birth_time < 3:
                 glow_color = config.COLOR_BIRTH
@@ -446,6 +499,8 @@ class Renderer:
                 screen.blit(g, (x - gw, y - gw), special_flags=pygame.BLEND_RGB_ADD)
 
             sprites.append((spr, (x + ox, y + oy)))
+            if c.signal > config.SIGNAL_RENDER_THRESHOLD:
+                signallers.append((c, x, y))
 
             if c.respawn_immunity_ticks > 0 and c.is_carnivore:
                 lvl = min(PULSE_LEVELS - 1, int(c.respawn_immunity_ticks / rit * PULSE_LEVELS))
@@ -454,6 +509,13 @@ class Renderer:
                 bubbles.append((b, (x - bw, y - bw)))
         screen.blits(sprites, doreturn=False)
         screen.blits(bubbles, doreturn=False)
+        for c, x, y in signallers:
+            t = ((self.frame + c.id * 7) % 30) / 30
+            color = (255, 230, 120) if c.is_carnivore else (150, 230, 255)
+            pygame.gfxdraw.aacircle(screen, int(x), int(y), int(c.size * 1.3 + 4 + t * 16),
+                                    (*color, int(220 * (1 - t) * c.signal)))
+
+        self._draw_night(screen, sim_state.get("light", 1.0), food_blits, fo)
 
         for c, x, y in visible:
             if c is selected:
@@ -465,6 +527,25 @@ class Renderer:
             alive = {c.id for c in sim_state["creatures"]} | {c.id for c in sim_state["carnivores"]}
             self._phase = {k: v for k, v in self._phase.items() if k in alive}
 
+    def _draw_night(self, screen, light, food_blits, fo):
+        """Darken the world, then let food glow faintly through the dark."""
+        darkness = 1 - light
+        alpha = int(darkness * config.NIGHT_MAX_ALPHA)
+        if alpha < 4:
+            return
+        if self._night is None or self._night.get_size() != screen.get_size():
+            self._night = pygame.Surface(screen.get_size()).convert()
+            self._night.fill(NIGHT_COLOR)
+        self._night.set_alpha(alpha)
+        screen.blit(self._night, (0, 0))
+        level = int(darkness * PULSE_LEVELS)
+        if level >= 2:
+            g = self._glow(2, (40, 130, 60), min(PULSE_LEVELS - 1, level))
+            gw = g.get_width() / 2
+            add = pygame.BLEND_RGB_ADD
+            screen.blits([(g, (x + fo - gw, y + fo - gw), None, add) for _, (x, y) in food_blits],
+                         doreturn=False)
+
     def _draw_whiskers(self, screen, c, x, y):
         color = config.COLOR_CARNIVORE_WHISKER if c.is_carnivore else config.COLOR_WHISKER
         for i, a in enumerate(c.whisker_angles):
@@ -474,7 +555,7 @@ class Renderer:
             pygame.draw.circle(screen, color, (ex, ey), 2)
 
     def _draw_selection(self, screen, c, x, y):
-        sd, sa = c.sight_distance, c.sight_angle
+        sd, sa = c.effective_sight or c.sight_distance, c.sight_angle
         n = max(8, int(sa * 10))
         arc = [(int(x + math.cos(c.angle - sa / 2 + sa * i / n) * sd),
                 int(y + math.sin(c.angle - sa / 2 + sa * i / n) * sd)) for i in range(n + 1)]

@@ -13,9 +13,10 @@ from .config import (
     MATE_SEEK_DANGER_THRESHOLD, MATE_SEEK_BLEND, MATE_SEEK_MIN_SPEED,
     REPRODUCTION_HEALTH_THRESHOLD, MAX_REPRODUCTIONS, REPRODUCTION_COOLDOWN_TICKS,
     REPRODUCTION_POP_CAP_FACTOR, RESPAWN_IMMUNITY_TICKS,
-    SCORE_SAMPLE_INTERVAL,
+    SCORE_SAMPLE_INTERVAL, NUM_MEMORY, DAY_LENGTH_TICKS,
+    FOOD_PATCH_COUNT, FOOD_PATCH_SHARE, FOOD_PATCH_RADIUS, FOOD_PATCH_SPEED, FOOD_PATCH_TURN,
 )
-from .entities import Creature, Food, Obstacle
+from .entities import Carcass, Creature, Food, Obstacle
 from .spatial import SpatialHashGrid
 from .genetics import combine_brains, combine_genes, mutate_genes
 from .neural_network import NeuralNetwork
@@ -32,6 +33,14 @@ def build_sim_state(world_bounds, creatures, carnivores, food_items, obstacles):
         "food_grid": SpatialHashGrid(w, h, GRID_CELL_SIZE),
         "herb_grid": SpatialHashGrid(w, h, GRID_CELL_SIZE),
         "carn_grid": SpatialHashGrid(w, h, GRID_CELL_SIZE),
+        "carcass_grid": SpatialHashGrid(w, h, GRID_CELL_SIZE),
+        "carcasses": [],
+        "food_patches": [
+            {"x": random.uniform(0, w), "y": random.uniform(0, h),
+             "heading": random.uniform(0, 2 * math.pi)}
+            for _ in range(FOOD_PATCH_COUNT)
+        ],
+        "light": 1.0,
         "creatures": creatures,
         "carnivores": carnivores,
         "food_items": food_items,
@@ -81,6 +90,33 @@ def batch_forward(creatures, inputs_list):
         if layer_idx < n_layers - 1:
             X = np.tanh(X)
     return np.tanh(X)
+
+
+def day_light(tick):
+    """0 at midnight, 1 at noon; a run starts at noon."""
+    return 0.5 + 0.5 * math.cos(2 * math.pi * tick / DAY_LENGTH_TICKS)
+
+
+def _update_food_patches(sim_state):
+    w, h = sim_state["world_bounds"]
+    for patch in sim_state["food_patches"]:
+        patch["heading"] += random.uniform(-FOOD_PATCH_TURN, FOOD_PATCH_TURN)
+        patch["x"] = (patch["x"] + math.cos(patch["heading"]) * FOOD_PATCH_SPEED) % w
+        patch["y"] = (patch["y"] + math.sin(patch["heading"]) * FOOD_PATCH_SPEED) % h
+
+
+def _spawn_food(sim_state):
+    """New food goes near a random patch (FOOD_PATCH_SHARE of the time) or anywhere."""
+    w, h = sim_state["world_bounds"]
+    # Inherit vec2 factory from existing food if present, else use default
+    vec2_factory = sim_state["food_items"][0]._vec2 if sim_state["food_items"] else None
+    pos = None
+    patches = sim_state.get("food_patches")
+    if patches and random.random() < FOOD_PATCH_SHARE:
+        patch = random.choice(patches)
+        pos = ((patch["x"] + random.gauss(0, FOOD_PATCH_RADIUS)) % w,
+               (patch["y"] + random.gauss(0, FOOD_PATCH_RADIUS)) % h)
+    return Food(sim_state["world_bounds"], vec2_factory=vec2_factory, pos=pos)
 
 
 def _apply_mate_seeking_drive(c, outputs, herb_grid, carn_grid):
@@ -177,16 +213,21 @@ def _repopulate_from_hof(is_carnivore, count, default_genes, sim_state,
 
 def update_world(sim_state, prometheus_metrics=None, worker_id=None):
     sim_state["tick"] += 1
+    sim_state["light"] = light = day_light(sim_state["tick"])
     grid = sim_state["grid"]
     for food in sim_state["food_items"]:
         food.update()
     sim_state["food_items"][:] = [
         f for f in sim_state["food_items"] if not f.is_rotten() and not f.consumed
     ]
+    if "food_patches" in sim_state:
+        _update_food_patches(sim_state)
     if random.random() < FOOD_RESPAWN_RATE and len(sim_state["food_items"]) < NUM_FOOD * 1.5:
-        # Inherit vec2 factory from existing food if present, else use default
-        vec2_factory = sim_state["food_items"][0]._vec2 if sim_state["food_items"] else None
-        sim_state["food_items"].append(Food(sim_state["world_bounds"], vec2_factory=vec2_factory))
+        sim_state["food_items"].append(_spawn_food(sim_state))
+    carcasses = sim_state.setdefault("carcasses", [])
+    for carcass in carcasses:
+        carcass.update()
+    carcasses[:] = [cc for cc in carcasses if not cc.is_gone()]
 
     all_creatures = sim_state["creatures"] + sim_state["carnivores"]
     food_grid = sim_state["food_grid"]
@@ -201,26 +242,35 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
         herb_grid.insert(h)
     for cn in sim_state["carnivores"]:
         carn_grid.insert(cn)
+    carcass_grid = sim_state.setdefault("carcass_grid", SpatialHashGrid(
+        *sim_state["world_bounds"], GRID_CELL_SIZE))
+    carcass_grid.clear()
+    for cc in carcasses:
+        carcass_grid.insert(cc)
 
     all_inputs = perceive_all(all_creatures, sim_state["food_items"], sim_state["creatures"],
-                              sim_state["carnivores"], sim_state["obstacles"])
+                              sim_state["carnivores"], sim_state["obstacles"], carcasses, light)
     all_outputs = batch_forward(all_creatures, all_inputs)
+    if len(all_outputs):
+        signals = np.maximum(0.0, all_outputs[:, 2]).tolist()
+        memories = all_outputs[:, 3:3 + NUM_MEMORY].tolist()
+        for c, sig, mem in zip(all_creatures, signals, memories):
+            c.signal, c.memory = sig, mem
+    tick = sim_state["tick"]
     for c, outputs in zip(all_creatures, all_outputs):
         outputs = _apply_mate_seeking_drive(c, list(outputs), herb_grid, carn_grid)
         c.act(outputs, sim_state["food_items"], sim_state["creatures"], sim_state["obstacles"], grid,
-              food_grid=food_grid, herb_grid=herb_grid)
+              food_grid=food_grid, herb_grid=herb_grid, carcass_grid=carcass_grid, tick=tick)
 
     alive_herbs, alive_carns = [], []
-    for c in sim_state["creatures"]:
-        if c.is_alive() and not c.dead:
-            alive_herbs.append(c)
-        else:
-            _retire_creature(c, sim_state, prometheus_metrics, worker_id)
-    for c in sim_state["carnivores"]:
-        if c.is_alive():
-            alive_carns.append(c)
-        else:
-            _retire_creature(c, sim_state, prometheus_metrics, worker_id)
+    for group, alive in ((sim_state["creatures"], alive_herbs),
+                         (sim_state["carnivores"], alive_carns)):
+        for c in group:
+            if c.is_alive():
+                alive.append(c)
+            else:
+                carcasses.append(Carcass(c))
+                _retire_creature(c, sim_state, prometheus_metrics, worker_id)
     sim_state["creatures"] = alive_herbs
     sim_state["carnivores"] = alive_carns
 
@@ -266,7 +316,6 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
 
     new_offspring = []
     reproduced_ids = set()
-    tick = sim_state["tick"]
     now = time.time()
     for group, pop_limit, max_health, default_genes in [
         (sim_state["creatures"], NUM_HERBIVOROUS, HERBIVORE_HEALTH, DEFAULT_HERBIVORE_GENES),

@@ -27,11 +27,18 @@ Shared library lives in `src/evolution/`; the three `game*.py` entry scripts are
 
 ### Simulation loop
 
-`simulation.build_sim_state()` returns a plain dict (`sim_state`) holding all world state: creature/food lists, four `SpatialHashGrid`s (general, food, herbivore, carnivore), score histories, tick/generation counters, and `hall_of_fame`. `simulation.update_world(sim_state, ...)` advances one tick and is shared by `game.py` and `game_headless.py`. Perception for all creatures is one vectorized numpy pass, `perception.perceive_all`, which returns the (N, 18) input matrix and sets `c.whiskers`, `c._nearest_target_dist` and `c._nearest_smell_strength`. `Creature.see()` is a one-creature wrapper around it. `tests/test_perception.py` holds the original scalar implementation as a reference, and the vectorized code must keep matching it. NN inference for all creatures goes through `batch_forward()`, which stacks the per-creature weights and runs one vectorized `np.einsum` per layer. The stacks are cached until the population changes, which assumes a creature's brain never changes in place after it is created. Any change to `NeuralNetwork`'s weight/bias layout has to stay compatible with it.
+`simulation.build_sim_state()` returns a plain dict (`sim_state`) holding all world state: creature/food lists, four `SpatialHashGrid`s (general, food, herbivore, carnivore), score histories, tick/generation counters, and `hall_of_fame`. `simulation.update_world(sim_state, ...)` advances one tick and is shared by `game.py` and `game_headless.py`. Perception for all creatures is one vectorized numpy pass, `perception.perceive_all`, which returns the (N, `BRAIN_INPUTS`) input matrix and sets `c.whiskers`, `c._nearest_target_dist`, `c._nearest_smell_strength` and `c.effective_sight`. `Creature.see()` is a one-creature wrapper around it. `tests/test_perception.py` holds the original scalar implementation as a reference, and the vectorized code must keep matching it. NN inference for all creatures goes through `batch_forward()`, which stacks the per-creature weights and runs one vectorized `np.einsum` per layer. The stacks are cached until the population changes, which assumes a creature's brain never changes in place after it is created. Any change to `NeuralNetwork`'s weight/bias layout has to stay compatible with it.
+
+World mechanics, all tuned through `config.py`:
+- **Chases:** carnivores bite instead of killing on contact. A bite needs contact, the prey within `CARNIVORE_BITE_ANGLE` of the carnivore's heading, and `BITE_COOLDOWN_TICKS` since the last bite (`Creature._try_bite`). Bitten prey gets an adrenaline stamina boost. Herbivores bigger than the carnivore deal retaliation damage. Death is simply `health <= 0`.
+- **Carcasses:** every dead creature leaves a `Carcass` in `sim_state["carcasses"]` (with its own grid). Carnivores scavenge it (`_scavenge`) until it's eaten or rots.
+- **Food patches:** `sim_state["food_patches"]` drift around the map, and most respawned food lands near one.
+- **Day/night:** `day_light(tick)` goes into `sim_state["light"]`. At night vision cones shrink (`NIGHT_SIGHT_FACTOR`), while whiskers and smell don't.
+- **Signal and memory:** after `batch_forward`, the extra outputs are stored as `c.signal` (heard by kin within `SIGNAL_RADIUS`, with a small health cost) and `c.memory` (fed back as inputs next tick).
 
 Evolution is continuous: creatures die and are "retired" (`_retire_creature` updates the Hall of Fame and saves the brain), and eligible nearby adults reproduce (brain crossover + gene averaging + mutation, in `genetics.py`). The reproduction cooldown is counted in ticks (`REPRODUCTION_COOLDOWN_TICKS`), so behavior doesn't depend on simulation speed. After an extinction, the species is repopulated from the Hall of Fame.
 
-**`game_headless_multiproc.py` diverges:** it has its own `update_world` and a *generational* `evolve_population`, and it ships `LeanCreature`/`LeanFood` dataclasses to worker processes for IPC. Changes to `simulation.update_world` do not carry over to it automatically.
+**`game_headless_multiproc.py` diverges:** it has its own `update_world` and a *generational* `evolve_population`, and it ships `LeanCreature`/`LeanFood` dataclasses to worker processes for IPC. Changes to `simulation.update_world` do not carry over to it automatically. It only stores signal/memory: it keeps instant kills and has no carcasses, food patches or night.
 
 ### Island workers (game.py)
 
@@ -43,11 +50,15 @@ Pressing **B** (background mode) in `game.py` spawns `cpu_count()-1` subprocesse
 
 ### Rendering (game.py only)
 
-`render.Renderer` draws everything; the entity classes have no draw methods. Sprites are drawn procedurally once (4× supersampled, then smoothscaled), pre-rotated into `config.SPRITE_ANGLE_STEPS` buckets with the drop shadow baked in, and cached by `(is_carnivore, size, health level, walk frame, angle)`, so a frame is mostly `screen.blits`. Obstacles are static and baked into the background surface at startup; if obstacles ever move or change, the background must be rebuilt.
+`render.Renderer` draws everything; the entity classes have no draw methods. Sprites are drawn procedurally once (4× supersampled, then smoothscaled), pre-rotated into `config.SPRITE_ANGLE_STEPS` buckets with the drop shadow baked in, and cached by `(is_carnivore, size, health level, walk frame, angle)`, so a frame is mostly `screen.blits`. Obstacles are static and baked into the background surface at startup; if obstacles ever move or change, the background must be rebuilt. The renderer also draws:
+- carcass sprites;
+- a red glow on creatures hit within the last few ticks;
+- pulsing rings around creatures that are signalling;
+- a night overlay scaled by `sim_state["light"]`, with food glowing through it.
 
 ### Neural network
 
-Topology is `config.BRAIN_TOPOLOGY = [18, 16, 8, 2]`, tanh on all layers. The input size is derived from `NUM_WHISKERS`, so changing the inputs in `Creature.see()` means updating that formula too. Inputs, in order:
+Topology is `config.BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]` = `[28, 16, 8, 5]`, tanh on all layers. Changing the inputs in `perception.perceive_all` means updating the `BRAIN_INPUTS` formula too. Append new inputs/outputs at the end: `NeuralNetwork.load` copies the overlapping top-left block, so saved brains keep their existing wiring. Inputs, in order:
 
 ```
 whisker[0..2]                obstacle proximity (1 = touching)
@@ -57,9 +68,14 @@ smell_angle, smell_strength  omnidirectional: prey (carnivore) / predator (herbi
 prey_vel_x, prey_vel_y       carnivore only, else 0
 health_ratio, sin(angle), cos(angle)
 size, speed, sight_dist, sight_angle, stamina, hunger   (normalized)
+kin_angle, kin_dist, kin_density   nearest same-species creature within KIN_SENSE_RADIUS
+signal_angle, signal_strength      loudest same-species signal within SIGNAL_RADIUS
+carcass_angle, carcass_dist        carnivore only: nearest visible carcass, else (0, 1)
+light                              0 = midnight, 1 = noon
+memory[0..NUM_MEMORY-1]            own memory outputs from the previous tick
 ```
 
-Outputs: `[rotation_delta, speed]`. `_apply_mate_seeking_drive` may override them for adults.
+Outputs: `[rotation_delta, speed, signal, memory...]`. `_apply_mate_seeking_drive` may override them for adults.
 
 ### Genes
 

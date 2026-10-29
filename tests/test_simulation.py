@@ -68,3 +68,53 @@ def test_herbivore_mate_seeking_skipped_when_predator_smelled(predator_x, expect
 
     outputs = _apply_mate_seeking_drive(herb, [0.0, 0.0], sim_state["herb_grid"], sim_state["carn_grid"])
     assert (outputs != [0.0, 0.0]) == expect_override
+
+
+def test_dead_creature_leaves_carcass_that_rots():
+    sim_state = _make_sim(n_herbs=2, n_carns=1)
+    victim = sim_state["creatures"][0]
+    victim.health = -1
+    update_world(sim_state)
+    assert len(sim_state["carcasses"]) == 1
+    carcass = sim_state["carcasses"][0]
+    assert (carcass.pos.x, carcass.pos.y) == pytest.approx((victim.pos.x, victim.pos.y))
+    carcass.age = config.CARCASS_LIFETIME
+    for c in sim_state["creatures"] + sim_state["carnivores"]:
+        c.health = c.max_health
+    update_world(sim_state)
+    assert carcass not in sim_state["carcasses"]
+
+
+def test_food_respawns_near_patches(monkeypatch):
+    from evolution import simulation
+
+    monkeypatch.setattr(simulation, "FOOD_PATCH_SHARE", 1.0)
+    sim_state = _make_sim(n_herbs=0, n_carns=0, n_food=0)
+    w, h = WORLD_BOUNDS
+    for _ in range(200):
+        f = simulation._spawn_food(sim_state)
+        best = min(
+            math.hypot(min(abs(f.pos.x - p["x"]), w - abs(f.pos.x - p["x"])),
+                       min(abs(f.pos.y - p["y"]), h - abs(f.pos.y - p["y"])))
+            for p in sim_state["food_patches"]
+        )
+        assert best < 5 * config.FOOD_PATCH_RADIUS
+
+
+def test_day_light_cycle():
+    from evolution.simulation import day_light
+
+    day = config.DAY_LENGTH_TICKS
+    assert day_light(0) == pytest.approx(1.0)
+    assert day_light(day // 4) == pytest.approx(0.5)
+    assert day_light(day // 2) == pytest.approx(0.0)
+    assert day_light(day) == pytest.approx(1.0)
+
+
+def test_update_world_stores_signal_and_memory():
+    sim_state = _make_sim(n_herbs=3, n_carns=2)
+    update_world(sim_state)
+    for c in sim_state["creatures"] + sim_state["carnivores"]:
+        assert 0.0 <= c.signal <= 1.0
+        assert len(c.memory) == config.NUM_MEMORY
+    assert any(m != 0.0 for c in sim_state["creatures"] for m in c.memory)

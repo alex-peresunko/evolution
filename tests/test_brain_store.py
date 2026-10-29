@@ -54,3 +54,15 @@ def test_retire_creature_keeps_better_saved_brain(tmp_path, monkeypatch):
     assert sim_state["hall_of_fame"]["herbivore"]["score"] == 5.0
     assert read_saved_score("best_brain_herbivore.json") == 100.0
     assert sim_state["last_autosave_tick"] == 0
+
+
+def test_old_topology_brain_loads_into_current_topology(tmp_path):
+    import numpy as np
+
+    old = NeuralNetwork([18, 16, 8, 2])
+    old.save("old.json", save_dir=str(tmp_path))
+    nn, _, _ = NeuralNetwork.load("old.json", config.BRAIN_TOPOLOGY, save_dir=str(tmp_path))
+    assert nn.layer_sizes == config.BRAIN_TOPOLOGY
+    np.testing.assert_array_equal(nn.weights[0][:18, :16], old.weights[0])
+    np.testing.assert_array_equal(nn.weights[-1][:8, :2], old.weights[-1])
+    np.testing.assert_array_equal(nn.biases[-1][:, :2], old.biases[-1])

@@ -5,14 +5,16 @@ import numpy as np
 import pytest
 
 from evolution import config
-from evolution.entities import Creature, Food, Obstacle
+from evolution.entities import Carcass, Creature, Food, Obstacle
 from evolution.perception import perceive_all
 
 WORLD_BOUNDS = (config.WORLD_WIDTH, config.WORLD_HEIGHT)
 
 
-def _reference_see(self, food_items, obstacles, herbivores, carnivores):
-    """The original per-creature, pure-Python Creature.see(); perceive_all must match it."""
+def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasses=(), light=1.0):
+    """The original per-creature, pure-Python Creature.see(), plus scalar versions of the
+    later inputs (kin, signal, carcass, light, memory); perceive_all must match it."""
+    eye = self.sight_distance * (config.NIGHT_SIGHT_FACTOR + (1 - config.NIGHT_SIGHT_FACTOR) * light)
     inputs = []
     whiskers = []
     for whisker_angle in self.whisker_angles:
@@ -31,7 +33,7 @@ def _reference_see(self, food_items, obstacles, herbivores, carnivores):
         if target.id == self.id:
             return False
         vec = target.pos - self.pos
-        if 0 < vec.length() <= self.sight_distance:
+        if 0 < vec.length() <= eye:
             angle_to_target = (math.atan2(vec.y, vec.x) - self.angle + math.pi) % (2 * math.pi) - math.pi
             return abs(angle_to_target) <= self.sight_angle / 2
         return False
@@ -40,7 +42,7 @@ def _reference_see(self, food_items, obstacles, herbivores, carnivores):
         dist = self.pos.distance_to(target.pos)
         angle = (math.atan2(target.pos.y - self.pos.y, target.pos.x - self.pos.x)
                  - self.angle + math.pi) % (2 * math.pi) - math.pi
-        return angle / (self.sight_angle / 2), dist / self.sight_distance
+        return angle / (self.sight_angle / 2), dist / eye
 
     nearest_prey = None
     if self.is_carnivore:
@@ -96,6 +98,32 @@ def _reference_see(self, food_items, obstacles, herbivores, carnivores):
         self.stamina / self.max_stamina,
         min(1.0, self.hunger / config.HUNGER_MAX),
     ]
+
+    def rel_angle(target):
+        vec = target.pos - self.pos
+        return (math.atan2(vec.y, vec.x) - self.angle + math.pi) % (2 * math.pi) - math.pi
+
+    kin = [k for k in (carnivores if self.is_carnivore else herbivores) if k.id != self.id]
+    near = [k for k in kin if self.pos.distance_to(k.pos) < config.KIN_SENSE_RADIUS]
+    if near:
+        closest = min(near, key=lambda k: self.pos.distance_to(k.pos))
+        inputs += [rel_angle(closest) / math.pi,
+                   self.pos.distance_to(closest.pos) / config.KIN_SENSE_RADIUS]
+    else:
+        inputs += [0.0, 1.0]
+    inputs.append(min(1.0, len(near) / config.KIN_DENSITY_NORM))
+    heard = [(k.signal * (1 - self.pos.distance_to(k.pos) / config.SIGNAL_RADIUS), k)
+             for k in kin if self.pos.distance_to(k.pos) < config.SIGNAL_RADIUS]
+    loudest = max(heard, key=lambda h: h[0], default=(0.0, None))
+    inputs += [rel_angle(loudest[1]) / math.pi if loudest[0] > 0 else 0.0, loudest[0]]
+
+    visible_carcasses = [cc for cc in carcasses if in_sight(cc)] if self.is_carnivore else []
+    if visible_carcasses:
+        inputs.extend(target_info(min(visible_carcasses, key=lambda cc: self.pos.distance_to(cc.pos))))
+    else:
+        inputs += [0.0, 1.0]
+    inputs.append(light)
+    inputs.extend(self.memory)
     return inputs, whiskers, nearest_target_dist, nearest_smell_strength
 
 
@@ -112,13 +140,16 @@ def _random_creature(rnd, is_carnivore, obstacles):
     c.current_speed = rnd.uniform(0, c.max_speed)
     c.stamina = c.max_stamina * rnd.uniform(0, 1)
     c.hunger = rnd.randint(0, 2 * config.HUNGER_MAX)
+    c.signal = rnd.choice([0.0, rnd.uniform(0, 1)])
+    c.memory = [rnd.uniform(-1, 1) for _ in range(config.NUM_MEMORY)]
     return c
 
 
+@pytest.mark.parametrize("light", [1.0, 0.3])
 @pytest.mark.parametrize("seed, n_herb, n_carn, n_food", [
     (0, 40, 40, 60), (1, 120, 30, 75), (2, 5, 150, 10), (3, 1, 1, 0), (4, 0, 20, 30), (5, 30, 0, 30),
 ])
-def test_perceive_all_matches_reference(seed, n_herb, n_carn, n_food):
+def test_perceive_all_matches_reference(seed, n_herb, n_carn, n_food, light):
     rnd = random.Random(seed)
     random.seed(seed)
     obstacles = [Obstacle(rnd.randint(100, 1700), rnd.randint(100, 700),
@@ -126,12 +157,14 @@ def test_perceive_all_matches_reference(seed, n_herb, n_carn, n_food):
     herbs = [_random_creature(rnd, False, obstacles) for _ in range(n_herb)]
     carns = [_random_creature(rnd, True, obstacles) for _ in range(n_carn)]
     food = [Food(WORLD_BOUNDS) for _ in range(n_food)]
+    carcasses = [Carcass(_random_creature(rnd, rnd.random() < 0.5, obstacles)) for _ in range(seed * 4)]
     everyone = herbs + carns
 
-    got = perceive_all(everyone, food, herbs, carns, obstacles)
+    got = perceive_all(everyone, food, herbs, carns, obstacles, carcasses, light)
     assert got.shape == (len(everyone), config.BRAIN_TOPOLOGY[0])
     for row, c in zip(got, everyone):
-        inputs, whiskers, target_dist, smell = _reference_see(c, food, obstacles, herbs, carns)
+        inputs, whiskers, target_dist, smell = _reference_see(c, food, obstacles, herbs, carns,
+                                                              carcasses, light)
         np.testing.assert_allclose(row, inputs, atol=1e-9)
         np.testing.assert_allclose(c.whiskers, whiskers, atol=1e-9)
         if target_dist is None:

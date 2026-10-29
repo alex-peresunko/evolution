@@ -14,7 +14,10 @@ from .config import (
     HEALTH_GAIN_SIZE_PENALTY,
     NUM_WHISKERS, BRAIN_TOPOLOGY, SIZE_SPEED_PENALTY_FACTOR, SPEED_STAMINA_EXPONENT,
     SIZE_STAMINA_FACTOR, RESPAWN_IMMUNITY_TICKS,
-    FOOD_MAX_LIFETIME, FOOD_MIN_HEALTH_FACTOR,
+    FOOD_MAX_LIFETIME, FOOD_MIN_HEALTH_FACTOR, NUM_MEMORY, CARNIVORE_BITE_ANGLE,
+    BITE_DAMAGE, BITE_COOLDOWN_TICKS, BITE_HEALTH_TRANSFER, BITE_SCORE, ADRENALINE_STAMINA,
+    RETALIATION_DAMAGE, CARCASS_MEAT_PER_SIZE, CARCASS_LIFETIME, CARCASS_EAT_RATE,
+    SCAVENGE_SCORE_FACTOR, SIGNAL_HEALTH_COST,
 )
 from .math_types import Vector2 as _HeadlessVector2, SimpleRect as _HeadlessRect
 from .neural_network import NeuralNetwork
@@ -49,8 +52,12 @@ class Creature:
         self.current_speed = 0.0
         self._nearest_target_dist: Optional[float] = None
         self._nearest_smell_strength: float = 0.0
-        self.dead = False
         self.hunger = 0
+        self.signal = 0.0                   # emitted to kin, from the brain's 3rd output
+        self.memory = [0.0] * NUM_MEMORY    # fed back as inputs on the next tick
+        self.effective_sight = 0.0
+        self.last_bite_tick: Optional[int] = None
+        self.last_hit_tick: Optional[int] = None
         self.respawn_immunity_ticks = 0
         self.age = 0
         self.is_adult = False
@@ -92,7 +99,7 @@ class Creature:
         return self.think(inputs)
 
     def act(self, outputs, global_food_list, global_herbivore_list, obstacles, grid,
-            food_grid=None, herb_grid=None):
+            food_grid=None, herb_grid=None, carcass_grid=None, tick=0):
         self.age += 1
         if self.respawn_immunity_ticks > 0:
             self.respawn_immunity_ticks -= 1
@@ -129,25 +136,18 @@ class Creature:
             HUNGER_HEALTH_PENALTY * min(1.0, max(0.0, (self.hunger - HUNGER_MAX) / HUNGER_MAX))
             if self.hunger > HUNGER_MAX else 0
         )
-        self.health -= HEALTH_LOSS_PER_TICK + (new_speed * HEALTH_LOSS_SPEED_FACTOR) + hunger_penalty
+        self.health -= (HEALTH_LOSS_PER_TICK + (new_speed * HEALTH_LOSS_SPEED_FACTOR) + hunger_penalty
+                        + self.signal * SIGNAL_HEALTH_COST)
         self.current_speed = new_speed
 
         interaction_radius = self.size + GENE_MIN_MAX["size"][1]
 
-        if self.is_carnivore and self.respawn_immunity_ticks == 0:
-            base_size = DEFAULT_CARNIVORE_GENES["size"]
-            nearby_prey = (herb_grid or grid).query(self.pos, interaction_radius)
-            for prey in nearby_prey:
-                if prey.dead:
-                    continue
-                if self.pos.distance_to(prey.pos) < (self.size + prey.size):
-                    prey.dead = True
-                    base_health_gain = CARNIVORE_HEALTH_PER_FOOD
-                    size_penalty_denom = 1 + (self.genetic_size - base_size) * HEALTH_GAIN_SIZE_PENALTY
-                    self.health = min(self.max_health, self.health + base_health_gain / max(0.1, size_penalty_denom))
-                    self.hunger = 0
-                    self.score += 1
-                    break
+        if self.is_carnivore:
+            if self.respawn_immunity_ticks == 0:
+                bit = (self.last_bite_tick is None or tick - self.last_bite_tick >= BITE_COOLDOWN_TICKS) \
+                    and self._try_bite((herb_grid or grid).query(self.pos, interaction_radius), tick)
+                if not bit and carcass_grid is not None:
+                    self._scavenge(carcass_grid.query(self.pos, interaction_radius))
         else:
             base_size = DEFAULT_HERBIVORE_GENES["size"]
             nearby_food = (food_grid or grid).query(self.pos, interaction_radius)
@@ -177,8 +177,49 @@ class Creature:
         elif self.is_carnivore and self._nearest_smell_strength > 0:
             self.score += 0.0005 * self._nearest_smell_strength
 
-    def see(self, food_items, obstacles, herbivores=None, carnivores=None):
-        return perceive_all([self], food_items, herbivores or [], carnivores or [], obstacles)[0].tolist()
+    def _gain_meat(self, amount):
+        size_penalty_denom = 1 + (self.genetic_size - DEFAULT_CARNIVORE_GENES["size"]) * HEALTH_GAIN_SIZE_PENALTY
+        gain = min(self.max_health - self.health, amount / max(0.1, size_penalty_denom))
+        self.health += max(0.0, gain)
+        self.hunger = 0
+        return gain
+
+    def _try_bite(self, nearby_prey, tick):
+        """Bite the first live prey in contact and in front; returns whether a bite landed."""
+        for prey in nearby_prey:
+            if prey.health <= 0 or self.pos.distance_to(prey.pos) >= self.size + prey.size:
+                continue
+            vec = prey.pos - self.pos
+            facing = (math.atan2(vec.y, vec.x) - self.angle + math.pi) % (2 * math.pi) - math.pi
+            if abs(facing) > CARNIVORE_BITE_ANGLE / 2:
+                continue
+            ratio = self.size / prey.size if prey.size > 0 else 2.0
+            damage = BITE_DAMAGE * min(2.0, max(0.5, ratio))
+            prey.health -= damage
+            prey.stamina = min(prey.max_stamina, prey.stamina + ADRENALINE_STAMINA)
+            prey.last_hit_tick = tick
+            self._gain_meat(damage * BITE_HEALTH_TRANSFER)
+            self.score += BITE_SCORE + (1 if prey.health <= 0 else 0)
+            # Large prey fights back.
+            self.health -= RETALIATION_DAMAGE * min(3.0, max(0.0, 1 / ratio - 1))
+            self.last_bite_tick = tick
+            self.last_hit_tick = tick
+            return True
+        return False
+
+    def _scavenge(self, nearby_carcasses):
+        for carcass in nearby_carcasses:
+            if carcass.meat <= 0 or self.pos.distance_to(carcass.pos) >= self.size + carcass.radius:
+                continue
+            eaten = min(CARCASS_EAT_RATE, carcass.meat)
+            carcass.meat -= eaten
+            gain = self._gain_meat(eaten)
+            self.score += gain / CARNIVORE_HEALTH_PER_FOOD * SCAVENGE_SCORE_FACTOR
+            return
+
+    def see(self, food_items, obstacles, herbivores=None, carnivores=None, carcasses=(), light=1.0):
+        return perceive_all([self], food_items, herbivores or [], carnivores or [], obstacles,
+                            carcasses, light)[0].tolist()
 
     def think(self, inputs):
         return self.brain.forward(inputs)
@@ -194,7 +235,9 @@ class Creature:
             "Status": status,
             "Health": int(self.health),
             "Stamina": f"{int(self.stamina)}/{int(self.max_stamina)}",
-            "Score": self.score,
+            "Score": round(self.score, 2),
+            "Signal": round(self.signal, 2),
+            "Memory": " ".join(f"{m:+.2f}" for m in self.memory),
             "Reproductions": self.reproductions,
             "Is Best": self.is_best,
         }
@@ -206,12 +249,14 @@ class Creature:
 class Food:
     _id_counter = -1
 
-    def __init__(self, world_bounds, *, vec2_factory=None):
+    def __init__(self, world_bounds, *, vec2_factory=None, pos=None):
         self._vec2 = vec2_factory or _HeadlessVector2
         self.id = Food._id_counter
         Food._id_counter -= 1
         self.world_bounds = world_bounds
-        self.pos = self._vec2(random.uniform(0, world_bounds[0]), random.uniform(0, world_bounds[1]))
+        if pos is None:
+            pos = (random.uniform(0, world_bounds[0]), random.uniform(0, world_bounds[1]))
+        self.pos = self._vec2(*pos)
         self.lifetime = 0
         self.max_lifetime = FOOD_MAX_LIFETIME
         self.health_value_base = HERBIVORE_HEALTH_PER_FOOD
@@ -229,3 +274,25 @@ class Food:
             return 0
         freshness = 1.0 - (self.lifetime / self.max_lifetime)
         return int(self.health_value_base * (self.min_health_factor + (1 - self.min_health_factor) * freshness))
+
+
+class Carcass:
+    """Meat left where a creature died; carnivores scavenge it until it is eaten or rots."""
+    _id_counter = -10**9
+
+    def __init__(self, creature):
+        self._vec2 = creature._vec2
+        self.id = Carcass._id_counter
+        Carcass._id_counter -= 1
+        self.pos = self._vec2(creature.pos.x, creature.pos.y)
+        self.radius = max(3.0, creature.size)
+        self.is_carnivore = creature.is_carnivore
+        self.max_meat = CARCASS_MEAT_PER_SIZE * creature.size
+        self.meat = self.max_meat
+        self.age = 0
+
+    def update(self):
+        self.age += 1
+
+    def is_gone(self):
+        return self.meat <= 0 or self.age >= CARCASS_LIFETIME

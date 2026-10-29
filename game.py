@@ -106,6 +106,11 @@ def _draw_panel(screen, rect):
     screen.blit(panel, rect.topleft)
 
 
+def _time_of_day(light):
+    phase = "Day" if light > 0.66 else "Dusk/Dawn" if light > 0.33 else "Night"
+    return f"Time: {phase} ({int(light * 100)}% light)"
+
+
 def _draw_text_block(screen, font, lines, x, y, title=None):
     surfs = ([font.render(title, True, config.COLOR_BEST_CREATURE)] if title else [])
     surfs += [font.render(line, True, config.COLOR_TEXT) for line in lines]
@@ -180,7 +185,8 @@ def draw_elements(screen, font, sim_state):
         f"Tick: {sim_state['tick']}",
         f"Herbivores: {len(sim_state['creatures'])}",
         f"Carnivores: {len(sim_state['carnivores'])}",
-        f"Food: {len(sim_state['food_items'])}",
+        f"Food: {len(sim_state['food_items'])}   Carcasses: {len(sim_state.get('carcasses', ()))}",
+        _time_of_day(sim_state.get("light", 1.0)),
         f"Top Herbivore Score: {max([c.score for c in sim_state['creatures']] + [0]):.2f}",
         f"Top Carnivore Score: {max([c.score for c in sim_state['carnivores']] + [0]):.2f}",
         f"Longest H: {sim_state['max_age_herbivore']} ticks",

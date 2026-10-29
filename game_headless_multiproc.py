@@ -32,6 +32,7 @@ class LeanCreature:
     angle: float
     current_speed: float
     max_speed: float
+    signal: float
 
 
 @dataclass(frozen=True)
@@ -47,8 +48,8 @@ class LeanFood:
 def process_creature_chunk(args):
     creature_chunk, all_herbivores, all_carnivores, all_food, obstacles, world_bounds = args
 
-    lean_herbivores = [LeanCreature(c.id, c.pos, c.size, c.is_carnivore, c.angle, c.current_speed, c.max_speed) for c in all_herbivores]
-    lean_carnivores = [LeanCreature(c.id, c.pos, c.size, c.is_carnivore, c.angle, c.current_speed, c.max_speed) for c in all_carnivores]
+    lean_herbivores = [LeanCreature(c.id, c.pos, c.size, c.is_carnivore, c.angle, c.current_speed, c.max_speed, c.signal) for c in all_herbivores]
+    lean_carnivores = [LeanCreature(c.id, c.pos, c.size, c.is_carnivore, c.angle, c.current_speed, c.max_speed, c.signal) for c in all_carnivores]
     lean_food = [LeanFood(f.id, f.pos, f.get_health_value()) for f in all_food]
 
     food_eaten_ids = set()
@@ -74,6 +75,8 @@ def process_creature_chunk(args):
         local_carnivores = [obj for obj in local_objects if isinstance(obj, LeanCreature) and obj.is_carnivore]
 
         outputs = c.perceive_and_think(local_food, local_herbivores, local_carnivores, obstacles)
+        c.signal = max(0.0, float(outputs[2]))
+        c.memory = [float(m) for m in outputs[3:3 + config.NUM_MEMORY]]
         outputs = _apply_mate_seeking_drive(c, list(outputs), herb_grid_full, carn_grid_full)
 
         interaction_radius = c.size + config.GENE_MIN_MAX["size"][1]

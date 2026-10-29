@@ -90,9 +90,50 @@ STAMINA_DEPLETION_RATE = 2.5
 STAMINA_REGEN_RATE = 1.0
 STAMINA_EXHAUSTION_PENALTY = 0.2
 
+# --- Chases & fights ---
+BITE_DAMAGE = 1800              # vs. 5000 health: ~3 bites kill a healthy adult
+BITE_COOLDOWN_TICKS = 25
+BITE_HEALTH_TRANSFER = 0.25     # share of the damage the carnivore gains as health
+BITE_SCORE = 0.25               # per bite landed; a kill adds 1
+ADRENALINE_STAMINA = 300        # stamina a bitten herbivore gains, so it can escape
+RETALIATION_DAMAGE = 600        # times (prey.size / carn.size - 1), capped at 3x
+
+# --- Carcasses ---
+CARCASS_MEAT_PER_SIZE = 120
+CARCASS_LIFETIME = 1200
+CARCASS_EAT_RATE = 40           # meat eaten per tick of contact
+SCAVENGE_SCORE_FACTOR = 0.5
+
+# --- Kin sense / signals ---
+KIN_SENSE_RADIUS = 250
+KIN_DENSITY_NORM = 8
+SIGNAL_RADIUS = 300
+SIGNAL_HEALTH_COST = 0.5        # per tick at full signal
+
+# --- Food patches ---
+FOOD_PATCH_COUNT = 3
+FOOD_PATCH_SHARE = 0.8          # share of respawned food placed in a patch
+FOOD_PATCH_RADIUS = 110         # Gaussian sigma
+FOOD_PATCH_SPEED = 0.3
+FOOD_PATCH_TURN = 0.05
+
+# --- Day/night ---
+DAY_LENGTH_TICKS = 3600
+NIGHT_SIGHT_FACTOR = 0.35       # share of sight distance left at midnight
+
 # --- Neural Network ---
 NUM_WHISKERS = 3
-BRAIN_TOPOLOGY = [NUM_WHISKERS + 2 + 2 + 3 + 4 + 1 + 2 + 1, 16, 8, 2]
+NUM_MEMORY = 2
+BRAIN_INPUTS = (
+    NUM_WHISKERS  # obstacle proximity
+    + 2 + 2 + 2   # target, smell, prey velocity
+    + 3 + 6       # health, sin/cos angle, normalized genes/stamina/hunger
+    + 3 + 2       # kin angle/dist/density, signal angle/strength
+    + 2 + 1       # carcass angle/dist, light
+    + NUM_MEMORY
+)
+BRAIN_OUTPUTS = 3 + NUM_MEMORY  # rotation, speed, signal, memory
+BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]
 
 # --- Evolution ---
 MUTATION_RATE = 0.08
@@ -118,3 +159,6 @@ HUD_FONT_SIZE = 18
 # --- Sprite rendering (render.py) ---
 SPRITE_ANGLE_STEPS = 72      # rotation buckets for cached creature sprites (5 degrees)
 SPRITE_CACHE_LIMIT = 8000    # rotated sprites kept before the cache is flushed
+NIGHT_MAX_ALPHA = 150
+SIGNAL_RENDER_THRESHOLD = 0.6
+COLOR_HIT = (255, 40, 30)
