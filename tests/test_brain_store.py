@@ -1,10 +1,11 @@
 import json
 
 from evolution import config
-from evolution.brain_store import read_saved_score, save_brain_if_better
+from evolution.brain_store import (read_saved_history, read_saved_score, save_brain_if_better,
+                                   update_saved_history)
 from evolution.entities import Creature
 from evolution.neural_network import NeuralNetwork
-from evolution.simulation import _retire_creature, build_sim_state
+from evolution.simulation import _retire_creature, build_sim_state, restore_progress
 
 WORLD_BOUNDS = (config.WORLD_WIDTH, config.WORLD_HEIGHT)
 
@@ -66,3 +67,35 @@ def test_old_topology_brain_loads_into_current_topology(tmp_path):
     np.testing.assert_array_equal(nn.weights[0][:18, :16], old.weights[0])
     np.testing.assert_array_equal(nn.weights[-1][:8, :2], old.weights[-1])
     np.testing.assert_array_equal(nn.biases[-1][:, :2], old.biases[-1])
+
+
+def test_history_round_trip_and_update(tmp_path):
+    history = {"score": [1.0, 2.0], "longevity": [10, 20]}
+    save_brain_if_better(NeuralNetwork([4, 3, 2]), "brain.json", generation=3, genes=None,
+                         score=2.0, save_dir=str(tmp_path), history=history)
+    assert read_saved_history("brain.json", save_dir=str(tmp_path)) == history
+    before = json.loads((tmp_path / "brain.json").read_text())
+    newer = {"score": [1.0, 2.0, 2.0], "longevity": [10, 20, 30]}
+    assert update_saved_history("brain.json", newer, save_dir=str(tmp_path)) is True
+    after = json.loads((tmp_path / "brain.json").read_text())
+    assert after.pop("history") == newer
+    before.pop("history")
+    assert after == before
+    assert update_saved_history("missing.json", newer, save_dir=str(tmp_path)) is False
+
+
+def test_restore_progress_seeds_hof_and_pads_histories(tmp_path):
+    brain = NeuralNetwork(config.BRAIN_TOPOLOGY)
+    history = {"score": [1.0, 4.0, 7.0], "longevity": [100, 200, 300]}
+    save_brain_if_better(brain, "best_brain_herbivore.json", generation=9, genes={"size": 5.0},
+                         score=7.0, save_dir=str(tmp_path), history=history)
+    sim_state = build_sim_state(WORLD_BOUNDS, [], [], [], [])
+    sim_state["carnivore_score_history"] = [0.5]
+    sim_state["carnivore_longevity_history"] = [50]
+    restore_progress(sim_state, "herbivore", brain, {"size": 5.0}, "best_brain_herbivore.json",
+                     save_dir=str(tmp_path))
+    assert sim_state["hall_of_fame"]["herbivore"]["score"] == 7.0
+    assert sim_state["herbivore_score_history"] == [1.0, 4.0, 7.0]
+    assert sim_state["max_age_herbivore"] == 300
+    assert sim_state["carnivore_score_history"] == [0.5, 0.5, 0.5]
+    assert sim_state["carnivore_longevity_history"] == [50, 50, 50]

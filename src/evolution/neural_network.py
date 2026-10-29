@@ -41,7 +41,7 @@ class NeuralNetwork:
         return new_nn
 
     def save(self, filename, save_dir="saved_brains", generation=None, genes=None,
-             score=None, uptime_seconds=None):
+             score=None, uptime_seconds=None, history=None):
         os.makedirs(save_dir, exist_ok=True)
         data = {
             "layer_sizes": self.layer_sizes,
@@ -56,6 +56,8 @@ class NeuralNetwork:
             data["genes"] = {k: float(v) for k, v in genes.items()}
         if uptime_seconds is not None:
             data["metric_game_uptime_seconds"] = uptime_seconds
+        if history is not None:
+            data["history"] = history
         with open(os.path.join(save_dir, filename), "w") as f:
             json.dump(data, f, indent=4, sort_keys=True)
         print(f"Brain saved to {filename}")

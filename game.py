@@ -14,7 +14,8 @@ from prometheus_client import start_http_server
 
 from evolution import config
 from evolution.entities import Creature, Food, Obstacle
-from evolution.simulation import update_world, create_initial_population, build_sim_state
+from evolution.simulation import (update_world, create_initial_population, build_sim_state,
+                                  restore_progress, species_history)
 from evolution.genetics import mutate_genes
 from evolution.neural_network import NeuralNetwork
 from evolution.metrics import GameMetrics
@@ -130,7 +131,7 @@ def _chart_font(size):
     return font
 
 
-def draw_dual_chart(screen, rect, title, series, scale):
+def draw_dual_chart(screen, rect, title, series, scale, generation):
     """Translucent panel with one line per (history, color, label) series, each scaled to its
     own peak (species scores differ by orders of magnitude), sized by the zoomable chart scale."""
     font = _chart_font(round(config.CHART_FONT_SIZE * scale))
@@ -138,7 +139,7 @@ def draw_dual_chart(screen, rect, title, series, scale):
     pad = round(4 * scale)
     _draw_panel(screen, rect)
     screen.blit(font.render(title, True, config.COLOR_TEXT), (rect.x + pad, rect.y + pad))
-    gens = font.render(f"Gens: {max(len(h) for h, _, _ in series)}", True, config.COLOR_TEXT)
+    gens = font.render(f"Gen: {generation}", True, config.COLOR_TEXT)
     screen.blit(gens, (rect.right - gens.get_width() - pad, rect.y + pad))
     info_y = rect.y + pad + line_h
     for i, (history, color, label) in enumerate(series):  # peaks: first left, second right
@@ -222,7 +223,7 @@ def draw_elements(screen, font, sim_state):
                            chart_w, chart_h)
         series = [(sim_state[f"herbivore_{metric}_history"], config.COLOR_CREATURE, "Herb"),
                   (sim_state[f"carnivore_{metric}_history"], config.COLOR_CARNIVORE, "Carn")]
-        draw_dual_chart(screen, rect, title, series, scale)
+        draw_dual_chart(screen, rect, title, series, scale, sim_state["generation"])
     if sim_state["paused"]:
         screen.blit(font.render("PAUSED", True, (255, 100, 100)),
                     (config.SCREEN_WIDTH // 2 - 60, 20))
@@ -244,12 +245,14 @@ def handle_events(sim_state, prometheus_metrics):
                 if best_h:
                     save_brain(best_h.brain, "best_brain_herbivore.json",
                                generation=sim_state["generation"], genes=best_h.genes,
-                               score=best_h.score, metrics=prometheus_metrics)
+                               score=best_h.score, metrics=prometheus_metrics,
+                               history=species_history(sim_state, "herbivore"))
                 best_c = max(sim_state["carnivores"], key=lambda c: c.score, default=None)
                 if best_c:
                     save_brain(best_c.brain, "best_brain_carnivore.json",
                                generation=sim_state["generation"], genes=best_c.genes,
-                               score=best_c.score, metrics=prometheus_metrics)
+                               score=best_c.score, metrics=prometheus_metrics,
+                               history=species_history(sim_state, "carnivore"))
             if event.key == pygame.K_l:
                 try:
                     brain, gen, genes = NeuralNetwork.load("best_brain_herbivore.json",
@@ -264,11 +267,12 @@ def handle_events(sim_state, prometheus_metrics):
                         new_herbivores.append(Creature(sim_state["world_bounds"], brain=mb, genes=mg,
                                                        vec2_factory=_vec2, rect_factory=_rect))
                     sim_state["creatures"] = new_herbivores
+                    restore_progress(sim_state, "herbivore", brain, genes, "best_brain_herbivore.json")
                     print(f"Loaded new herbivore population from generation {gen}.")
                 except FileNotFoundError:
                     print("No herbivore brain file found to load.")
                 try:
-                    brain_c, _, genes_c = NeuralNetwork.load("best_brain_carnivore.json",
+                    brain_c, gen_c, genes_c = NeuralNetwork.load("best_brain_carnivore.json",
                                                               config.BRAIN_TOPOLOGY)
                     new_carnivores = [Creature(sim_state["world_bounds"], brain=brain_c,
                                                is_carnivore=True, genes=genes_c,
@@ -282,6 +286,9 @@ def handle_events(sim_state, prometheus_metrics):
                                                        is_carnivore=True, genes=mg,
                                                        vec2_factory=_vec2, rect_factory=_rect))
                     sim_state["carnivores"] = new_carnivores
+                    sim_state["generation"] = max(sim_state["generation"], gen_c)
+                    restore_progress(sim_state, "carnivore", brain_c, genes_c,
+                                     "best_brain_carnivore.json")
                     print("Loaded new carnivore population.")
                 except FileNotFoundError:
                     print("No carnivore brain file found to load.")

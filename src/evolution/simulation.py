@@ -13,7 +13,7 @@ from .config import (
     MATE_SEEK_DANGER_THRESHOLD, MATE_SEEK_BLEND, MATE_SEEK_MIN_SPEED,
     REPRODUCTION_HEALTH_THRESHOLD, MAX_REPRODUCTIONS, REPRODUCTION_COOLDOWN_TICKS,
     REPRODUCTION_POP_CAP_FACTOR, RESPAWN_IMMUNITY_TICKS,
-    SCORE_SAMPLE_INTERVAL, NUM_MEMORY, DAY_LENGTH_TICKS,
+    SCORE_SAMPLE_INTERVAL, CHART_HISTORY_SAVE_MAX, NUM_MEMORY, DAY_LENGTH_TICKS,
     FOOD_PATCH_COUNT, FOOD_PATCH_SHARE, FOOD_PATCH_RADIUS, FOOD_PATCH_SPEED, FOOD_PATCH_TURN,
 )
 from .entities import Carcass, Creature, Food, Obstacle
@@ -21,7 +21,7 @@ from .spatial import SpatialHashGrid
 from .genetics import combine_brains, combine_genes, mutate_genes
 from .neural_network import NeuralNetwork
 from .perception import perceive_all
-from .brain_store import save_brain, save_brain_if_better
+from .brain_store import read_saved_history, read_saved_score, save_brain, save_brain_if_better
 
 
 def build_sim_state(world_bounds, creatures, carnivores, food_items, obstacles):
@@ -153,6 +153,33 @@ def _apply_mate_seeking_drive(c, outputs, herb_grid, carn_grid):
 from .config import HUNGER_MAX
 
 
+def species_history(sim_state, species):
+    """One species' chart histories, trimmed for saving into its brain file."""
+    return {metric: list(sim_state[f"{species}_{metric}_history"][-CHART_HISTORY_SAVE_MAX:])
+            for metric in ("score", "longevity")}
+
+
+def restore_progress(sim_state, species, brain, genes, filename, save_dir="saved_brains"):
+    """After loading a saved brain, continue where its run left off: seed the Hall of Fame with
+    the saved score (so new chart samples don't drop to 0), and restore the chart histories."""
+    score = read_saved_score(filename, save_dir=save_dir)
+    if score is not None:
+        sim_state["hall_of_fame"][species] = {"score": score, "brain": brain.copy(),
+                                              "genes": dict(genes or {})}
+    history = read_saved_history(filename, save_dir=save_dir) or {}
+    for metric in ("score", "longevity"):
+        sim_state[f"{species}_{metric}_history"] = list(history.get(metric, []))
+    longevity = sim_state[f"{species}_longevity_history"]
+    if longevity:
+        sim_state[f"max_age_{species}"] = max(sim_state[f"max_age_{species}"], int(longevity[-1]))
+    # Both species share the chart x axis: left-pad the shorter histories to equal length.
+    keys = [f"{sp}_{m}_history" for sp in ("herbivore", "carnivore") for m in ("score", "longevity")]
+    length = max(len(sim_state[k]) for k in keys)
+    for k in keys:
+        h = sim_state[k]
+        sim_state[k] = [h[0] if h else 0] * (length - len(h)) + h
+
+
 def _retire_creature(c, sim_state, prometheus_metrics=None, worker_id=None):
     age_key = "max_age_carnivore" if c.is_carnivore else "max_age_herbivore"
     if c.age > sim_state.get(age_key, 0):
@@ -176,6 +203,7 @@ def _retire_creature(c, sim_state, prometheus_metrics=None, worker_id=None):
                 genes=c.genes,
                 score=c.score,
                 metrics=prometheus_metrics,
+                history=species_history(sim_state, species),
             )
             if written is not False:
                 sim_state["last_autosave_tick"] = tick

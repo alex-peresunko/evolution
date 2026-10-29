@@ -22,6 +22,7 @@ GRID_CELL_SIZE = 200
 
 # --- Score / Worker sync ---
 SCORE_SAMPLE_INTERVAL = 200
+CHART_HISTORY_SAVE_MAX = 500  # chart samples per series kept in a saved brain file
 WORKER_SYNC_INTERVAL = 300
 
 # --- Gene Defaults ---
