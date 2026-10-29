@@ -2,106 +2,77 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Running the Simulation
+## Commands
 
 ```bash
-# Install dependencies
-poetry install
+poetry install                                   # deps (Python >=3.12)
 
-# Graphical (requires display)
-poetry run python game.py
+poetry run python game.py                        # graphical (requires display)
+poetry run python game_headless.py               # headless, auto-loads saved brains, Prometheus on :8000
+poetry run python game_headless_multiproc.py     # headless + ProcessPoolExecutor
 
-# Headless (fastest, auto-loads saved brains on start)
-poetry run python game_headless.py
+poetry run pytest                                # all tests (no pygame required)
+poetry run pytest tests/test_genetics.py         # one file
+poetry run pytest tests/test_spatial.py::test_insert_and_query   # one test
 
-# Headless + multi-core (uses ProcessPoolExecutor)
-poetry run python game_headless_multiproc.py
-
-# Profile any script
+poetry run ruff check .                          # lint (E, F, I, UP; line-length 100)
 poetry run python -m cProfile -s time <script.py>
 ```
 
-**Docker:**
-```bash
-docker compose up   # builds image, exposes Prometheus metrics on port 8000
-# Dockerfile uses game_headless.py (no display required) and requirements-headless.txt (no pygame)
-```
+**Docker:** `docker compose up` — runs `game_headless.py` with `requirements-headless.txt` (no pygame), exposes metrics on port 8000. See `README.Docker.md`.
 
 ## Architecture
 
-### Package layout
+Shared library lives in `src/evolution/`; the three `game*.py` entry scripts are thin wrappers around it. `config.py` is the single source of truth for every simulation constant.
 
-```
-src/evolution/         # shared library
-  config.py            # all simulation constants (single source of truth)
-  math_types.py        # headless Vector2 / SimpleRect (pygame-free)
-  neural_network.py    # NeuralNetwork class
-  genetics.py          # combine_brains, combine_genes, mutate_genes
-  spatial.py           # SpatialHashGrid
-  entities.py          # Creature, Food, Obstacle (with vec2/rect factory injection)
-  simulation.py        # update_world, create_initial_population, build_sim_state
-  metrics.py           # GameMetrics (Prometheus)
-  brain_store.py       # save_brain / load_brain
-```
+### Simulation loop
 
-Entry scripts are thin wrappers (~60–150 lines each):
+`simulation.build_sim_state()` returns a plain dict (`sim_state`) holding all world state: creature/food lists, four `SpatialHashGrid`s (general, food, herbivore, carnivore), score histories, tick/generation counters, and `hall_of_fame`. `simulation.update_world(sim_state, ...)` advances one tick and is shared by `game.py` and `game_headless.py`. NN inference for all creatures goes through `batch_forward()`, which stacks the per-creature weights and runs one vectorized `np.einsum` per layer. Any change to `NeuralNetwork`'s weight/bias layout has to stay compatible with it.
 
-| File | Mode |
-|------|------|
-| `game.py` | Graphical via pygame; passes `pygame.math.Vector2` factory to entities |
-| `game_headless.py` | Console-only; uses headless `Vector2`/`SimpleRect` (the default) |
-| `game_headless_multiproc.py` | Console + ProcessPoolExecutor; keeps local `LeanCreature`/`LeanFood` for IPC |
+Evolution is continuous: creatures die and are "retired" (`_retire_creature` updates the Hall of Fame and saves the brain), and eligible nearby adults reproduce (brain crossover + gene averaging + mutation, in `genetics.py`). After an extinction, the species is repopulated from the Hall of Fame.
+
+**`game_headless_multiproc.py` diverges:** it has its own `update_world` and a *generational* `evolve_population`, and it ships `LeanCreature`/`LeanFood` dataclasses to worker processes for IPC. Changes to `simulation.update_world` do not carry over to it automatically.
+
+### Island workers (game.py)
+
+Pressing **B** (background mode) in `game.py` spawns `cpu_count()-1` subprocesses of `game_headless.py --worker-id N`. Each worker runs an independent world, skips the Prometheus server, logs to `saved_brains/worker_N.log`, and saves its best brains as `saved_brains/worker_N_{herbivore,carnivore}.json`. `_sync_worker_brains` polls those files by mtime and promotes a worker's brain into the main Hall of Fame when its score is higher.
 
 ### Vector type injection
 
-`Creature`/`Food`/`Obstacle` accept `vec2_factory=` / `rect_factory=` kwargs. Default: headless `Vector2`/`SimpleRect`. `game.py` passes `pygame.math.Vector2` / `pygame.Rect`. Child creatures inherit the factory from parent 1 during reproduction inside `simulation.py`.
+`Creature`/`Food`/`Obstacle` accept `vec2_factory=` / `rect_factory=` kwargs. The default is the headless `Vector2`/`SimpleRect` from `math_types.py`, which mirrors the subset of the pygame API that's used (`distance_to`, `clipline`, `colliderect`, …). `game.py` passes `pygame.math.Vector2` / `pygame.Rect` instead. Code inside the library must create vectors via `self._vec2` (or inherit the factory from an existing entity, as children and respawned food do) and never import pygame.
 
-### Core classes
+### Neural network
 
-- **`NeuralNetwork`** — Feed-forward NN, topology `[18, 16, 8, 2]`, tanh activations. `forward()`, `mutate()`, `copy()`, `save()`/`load()` (JSON). Load is topology-resilient.
-- **`Creature`** — Single agent with `NeuralNetwork` brain and `genes` dict. `see()` builds 18-input vector; `think()` runs the NN; `act()` applies movement, eating, collision.
-- **`Food`** — Passive resource with freshness/lifetime decay.
-- **`Obstacle`** — Static rectangle; collision via `clipline`/`colliderect`.
-- **`SpatialHashGrid`** — Bucketed spatial lookup, O(1) neighbor queries.
-- **`GameMetrics`** — Prometheus `Counter`/`Gauge` wrappers; served on port 8000.
-
-### Neural network inputs (18 values)
+Topology is `config.BRAIN_TOPOLOGY = [18, 16, 8, 2]`, tanh on all layers. The input size is derived from `NUM_WHISKERS`, so changing the inputs in `Creature.see()` means updating that formula too. Inputs, in order:
 
 ```
-whisker[0..2]          obstacle proximity
-target_angle, dist     nearest food (herbivore) or prey (carnivore)
-pred_angle, dist       nearest predator / smell direction
-smell_angle, strength  omnidirectional scent
-prey_vel_x, prey_vel_y prey velocity vector (carnivores)
-health_ratio           current health normalized
-sin(angle), cos(angle) heading
-size, speed, sight_dist, sight_angle, stamina, hunger
+whisker[0..2]                obstacle proximity (1 = touching)
+target_angle, target_dist    carnivore: nearest visible prey
+                             herbivore: food angle blended away from nearest visible predator, food dist
+smell_angle, smell_strength  omnidirectional: prey (carnivore) / predator (herbivore)
+prey_vel_x, prey_vel_y       carnivore only, else 0
+health_ratio, sin(angle), cos(angle)
+size, speed, sight_dist, sight_angle, stamina, hunger   (normalized)
 ```
 
-Outputs: `[rotation_delta, speed]` — both tanh-clamped.
+Outputs: `[rotation_delta, speed]`. `_apply_mate_seeking_drive` may override them for adults.
 
-### Evolution
+### Genes
 
-Continuous sexual reproduction: eligible nearby creatures reproduce (brain crossover + gene averaging + mutation). **Hall of Fame** preserves all-time best individuals per species and repopulates after extinction.
-
-### Genetic traits
-
-`size`, `max_speed`, `sight_distance`, `sight_angle`, `max_stamina`, `attractiveness` — all bounded by `GENE_MIN_MAX`. Larger size reduces speed; stamina adds to effective size.
+`size`, `max_speed`, `sight_distance`, `sight_angle`, `max_stamina`, `attractiveness`, all clamped by `config.GENE_MIN_MAX`. Larger size reduces speed, and stamina adds to effective size.
 
 ### Saved brains
 
-Best brains auto-save as JSON to `saved_brains/`. Headless mode loads them on startup. The JSON format stores weights as nested lists with topology metadata, enabling cross-architecture loading.
+`brain_store.save_brain`/`load_brain` write JSON to `saved_brains/` (weights as nested lists plus topology, generation, genes, score). `NeuralNetwork.load` handles topology mismatches, so old brains survive architecture changes. Main files: `best_brain_{herbivore,carnivore}.json`. `game_headless.py` loads them on startup, while `game.py` starts with a random population and loads them only when **L** is pressed.
 
-### Tests
+## game.py controls
 
-```bash
-poetry run pytest tests/ -v   # 24 tests, no pygame required
-```
-
-### Legacy / prototype files
-
-Early prototypes moved to `archive/` — not used by the main simulation.
+Space pause · S save brains · L load brains · Enter toggle FPS cap · D toggle drawing · B background mode + island workers · left-click: spawn food / select creature · minimap drag to pan.
 
 ## Metrics
 
-Prometheus metrics are exposed at `http://localhost:8000`. A ready-to-import Grafana dashboard is in `grafana_dashboard.json`.
+Prometheus metrics are served at `http://localhost:8000` (`metrics.GameMetrics`). An importable Grafana dashboard is in `grafana_dashboard.json`.
+
+## Legacy
+
+`archive/` contains early prototypes that the simulation does not use.
