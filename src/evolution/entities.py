@@ -17,7 +17,7 @@ from .config import (
     FOOD_MAX_LIFETIME, FOOD_MIN_HEALTH_FACTOR, NUM_MEMORY, CARNIVORE_BITE_ANGLE,
     BITE_DAMAGE, BITE_COOLDOWN_TICKS, BITE_HEALTH_TRANSFER, BITE_SCORE, ADRENALINE_STAMINA,
     RETALIATION_DAMAGE, CARCASS_MEAT_PER_SIZE, CARCASS_LIFETIME, CARCASS_EAT_RATE,
-    SCAVENGE_SCORE_FACTOR, SIGNAL_HEALTH_COST,
+    SCAVENGE_SCORE_FACTOR, SIGNAL_HEALTH_COST, HERBIVORE_EAT_TICKS, CARNIVORE_EAT_TICKS,
 )
 from .math_types import Vector2 as _HeadlessVector2, SimpleRect as _HeadlessRect
 from .neural_network import NeuralNetwork
@@ -59,6 +59,9 @@ class Creature:
         self.last_bite_tick: Optional[int] = None
         self.last_hit_tick: Optional[int] = None
         self.respawn_immunity_ticks = 0
+        self.eating_ticks = 0               # > 0 while standing still to eat
+        self.meal_health = 0.0              # herbivore: health still to absorb from the meal
+        self.meal_carcass = None            # carnivore: carcass being eaten
         self.age = 0
         self.is_adult = False
 
@@ -114,11 +117,14 @@ class Creature:
                 self.size = self.genetic_size * growth_factor
                 self.max_speed = self.effective_max_speed * growth_factor
 
-        self.angle = (self.angle + outputs[0] * CREATURE_ROTATION_SPEED) % (2 * math.pi)
-        speed_multiplier = max(0.1, self.health / self.max_health)
-        is_exhausted = self.stamina <= 0
-        speed_penalty = STAMINA_EXHAUSTION_PENALTY if is_exhausted else 1.0
-        new_speed = max(0, outputs[1]) * self.max_speed * speed_multiplier * speed_penalty
+        if self.eating_ticks > 0:
+            new_speed = 0.0
+        else:
+            self.angle = (self.angle + outputs[0] * CREATURE_ROTATION_SPEED) % (2 * math.pi)
+            speed_multiplier = max(0.1, self.health / self.max_health)
+            is_exhausted = self.stamina <= 0
+            speed_penalty = STAMINA_EXHAUSTION_PENALTY if is_exhausted else 1.0
+            new_speed = max(0, outputs[1]) * self.max_speed * speed_multiplier * speed_penalty
 
         if self.max_speed > 0 and new_speed / self.max_speed > STAMINA_DEPLETION_SPEED_THRESHOLD:
             speed_ratio = new_speed / self.max_speed
@@ -143,11 +149,15 @@ class Creature:
         interaction_radius = self.size + GENE_MIN_MAX["size"][1]
 
         if self.is_carnivore:
-            if self.respawn_immunity_ticks == 0:
+            if self.eating_ticks > 0:
+                self._continue_scavenging()
+            elif self.respawn_immunity_ticks == 0:
                 bit = (self.last_bite_tick is None or tick - self.last_bite_tick >= BITE_COOLDOWN_TICKS) \
                     and self._try_bite((herb_grid or grid).query(self.pos, interaction_radius), tick)
                 if not bit and carcass_grid is not None:
                     self._scavenge(carcass_grid.query(self.pos, interaction_radius))
+        elif self.eating_ticks > 0:
+            self._digest()
         else:
             base_size = DEFAULT_HERBIVORE_GENES["size"]
             nearby_food = (food_grid or grid).query(self.pos, interaction_radius)
@@ -158,7 +168,11 @@ class Creature:
                     food.consumed = True
                     base_health_gain = food.get_health_value()
                     size_penalty_denom = 1 + (self.genetic_size - base_size) * HEALTH_GAIN_SIZE_PENALTY
-                    self.health = min(self.max_health, self.health + base_health_gain / max(0.1, size_penalty_denom))
+                    gain = base_health_gain / max(0.1, size_penalty_denom)
+                    if HERBIVORE_EAT_TICKS > 0:
+                        self.meal_health, self.eating_ticks = gain, HERBIVORE_EAT_TICKS
+                    else:
+                        self.health = min(self.max_health, self.health + gain)
                     self.hunger = 0
                     self.score += 1
                     break
@@ -176,6 +190,17 @@ class Creature:
             self.score += 0.001 * (1.0 - self._nearest_target_dist)
         elif self.is_carnivore and self._nearest_smell_strength > 0:
             self.score += 0.0005 * self._nearest_smell_strength
+
+    def _digest(self):
+        """One tick of a herbivore meal: absorb an even share of the remaining health."""
+        portion = self.meal_health / self.eating_ticks
+        self.health = min(self.max_health, self.health + portion)
+        self.meal_health -= portion
+        self.eating_ticks -= 1
+        self.hunger = 0
+
+    def _stop_eating(self):
+        self.eating_ticks, self.meal_health, self.meal_carcass = 0, 0.0, None
 
     def _gain_meat(self, amount):
         size_penalty_denom = 1 + (self.genetic_size - DEFAULT_CARNIVORE_GENES["size"]) * HEALTH_GAIN_SIZE_PENALTY
@@ -198,6 +223,7 @@ class Creature:
             prey.health -= damage
             prey.stamina = min(prey.max_stamina, prey.stamina + ADRENALINE_STAMINA)
             prey.last_hit_tick = tick
+            prey._stop_eating()   # a bite interrupts the meal; the rest of it is lost
             self._gain_meat(damage * BITE_HEALTH_TRANSFER)
             self.score += BITE_SCORE + (1 if prey.health <= 0 else 0)
             # Large prey fights back.
@@ -211,11 +237,27 @@ class Creature:
         for carcass in nearby_carcasses:
             if carcass.meat <= 0 or self.pos.distance_to(carcass.pos) >= self.size + carcass.radius:
                 continue
-            eaten = min(CARCASS_EAT_RATE, carcass.meat)
-            carcass.meat -= eaten
-            gain = self._gain_meat(eaten)
-            self.score += gain / CARNIVORE_HEALTH_PER_FOOD * SCAVENGE_SCORE_FACTOR
+            self._eat_from(carcass)
+            if CARNIVORE_EAT_TICKS > 0 and not carcass.is_gone() and self.health < self.max_health:
+                self.meal_carcass, self.eating_ticks = carcass, CARNIVORE_EAT_TICKS
             return
+
+    def _continue_scavenging(self):
+        """One tick of a carnivore meal; ends early once the carcass is gone or health is full."""
+        carcass = self.meal_carcass
+        if carcass is None or carcass.is_gone() or self.health >= self.max_health:
+            self._stop_eating()
+            return
+        self._eat_from(carcass)
+        self.eating_ticks -= 1
+        if self.eating_ticks == 0:
+            self.meal_carcass = None
+
+    def _eat_from(self, carcass):
+        eaten = min(CARCASS_EAT_RATE, carcass.meat)
+        carcass.meat -= eaten
+        gain = self._gain_meat(eaten)
+        self.score += gain / CARNIVORE_HEALTH_PER_FOOD * SCAVENGE_SCORE_FACTOR
 
     def see(self, food_items, obstacles, herbivores=None, carnivores=None, carcasses=(), light=1.0):
         return perceive_all([self], food_items, herbivores or [], carnivores or [], obstacles,
@@ -236,6 +278,7 @@ class Creature:
             "Health": int(self.health),
             "Stamina": f"{int(self.stamina)}/{int(self.max_stamina)}",
             "Score": round(self.score, 2),
+            "Eating": self.eating_ticks,
             "Signal": round(self.signal, 2),
             "Memory": " ".join(f"{m:+.2f}" for m in self.memory),
             "Reproductions": self.reproductions,

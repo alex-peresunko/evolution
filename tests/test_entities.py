@@ -142,3 +142,65 @@ def test_carnivore_scavenges_carcass():
     assert carn.health > 2000 - 10
     assert carn.hunger == 0
     assert carn.score > 0
+    assert carn.eating_ticks == config.CARNIVORE_EAT_TICKS
+    # It stays at the carcass, eating every tick, even though the brain says "run".
+    pos = (carn.pos.x, carn.pos.y)
+    for tick in range(2, 6):
+        carn.act([0.0, 1.0], [], [], [], _empty_grid(), tick=tick)
+        assert (carn.pos.x, carn.pos.y) == pos
+    assert carcass.meat == meat - 5 * config.CARCASS_EAT_RATE
+
+
+def test_carnivore_meal_ends_when_carcass_is_gone():
+    carn = _adult_at(True, 500, 400, size=8)
+    carn.health = 2000
+    carcass = Carcass(_adult_at(False, 505, 400, size=10))
+    _carnivore_step(carn, [], tick=1, carcasses=[carcass])
+    carcass.meat = 0
+    carn.act([0.0, 1.0], [], [], [], _empty_grid(), tick=2)
+    assert carn.eating_ticks == 0 and carn.meal_carcass is None
+
+
+def _herbivore_step(herb, food_items, speed=1.0):
+    food_grid = SpatialHashGrid(*WORLD_BOUNDS, config.GRID_CELL_SIZE)
+    for f in food_items:
+        food_grid.insert(f)
+    herb.act([0.0, speed], food_items, [herb], [], food_grid, food_grid=food_grid)
+
+
+def test_herbivore_stops_to_eat_and_digests_gradually():
+    herb = _adult_at(False, 500, 400)
+    herb.health = 1000
+    food = Food(WORLD_BOUNDS, pos=(500, 400))
+    _herbivore_step(herb, [food], speed=0.0)
+    assert food.consumed and herb.score == 1
+    assert herb.eating_ticks == config.HERBIVORE_EAT_TICKS
+    meal = herb.meal_health
+    start = herb.health
+    pos = (herb.pos.x, herb.pos.y)
+    for _ in range(config.HERBIVORE_EAT_TICKS):
+        _herbivore_step(herb, [], speed=1.0)
+        assert (herb.pos.x, herb.pos.y) == pos and herb.current_speed == 0
+        assert start < herb.health < start + meal
+    assert herb.eating_ticks == 0
+    decay = config.HERBIVORE_EAT_TICKS * config.HEALTH_LOSS_PER_TICK
+    assert herb.health == pytest.approx(start + meal - decay)
+    _herbivore_step(herb, [], speed=1.0)
+    assert herb.current_speed > 0
+
+
+def test_bite_interrupts_meal():
+    herb = _adult_at(False, 505, 400, size=8)
+    herb.eating_ticks, herb.meal_health = 30, 400.0
+    carn = _adult_at(True, 500, 400, size=8)
+    _carnivore_step(carn, [herb], tick=1)
+    assert herb.eating_ticks == 0 and herb.meal_health == 0
+
+
+def test_instant_eating_when_eat_ticks_zero(monkeypatch):
+    import evolution.entities as entities
+    monkeypatch.setattr(entities, "HERBIVORE_EAT_TICKS", 0)
+    herb = _adult_at(False, 500, 400)
+    herb.health = 1000
+    _herbivore_step(herb, [Food(WORLD_BOUNDS, pos=(500, 400))], speed=0.0)
+    assert herb.eating_ticks == 0 and herb.health > 1000 + 100

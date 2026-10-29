@@ -105,6 +105,10 @@ CARCASS_LIFETIME = 1200
 CARCASS_EAT_RATE = 40           # meat eaten per tick of contact
 SCAVENGE_SCORE_FACTOR = 0.5
 
+# --- Meals (creatures stand still while eating; 0 = instant eating on the move) ---
+HERBIVORE_EAT_TICKS = 45        # food's health is absorbed gradually over the meal
+CARNIVORE_EAT_TICKS = 60        # ticks spent at a carcass, eating CARCASS_EAT_RATE per tick
+
 # --- Kin sense / signals ---
 KIN_SENSE_RADIUS = 250
 KIN_DENSITY_NORM = 8
