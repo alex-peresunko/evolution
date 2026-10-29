@@ -130,27 +130,32 @@ def _chart_font(size):
     return font
 
 
-def draw_score_chart(screen, history, rect, color, title, scale):
-    """Translucent panel with opaque text and line, sized by the zoomable chart scale."""
+def draw_dual_chart(screen, rect, title, series, scale):
+    """Translucent panel with one line per (history, color, label) series, each scaled to its
+    own peak (species scores differ by orders of magnitude), sized by the zoomable chart scale."""
     font = _chart_font(round(config.CHART_FONT_SIZE * scale))
     line_h = font.get_linesize()
     pad = round(4 * scale)
     _draw_panel(screen, rect)
-    screen.blit(font.render(title, True, color), (rect.x + pad, rect.y + pad))
-    if len(history) < 2:
-        return
-    max_score = max(history) or 1
+    screen.blit(font.render(title, True, config.COLOR_TEXT), (rect.x + pad, rect.y + pad))
+    gens = font.render(f"Gens: {max(len(h) for h, _, _ in series)}", True, config.COLOR_TEXT)
+    screen.blit(gens, (rect.right - gens.get_width() - pad, rect.y + pad))
     info_y = rect.y + pad + line_h
-    screen.blit(font.render(f"Peak: {int(max_score)}", True, config.COLOR_TEXT), (rect.x + pad, info_y))
-    gens = font.render(f"Gens: {len(history)}", True, config.COLOR_TEXT)
-    screen.blit(gens, (rect.right - gens.get_width() - pad, info_y))
+    for i, (history, color, label) in enumerate(series):  # peaks: first left, second right
+        peak = font.render(f"{label}: {int(max(history, default=0))}", True, color)
+        x = rect.x + pad if i == 0 else rect.right - peak.get_width() - pad
+        screen.blit(peak, (x, info_y))
     top, bottom = info_y + line_h + pad, rect.bottom - pad
     left, width = rect.x + pad, rect.width - pad * 2
-    points = [
-        (left + i / (len(history) - 1) * width, bottom - (score / max_score) * (bottom - top))
-        for i, score in enumerate(history)
-    ]
-    pygame.draw.lines(screen, color, False, points, max(1, round(scale)))
+    for history, color, _ in series:
+        if len(history) < 2:
+            continue
+        max_score = max(history) or 1
+        points = [
+            (left + i / (len(history) - 1) * width, bottom - (score / max_score) * (bottom - top))
+            for i, score in enumerate(history)
+        ]
+        pygame.draw.lines(screen, color, False, points, max(1, round(scale)))
 
 
 def _set_viewport_center(wx, wy, sim_state):
@@ -210,17 +215,14 @@ def draw_elements(screen, font, sim_state):
     scale = sim_state["chart_scale"]
     chart_w, chart_h = round(config.CHART_SIZE[0] * scale), round(config.CHART_SIZE[1] * scale)
     spacing = round(5 * scale)
-    charts = [
-        ("carnivore_score_history", config.COLOR_CARNIVORE, "Carnivore HoF Score"),
-        ("herbivore_score_history", config.COLOR_CREATURE, "Herbivore HoF Score"),
-        ("carnivore_longevity_history", config.COLOR_CARNIVORE, "Carnivore Max Longevity"),
-        ("herbivore_longevity_history", config.COLOR_CREATURE, "Herbivore Max Longevity"),
-    ]
-    for i, (key, color, title) in enumerate(charts):
+    charts = [("HoF Score", "score"), ("Max Longevity", "longevity")]
+    for i, (title, metric) in enumerate(charts):
         rect = pygame.Rect(config.SCREEN_WIDTH - chart_w - 10,
                            config.SCREEN_HEIGHT - 10 - chart_h * (i + 1) - spacing * i,
                            chart_w, chart_h)
-        draw_score_chart(screen, sim_state[key], rect, color, title, scale)
+        series = [(sim_state[f"herbivore_{metric}_history"], config.COLOR_CREATURE, "Herb"),
+                  (sim_state[f"carnivore_{metric}_history"], config.COLOR_CARNIVORE, "Carn")]
+        draw_dual_chart(screen, rect, title, series, scale)
     if sim_state["paused"]:
         screen.blit(font.render("PAUSED", True, (255, 100, 100)),
                     (config.SCREEN_WIDTH // 2 - 60, 20))
