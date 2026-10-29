@@ -63,7 +63,7 @@ Outputs: `[rotation_delta, speed]`. `_apply_mate_seeking_drive` may override the
 
 ### Saved brains
 
-`brain_store.save_brain`/`load_brain` write JSON to `saved_brains/` (weights as nested lists plus topology, generation, genes, score). `NeuralNetwork.load` handles topology mismatches, so old brains survive architecture changes. Main files: `best_brain_{herbivore,carnivore}.json`. `game_headless.py` loads them on startup, while `game.py` starts with a random population and loads them only when **L** is pressed.
+`brain_store.save_brain`/`load_brain` write JSON to `saved_brains/` (weights as nested lists plus topology, generation, genes, score). `NeuralNetwork.load` handles topology mismatches, so old brains survive architecture changes. Main files: `best_brain_{herbivore,carnivore}.json`. These are tracked in git. Autosaves and exit saves write them through `save_brain_if_better`, which only overwrites a file when the new score is higher. The manual **S** key in `game.py` always overwrites. `game_headless.py` loads them on startup, while `game.py` starts with a random population and loads them only when **L** is pressed.
 
 ## game.py controls
 

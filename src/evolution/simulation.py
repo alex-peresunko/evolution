@@ -19,7 +19,7 @@ from .entities import Creature, Food, Obstacle
 from .spatial import SpatialHashGrid
 from .genetics import combine_brains, combine_genes, mutate_genes
 from .neural_network import NeuralNetwork
-from .brain_store import save_brain
+from .brain_store import save_brain, save_brain_if_better
 
 
 def build_sim_state(world_bounds, creatures, carnivores, food_items, obstacles):
@@ -109,19 +109,22 @@ def _retire_creature(c, sim_state, prometheus_metrics=None, worker_id=None):
         hof[species] = {"score": c.score, "brain": c.brain.copy(), "genes": c.genes.copy()}
         tick = sim_state["tick"]
         if tick - sim_state["last_autosave_tick"] >= AUTOSAVE_INTERVAL:
-            filename = (
-                f"worker_{worker_id}_{species}.json"
-                if worker_id is not None
-                else f"best_brain_{species}.json"
-            )
-            save_brain(
+            # Worker files are per-run scratch; main files must only ever improve.
+            if worker_id is not None:
+                save = save_brain
+                filename = f"worker_{worker_id}_{species}.json"
+            else:
+                save = save_brain_if_better
+                filename = f"best_brain_{species}.json"
+            written = save(
                 c.brain, filename,
                 generation=sim_state["generation"],
                 genes=c.genes,
                 score=c.score,
                 metrics=prometheus_metrics,
             )
-            sim_state["last_autosave_tick"] = tick
+            if written is not False:
+                sim_state["last_autosave_tick"] = tick
 
 
 def _repopulate_from_hof(is_carnivore, count, default_genes, sim_state,

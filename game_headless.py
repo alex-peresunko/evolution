@@ -8,7 +8,7 @@ from evolution import config
 from evolution.entities import Creature, Food, Obstacle
 from evolution.simulation import update_world, create_initial_population, build_sim_state
 from evolution.metrics import GameMetrics
-from evolution.brain_store import save_brain
+from evolution.brain_store import read_saved_score, save_brain_if_better
 
 
 def main(worker_id=None):
@@ -70,20 +70,16 @@ def main(worker_id=None):
         print("\nSimulation stopped by user.")
     finally:
         print("\nSaving best brains from Hall of Fame on exit...")
-        hof_h = sim_state["hall_of_fame"]["herbivore"]
-        if hof_h["brain"] is not None:
-            save_brain(hof_h["brain"], "best_brain_herbivore.json",
-                       generation=sim_state["generation"], genes=hof_h["genes"],
-                       score=hof_h["score"], metrics=prometheus_metrics)
-        else:
-            print("No herbivore in Hall of Fame to save.")
-        hof_c = sim_state["hall_of_fame"]["carnivore"]
-        if hof_c["brain"] is not None:
-            save_brain(hof_c["brain"], "best_brain_carnivore.json",
-                       generation=sim_state["generation"], genes=hof_c["genes"],
-                       score=hof_c["score"], metrics=prometheus_metrics)
-        else:
-            print("No carnivore in Hall of Fame to save.")
+        for species in ("herbivore", "carnivore"):
+            hof = sim_state["hall_of_fame"][species]
+            filename = f"best_brain_{species}.json"
+            if hof["brain"] is None:
+                print(f"No {species} in Hall of Fame to save.")
+            elif not save_brain_if_better(hof["brain"], filename,
+                                          generation=sim_state["generation"], genes=hof["genes"],
+                                          score=hof["score"], metrics=prometheus_metrics):
+                print(f"Kept existing {filename} (saved score "
+                      f"{read_saved_score(filename):.3f} >= {hof['score']:.3f})")
         print("Exiting.")
 
 
