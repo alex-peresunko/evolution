@@ -103,11 +103,9 @@ AUTOSAVE_INTERVAL = 100
 RESPAWN_IMMUNITY_TICKS = 500
 
 # --- Colors (pygame only) ---
-COLOR_BACKGROUND = (20, 20, 30)
 COLOR_CREATURE = (0, 255, 0)
 COLOR_CARNIVORE = (255, 120, 120)
 COLOR_BEST_CREATURE = (255, 255, 0)
-COLOR_FOOD = (10, 120, 80)
 COLOR_OBSTACLE = (60, 60, 60)
 COLOR_WHISKER = (0, 125, 0)
 COLOR_CARNIVORE_WHISKER = (125, 0, 0)
@@ -116,3 +114,7 @@ COLOR_BIRTH = (0, 255, 255)
 CHART_OPACITY = 100
 CHART_FONT_SIZE = 15
 HUD_FONT_SIZE = 18
+
+# --- Sprite rendering (render.py) ---
+SPRITE_ANGLE_STEPS = 72      # rotation buckets for cached creature sprites (5 degrees)
+SPRITE_CACHE_LIMIT = 8000    # rotated sprites kept before the cache is flushed

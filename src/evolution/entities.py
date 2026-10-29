@@ -25,16 +25,6 @@ class Obstacle:
         _rect = rect_factory or _HeadlessRect
         self.rect = _rect(x, y, width, height)
 
-    def draw(self, screen, cam_offset=(0, 0)):
-        if screen is None:
-            return
-        try:
-            import pygame
-            from .config import COLOR_OBSTACLE
-            pygame.draw.rect(screen, COLOR_OBSTACLE, self.rect.move(-cam_offset[0], -cam_offset[1]))
-        except ImportError:
-            pass
-
 
 class Creature:
     _id_counter = 1
@@ -315,66 +305,6 @@ class Creature:
             info[f"Gene: {gene}"] = round(value, 2)
         return info
 
-    def draw(self, screen, is_selected=False, cam_offset=(0, 0)):
-        if screen is None:
-            return
-        import time
-        try:
-            import pygame
-            from .config import (
-                COLOR_BIRTH, COLOR_CARNIVORE, COLOR_CREATURE, COLOR_BEST_CREATURE,
-                COLOR_WHISKER, COLOR_CARNIVORE_WHISKER, RESPAWN_IMMUNITY_TICKS as RIT,
-            )
-        except ImportError:
-            return
-
-        sp = pygame.math.Vector2(self.pos.x - cam_offset[0], self.pos.y - cam_offset[1])
-        if self.birth_time and time.time() - self.birth_time < 3:
-            color = COLOR_BIRTH
-        else:
-            if self.birth_time:
-                self.birth_time = None
-            health_ratio = max(0.0, min(1.0, self.health / self.max_health))
-            base_color = COLOR_CARNIVORE if self.is_carnivore else COLOR_CREATURE
-            color = tuple(int(base_color[i] * health_ratio + 180 * (1 - health_ratio)) for i in range(3))
-            if self.is_best:
-                color = COLOR_BEST_CREATURE
-
-        if self.respawn_immunity_ticks > 0 and self.is_carnivore:
-            fade = self.respawn_immunity_ticks / RIT
-            color = tuple(int(color[i] * (1 - fade) + (80, 80, 220)[i] * fade) for i in range(3))
-
-        if self.is_carnivore:
-            p_nose = sp + pygame.math.Vector2(math.cos(self.angle), math.sin(self.angle)) * self.size
-            p_back_left = sp + pygame.math.Vector2(
-                math.cos(self.angle + math.pi * 0.85), math.sin(self.angle + math.pi * 0.85)
-            ) * self.size
-            p_back_right = sp + pygame.math.Vector2(
-                math.cos(self.angle - math.pi * 0.85), math.sin(self.angle - math.pi * 0.85)
-            ) * self.size
-            pygame.draw.polygon(screen, color, [p_nose, p_back_left, p_back_right])
-        else:
-            body_radius = int(self.size)
-            pygame.draw.circle(screen, color, sp, body_radius)
-            eye_color = (0, 0, 0)
-            eye_radius = int(self.size * 0.2)
-            eye_forward_offset = self.size * 0.4
-            eye_side_offset = self.size * 0.35
-            forward_vec = pygame.math.Vector2(math.cos(self.angle), math.sin(self.angle))
-            side_vec = pygame.math.Vector2(-math.sin(self.angle), math.cos(self.angle))
-            eye1_pos = sp + forward_vec * eye_forward_offset + side_vec * eye_side_offset
-            eye2_pos = sp + forward_vec * eye_forward_offset - side_vec * eye_side_offset
-            pygame.draw.circle(screen, eye_color, eye1_pos, eye_radius)
-            pygame.draw.circle(screen, eye_color, eye2_pos, eye_radius)
-
-        if self.is_best or is_selected:
-            whisker_color = COLOR_CARNIVORE_WHISKER if self.is_carnivore else COLOR_WHISKER
-            for i, angle in enumerate(self.whisker_angles):
-                end = sp + pygame.math.Vector2(
-                    math.cos(self.angle + angle), math.sin(self.angle + angle)
-                ) * self.whiskers[i]
-                pygame.draw.line(screen, whisker_color, sp, end, 1)
-
 
 class Food:
     _id_counter = -1
@@ -402,16 +332,3 @@ class Food:
             return 0
         freshness = 1.0 - (self.lifetime / self.max_lifetime)
         return int(self.health_value_base * (self.min_health_factor + (1 - self.min_health_factor) * freshness))
-
-    def draw(self, screen, cam_offset=(0, 0)):
-        if screen is None:
-            return
-        try:
-            import pygame
-            from .config import COLOR_FOOD, FOOD_RADIUS as FR
-        except ImportError:
-            return
-        alpha = int(50 + 205 * (1.0 - (self.lifetime / self.max_lifetime)))
-        temp_surface = pygame.Surface((FR * 2, FR * 2), pygame.SRCALPHA)
-        pygame.draw.circle(temp_surface, (*COLOR_FOOD, alpha), (FR, FR), FR)
-        screen.blit(temp_surface, (self.pos.x - FR - cam_offset[0], self.pos.y - FR - cam_offset[1]))

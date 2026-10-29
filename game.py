@@ -19,12 +19,15 @@ from evolution.genetics import mutate_genes
 from evolution.neural_network import NeuralNetwork
 from evolution.metrics import GameMetrics
 from evolution.brain_store import save_brain
+from evolution.render import Renderer
 
 # pygame-specific vector/rect factories
 _vec2 = pygame.math.Vector2
 def _rect(x, y, w, h): return pygame.Rect(x, y, w, h)
 
 MINIMAP_RECT = None  # initialized after pygame.init()
+_CHART_FONT = None
+_PANELS = {}
 
 
 # =============================================================================
@@ -90,8 +93,35 @@ def _sync_worker_brains(sim_state):
 # =============================================================================
 # Rendering helpers
 # =============================================================================
+def _draw_panel(screen, rect):
+    """Translucent rounded HUD panel, cached per size."""
+    key = (rect.width, rect.height)
+    panel = _PANELS.get(key)
+    if panel is None:
+        panel = pygame.Surface(key, pygame.SRCALPHA)
+        pygame.draw.rect(panel, (12, 18, 16, 165), panel.get_rect(), border_radius=8)
+        pygame.draw.rect(panel, (255, 255, 255, 45), panel.get_rect(), width=1, border_radius=8)
+        _PANELS[key] = panel
+    screen.blit(panel, rect.topleft)
+
+
+def _draw_text_block(screen, font, lines, x, y, title=None):
+    surfs = ([font.render(title, True, config.COLOR_BEST_CREATURE)] if title else [])
+    surfs += [font.render(line, True, config.COLOR_TEXT) for line in lines]
+    line_h = font.get_linesize()
+    pad = 6
+    _draw_panel(screen, pygame.Rect(x - pad, y - pad, max(s.get_width() for s in surfs) + pad * 2,
+                                    line_h * len(surfs) + pad * 2))
+    for surf in surfs:
+        screen.blit(surf, (x, y))
+        y += line_h
+
+
 def draw_score_chart(screen, font, history, position, size, color, title):
-    small_font = pygame.font.Font(None, config.CHART_FONT_SIZE)
+    global _CHART_FONT
+    if _CHART_FONT is None:
+        _CHART_FONT = pygame.font.Font(None, config.CHART_FONT_SIZE)
+    small_font = _CHART_FONT
     line_h = small_font.get_linesize()
     surf = pygame.Surface(size)
     surf.set_alpha(config.CHART_OPACITY)
@@ -120,8 +150,7 @@ def _set_viewport_center(wx, wy, sim_state):
 
 
 def draw_minimap(screen, sim_state):
-    mmap = pygame.Surface((config.MINIMAP_WIDTH, config.MINIMAP_HEIGHT), pygame.SRCALPHA)
-    mmap.fill((20, 20, 30, 190))
+    mmap = sim_state["renderer"].minimap_bg.copy()
     sx = config.MINIMAP_WIDTH / config.WORLD_WIDTH
     sy = config.MINIMAP_HEIGHT / config.WORLD_HEIGHT
     for obs in sim_state["obstacles"]:
@@ -141,21 +170,7 @@ def draw_minimap(screen, sim_state):
 
 
 def draw_elements(screen, font, sim_state):
-    screen.fill(config.COLOR_BACKGROUND)
-    cam = (sim_state["cam_x"], sim_state["cam_y"])
-    vx, vy = cam
-    for item in sim_state["obstacles"]:
-        if item.rect.colliderect((vx, vy, config.SCREEN_WIDTH, config.SCREEN_HEIGHT)):
-            item.draw(screen, cam_offset=cam)
-    for item in sim_state["food_items"]:
-        if (vx - 10 <= item.pos.x <= vx + config.SCREEN_WIDTH + 10
-                and vy - 10 <= item.pos.y <= vy + config.SCREEN_HEIGHT + 10):
-            item.draw(screen, cam_offset=cam)
-    for c in sim_state["creatures"] + sim_state["carnivores"]:
-        r = c.size + 5
-        if (vx - r <= c.pos.x <= vx + config.SCREEN_WIDTH + r
-                and vy - r <= c.pos.y <= vy + config.SCREEN_HEIGHT + r):
-            c.draw(screen, c == sim_state.get("selected_creature"), cam_offset=cam)
+    sim_state["renderer"].draw_world(screen, sim_state)
     draw_minimap(screen, sim_state)
     text_y = config.MINIMAP_Y + config.MINIMAP_HEIGHT + 15
     limit_status = "Limited (60)" if sim_state["fps_limited"] else "Unlimited"
@@ -171,19 +186,12 @@ def draw_elements(screen, font, sim_state):
         f"Longest C: {sim_state['max_age_carnivore']} ticks",
         f"FPS: {int(sim_state['clock'].get_fps())} [{limit_status}]",
     ]
-    line_h = font.get_linesize()
-    for line in stats:
-        screen.blit(font.render(line, True, config.COLOR_TEXT), (10, text_y))
-        text_y += line_h
+    _draw_text_block(screen, font, stats, 10, text_y)
     selected = sim_state.get("selected_creature")
     if selected and selected.is_alive():
         info_lines = [f"{k}: {v}" for k, v in selected.get_info().items()]
-        x, y = config.SCREEN_WIDTH - 450, 10
-        screen.blit(font.render("Selected Creature", True, config.COLOR_TEXT), (x, y))
-        y += line_h
-        for line in info_lines:
-            screen.blit(font.render(line, True, config.COLOR_TEXT), (x, y))
-            y += line_h
+        _draw_text_block(screen, font, info_lines, config.SCREEN_WIDTH - 450, 16,
+                         title="Selected Creature")
     else:
         sim_state["selected_creature"] = None
     chart_width, chart_height, chart_spacing = 150, 60, 5
@@ -368,6 +376,7 @@ def main():
         "cam_x": 0.0,
         "cam_y": 0.0,
         "minimap_dragging": False,
+        "renderer": Renderer(config.WORLD_WIDTH, config.WORLD_HEIGHT, obstacles),
     })
 
     prometheus_metrics = GameMetrics(sim_state)

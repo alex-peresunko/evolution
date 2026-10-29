@@ -41,6 +41,10 @@ Pressing **B** (background mode) in `game.py` spawns `cpu_count()-1` subprocesse
 
 `Creature`/`Food`/`Obstacle` accept `vec2_factory=` / `rect_factory=` kwargs. The default is the headless `Vector2`/`SimpleRect` from `math_types.py`, which mirrors the subset of the pygame API that's used (`distance_to`, `clipline`, `colliderect`, …). `game.py` passes `pygame.math.Vector2` / `pygame.Rect` instead. Code inside the library must create vectors via `self._vec2` (or inherit the factory from an existing entity, as children and respawned food do) and never import pygame.
 
+### Rendering (game.py only)
+
+`render.Renderer` draws everything; the entity classes have no draw methods. Sprites are drawn procedurally once (4× supersampled, then smoothscaled), pre-rotated into `config.SPRITE_ANGLE_STEPS` buckets with the drop shadow baked in, and cached by `(is_carnivore, size, health level, walk frame, angle)`, so a frame is mostly `screen.blits`. Obstacles are static and baked into the background surface at startup; if obstacles ever move or change, the background must be rebuilt.
+
 ### Neural network
 
 Topology is `config.BRAIN_TOPOLOGY = [18, 16, 8, 2]`, tanh on all layers. The input size is derived from `NUM_WHISKERS`, so changing the inputs in `Creature.see()` means updating that formula too. Inputs, in order:
