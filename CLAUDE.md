@@ -79,7 +79,7 @@ Hall of Fame autosaves happen at most once per `AUTOSAVE_INTERVAL` ticks. A reco
 - pulsing rings around creatures that are signalling;
 - a night overlay scaled by `sim_state["light"]`, with food glowing through it.
 
-Zoom (`sim_state["zoom"]`, mouse wheel): at zoom 1 the view is drawn straight to the screen. Otherwise `draw_world` renders the visible world rect (screen size / zoom) to an off-screen surface at native scale and smoothscales it up, so sprite caches are unaffected. Screen↔world conversions in `game.py` go through `_screen_to_world` / `_view_size`, and the zoom math (`zoom_at`, `min_zoom`) lives in `camera.py`.
+Zoom (`sim_state["zoom"]`, mouse wheel): `draw_world` scales positions and sprite sizes by the zoom, so sprites are built and cached at their on-screen size and stay sharp. The size is part of the cache key, so zoom levels that round to the same size share sprites. When zoomed, the background is a scaled copy of the view plus a `BG_CACHE_MARGIN`, and it is rebuilt only when the camera leaves it or the zoom changes. Avoid any per-frame full-screen `smoothscale`: it roughly doubles the frame time. Screen↔world conversions in `game.py` go through `_screen_to_world` / `_view_size`, and the zoom math (`zoom_at`, `min_zoom`) lives in `camera.py`.
 
 ### Neural network
 

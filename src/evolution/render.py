@@ -2,7 +2,8 @@
 
 Only game.py imports this module, so the simulation library stays pygame-free.
 Every sprite is drawn once at SS× resolution and smoothscaled down (anti-aliasing),
-then cached by quantized (size, health, walk frame, colour gene, angle); a frame is mostly blits.
+then cached by quantized (on-screen size, health, walk frame, colour gene, angle); a frame is
+mostly blits. Zooming scales positions and sprite sizes, so zoomed sprites are drawn natively.
 """
 import colorsys
 import math
@@ -25,6 +26,7 @@ WALK_FRAMES = 4
 PULSE_LEVELS = 4
 CARCASS_LEVELS = 4
 HIT_FLASH_TICKS = 8
+BG_CACHE_MARGIN = 0.25  # share of the view cached around it on each side when zoomed
 NIGHT_COLOR = (8, 12, 42)
 
 HERBIVORE_PALETTE = {
@@ -296,9 +298,8 @@ class Renderer:
         self._phase = {}
         self._carcasses = {}
         self._night = None
-        self._view = None
-        self._food = [[self._build_food(v, lvl) for lvl in range(FOOD_LEVELS)]
-                      for v in range(FOOD_VARIANTS)]
+        self._bg_cache = None  # (zoom, world rect, scaled background of that rect)
+        self._food = {}  # draw radius -> [variant][level] sprites
 
     # --- sprite caches -----------------------------------------------------
     def _creature_sprite(self, carn, sb, hl, frame, cb, ai):
@@ -308,6 +309,7 @@ class Renderer:
         if len(self._rotated) >= config.SPRITE_CACHE_LIMIT:
             for k in list(islice(self._rotated, config.SPRITE_CACHE_LIMIT // 2)):
                 del self._rotated[k]
+            self._base.clear()  # zooming in builds large bases; they are cheap to redraw
         base_key = key[:5]
         entry = self._base.get(base_key)
         if entry is None:
@@ -409,13 +411,21 @@ class Renderer:
         small.fill((255, 255, 255, int(110 + 145 * rot)), special_flags=pygame.BLEND_RGBA_MULT)
         return small.convert_alpha(), w / 2
 
+    def _food_sprites(self, radius):
+        sprites = self._food.get(radius)
+        if sprites is None:
+            sprites = self._food[radius] = [
+                [self._build_food(v, lvl, radius) for lvl in range(FOOD_LEVELS)]
+                for v in range(FOOD_VARIANTS)]
+        return sprites
+
     @staticmethod
-    def _build_food(variant, level):
+    def _build_food(variant, level, radius=FOOD_DRAW_RADIUS):
         rnd = random.Random(variant * 97 + 3)
         fresh = 1 - level / (FOOD_LEVELS - 1)
-        w = FOOD_DRAW_RADIUS * 2 + 2
+        w = radius * 2 + 2
         big = pygame.Surface((w * SS, w * SS), pygame.SRCALPHA)
-        c, u = w * SS / 2, FOOD_DRAW_RADIUS * SS
+        c, u = w * SS / 2, radius * SS
         leaf_rim = _mix((84, 62, 32), (30, 112, 46), fresh)
         leaf = _mix((140, 104, 50), (104, 206, 84), fresh)
         vein = _mix((150, 120, 70), (150, 214, 120), fresh)
@@ -443,51 +453,67 @@ class Renderer:
         return small.convert_alpha()
 
     # --- frame ---------------------------------------------------------------
-    def draw_world(self, screen, sim_state):
-        """Draw the camera's view; when zoomed, render the visible world rect off-screen at
-        native scale and smoothscale it onto the screen."""
-        self.frame += 1
-        zoom = sim_state.get("zoom", 1.0)
+    def _draw_background(self, screen, cam_x, cam_y, zoom):
+        """Blit the background under the camera. When zoomed, a scaled copy of the view
+        plus a margin is cached and only rebuilt when the camera leaves it or the zoom
+        changes, so a frame doesn't pay for a full-screen smoothscale."""
+        sw, sh = screen.get_size()
         if zoom == 1.0:
-            self._draw_view(screen, sim_state)
+            screen.blit(self.background, (0, 0), (int(cam_x), int(cam_y), sw, sh))
             return
-        sw, sh = screen.get_size()
-        size = (math.ceil(sw / zoom), math.ceil(sh / zoom))
-        if self._view is None or self._view.get_size() != size:
-            self._view = pygame.Surface(size).convert(screen)
-        self._draw_view(self._view, sim_state)
-        pygame.transform.smoothscale(self._view, (sw, sh), screen)
+        vw, vh = sw / zoom, sh / zoom
+        world = self.background.get_rect()
+        view = pygame.Rect(int(cam_x), int(cam_y), math.ceil(vw) + 1, math.ceil(vh) + 1)
+        cache = self._bg_cache
+        if cache is None or cache[0] != zoom or not cache[1].contains(view.clip(world)):
+            mx, my = vw * BG_CACHE_MARGIN, vh * BG_CACHE_MARGIN
+            rect = pygame.Rect(int(cam_x - mx), int(cam_y - my),
+                               math.ceil(vw + 2 * mx) + 1, math.ceil(vh + 2 * my) + 1)
+            rect = rect.clip(world)
+            scaled = pygame.transform.smoothscale(
+                self.background.subsurface(rect),
+                (round(rect.width * zoom), round(rect.height * zoom)))
+            cache = self._bg_cache = (zoom, rect, scaled)
+        _, rect, scaled = cache
+        screen.blit(scaled, (0, 0), (round((cam_x - rect.x) * zoom),
+                                     round((cam_y - rect.y) * zoom), sw, sh))
 
-    def _draw_view(self, screen, sim_state):
+    def draw_world(self, screen, sim_state):
+        """Draw the camera's view at sim_state["zoom"]: positions and sprite sizes are scaled,
+        and sprites are built (and cached) at their on-screen size, so zooming stays sharp."""
+        self.frame += 1
         cam_x, cam_y = sim_state["cam_x"], sim_state["cam_y"]
+        z = sim_state.get("zoom", 1.0)
         sw, sh = screen.get_size()
-        screen.blit(self.background, (0, 0), (int(cam_x), int(cam_y), sw, sh))
+        self._draw_background(screen, cam_x, cam_y, z)
 
-        fo = FOOD_DRAW_RADIUS + 1
+        food_r = max(2, round(FOOD_DRAW_RADIUS * z))
+        food_sprites = self._food_sprites(food_r)
+        fo = food_r + 1
         lifetime_scale = FOOD_LEVELS / config.FOOD_MAX_LIFETIME
         food_blits = []
         for f in sim_state["food_items"]:
-            x, y = f.pos.x - cam_x, f.pos.y - cam_y
+            x, y = (f.pos.x - cam_x) * z, (f.pos.y - cam_y) * z
             if -fo <= x <= sw + fo and -fo <= y <= sh + fo:
                 lvl = min(FOOD_LEVELS - 1, int(f.lifetime * lifetime_scale))
-                food_blits.append((self._food[f.id % FOOD_VARIANTS][lvl], (x - fo, y - fo)))
+                food_blits.append((food_sprites[f.id % FOOD_VARIANTS][lvl], (x - fo, y - fo)))
         screen.blits(food_blits, doreturn=False)
 
         carcass_blits = []
         for cc in sim_state.get("carcasses", ()):
-            x, y = cc.pos.x - cam_x, cc.pos.y - cam_y
-            r = cc.radius * 1.4 + 3
+            x, y = (cc.pos.x - cam_x) * z, (cc.pos.y - cam_y) * z
+            r = (cc.radius * 1.4 + 3) * z
             if -r <= x <= sw + r and -r <= y <= sh + r:
                 lvl = min(CARCASS_LEVELS - 1, int((1 - cc.meat / cc.max_meat) * CARCASS_LEVELS))
-                spr, half = self._carcass(max(2, int(cc.radius + 0.5)), cc.is_carnivore, lvl)
+                spr, half = self._carcass(max(2, int(cc.radius * z + 0.5)), cc.is_carnivore, lvl)
                 carcass_blits.append((spr, (x - half, y - half)))
         screen.blits(carcass_blits, doreturn=False)
 
         selected = sim_state.get("selected_creature")
         visible = []
         for c in sim_state["creatures"] + sim_state["carnivores"]:
-            x, y = c.pos.x - cam_x, c.pos.y - cam_y
-            r = c.size * 2.2 + 8
+            x, y = (c.pos.x - cam_x) * z, (c.pos.y - cam_y) * z
+            r = (c.size * 2.2 + 8) * z
             if -r <= x <= sw + r and -r <= y <= sh + r:
                 visible.append((c, x, y))
 
@@ -500,7 +526,7 @@ class Renderer:
         rotated, phases = self._rotated, self._phase
         sprites, bubbles, signallers = [], [], []
         for c, x, y in visible:
-            sb = int(c.size + 0.5)
+            sb = int(c.size * z + 0.5)
             if sb < 2:
                 sb = 2
             hl = int(c.health / c.max_health * HEALTH_LEVELS) if c.max_health else 0
@@ -547,22 +573,23 @@ class Renderer:
         for c, x, y in signallers:
             t = ((self.frame + c.id * 7) % 30) / 30
             color = (255, 230, 120) if c.is_carnivore else (150, 230, 255)
-            pygame.gfxdraw.aacircle(screen, int(x), int(y), int(c.size * 1.3 + 4 + t * 16),
+            pygame.gfxdraw.aacircle(screen, int(x), int(y),
+                                    int((c.size * 1.3 + 4 + t * 16) * z),
                                     (*color, int(220 * (1 - t) * c.signal)))
 
-        self._draw_night(screen, sim_state.get("light", 1.0), food_blits, fo)
+        self._draw_night(screen, sim_state.get("light", 1.0), food_blits, fo, z)
 
         for c, x, y in visible:
             if c is selected:
-                self._draw_selection(screen, c, x, y)
+                self._draw_selection(screen, c, x, y, z)
             elif c.is_best:
-                self._draw_whiskers(screen, c, x, y)
+                self._draw_whiskers(screen, c, x, y, z)
 
         if self.frame % 600 == 0:
             alive = {c.id for c in sim_state["creatures"]} | {c.id for c in sim_state["carnivores"]}
             self._phase = {k: v for k, v in self._phase.items() if k in alive}
 
-    def _draw_night(self, screen, light, food_blits, fo):
+    def _draw_night(self, screen, light, food_blits, fo, z):
         """Darken the world, then let food glow faintly through the dark."""
         darkness = 1 - light
         alpha = int(darkness * config.NIGHT_MAX_ALPHA)
@@ -575,34 +602,35 @@ class Renderer:
         screen.blit(self._night, (0, 0))
         level = int(darkness * PULSE_LEVELS)
         if level >= 2:
-            g = self._glow(2, (40, 130, 60), min(PULSE_LEVELS - 1, level))
+            g = self._glow(max(2, round(2 * z)), (40, 130, 60), min(PULSE_LEVELS - 1, level))
             gw = g.get_width() / 2
             add = pygame.BLEND_RGB_ADD
             screen.blits([(g, (x + fo - gw, y + fo - gw), None, add) for _, (x, y) in food_blits],
                          doreturn=False)
 
-    def _draw_whiskers(self, screen, c, x, y):
+    def _draw_whiskers(self, screen, c, x, y, z):
         color = config.COLOR_CARNIVORE_WHISKER if c.is_carnivore else config.COLOR_WHISKER
         for i, a in enumerate(c.whisker_angles):
-            ex = x + math.cos(c.angle + a) * c.whiskers[i]
-            ey = y + math.sin(c.angle + a) * c.whiskers[i]
+            ex = x + math.cos(c.angle + a) * c.whiskers[i] * z
+            ey = y + math.sin(c.angle + a) * c.whiskers[i] * z
             pygame.draw.aaline(screen, color, (x, y), (ex, ey))
             pygame.draw.circle(screen, color, (ex, ey), 2)
             seen = c.target_whiskers[i]
             if seen is not None:  # food / prey on this ray
+                seen *= z
                 tx, ty = x + math.cos(c.angle + a) * seen, y + math.sin(c.angle + a) * seen
                 pygame.draw.circle(screen, config.COLOR_TARGET_WHISKER, (tx, ty), 3)
 
-    def _draw_selection(self, screen, c, x, y):
-        sd, sa = c.effective_sight or c.sight_distance, c.sight_angle
+    def _draw_selection(self, screen, c, x, y, z):
+        sd, sa = (c.effective_sight or c.sight_distance) * z, c.sight_angle
         n = max(8, int(sa * 10))
         arc = [(int(x + math.cos(c.angle - sa / 2 + sa * i / n) * sd),
                 int(y + math.sin(c.angle - sa / 2 + sa * i / n) * sd)) for i in range(n + 1)]
         pts = arc if sa >= 2 * math.pi - 1e-3 else [(int(x), int(y))] + arc
         pygame.gfxdraw.filled_polygon(screen, pts, (255, 255, 255, 18))
         pygame.gfxdraw.aapolygon(screen, pts, (255, 255, 255, 70))
-        self._draw_whiskers(screen, c, x, y)
-        r = c.size * 1.6 + 7
+        self._draw_whiskers(screen, c, x, y, z)
+        r = (c.size * 1.6 + 7) * z
         rect = pygame.Rect(0, 0, r * 2, r * 2)
         rect.center = (int(x), int(y))
         dashes = 10
