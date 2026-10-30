@@ -6,6 +6,7 @@ import sys
 import time
 import ctypes
 import ctypes.util
+from collections import deque
 from multiprocessing import cpu_count
 
 import pygame
@@ -19,6 +20,8 @@ from evolution.genetics import mutate_genes
 from evolution.neural_network import NeuralNetwork
 from evolution.metrics import GameMetrics
 from evolution.brain_store import save_brain
+from evolution.brain_view import (INPUT_LABELS, OUTPUT_LABELS, activations, edge_contributions,
+                                  strong_edges, top_drivers)
 from evolution.camera import follow_target, viewport_origin
 from evolution.render import Renderer
 from evolution.islands import (clear_island_files, import_if_better, publish_hall_of_fame,
@@ -32,6 +35,7 @@ MINIMAP_RECT = None  # initialized after pygame.init()
 _CHART_FONTS = {}
 SPEEDS = (1, 2, 4, 8, 16, 32)  # simulation ticks per drawn frame
 _PANELS = {}
+_EDGE_LAYER = {}
 
 
 # =============================================================================
@@ -174,6 +178,100 @@ def _follow_selected(sim_state):
         _set_viewport_center(c.pos.x, c.pos.y, sim_state)
 
 
+def _record_brain(sim_state):
+    """Append the selected creature's outputs to the sparkline history (reset on a new target)."""
+    c = sim_state["selected_creature"]
+    if c is None or c.brain_outputs is None or not c.is_alive():
+        return
+    if sim_state["brain_history_owner"] is not c:
+        sim_state["brain_history"].clear()
+        sim_state["brain_history_owner"] = c
+    sim_state["brain_history"].append(c.brain_outputs.copy())
+
+
+def _activation_color(v):
+    """Diverging color: blue at -1, gray at 0, orange at +1."""
+    v = max(-1.0, min(1.0, float(v)))
+    end = config.COLOR_BRAIN_POS if v > 0 else config.COLOR_BRAIN_NEG
+    return tuple(round(z + (e - z) * abs(v)) for z, e in zip(config.COLOR_BRAIN_ZERO, end))
+
+
+def draw_brain_panel(screen, sim_state):
+    """Live network diagram of the selected creature: node activations, strongest
+    connections (weight * activation), override badge, top input drivers, output sparklines."""
+    c = sim_state["selected_creature"]
+    w, h = config.BRAIN_PANEL_SIZE
+    x0, y0 = 10, config.SCREEN_HEIGHT - h - 10
+    _draw_panel(screen, pygame.Rect(x0, y0, w, h))
+    font = _chart_font(15)
+    kind = "Carnivore" if c.is_carnivore else "Herbivore"
+    screen.blit(font.render(f"Brain - {kind} #{c.id}", True, config.COLOR_BEST_CREATURE),
+                (x0 + 8, y0 + 6))
+
+    acts = activations(c.brain, c.brain_inputs)
+    top, row_h = y0 + 26, 14
+    net_h = row_h * len(INPUT_LABELS)
+    col_x = [x0 + 128, x0 + 210, x0 + 290, x0 + 360]
+    nodes = [[(col_x[k], round(top + (i + 0.5) * net_h / len(a))) for i in range(len(a))]
+             for k, a in enumerate(acts)]
+
+    edges = strong_edges(edge_contributions(c.brain, acts))
+    layer = _EDGE_LAYER.get((w, h))
+    if layer is None:
+        layer = _EDGE_LAYER[(w, h)] = pygame.Surface((w, h), pygame.SRCALPHA)
+    layer.fill((0, 0, 0, 0))
+    peak = max((abs(v) for *_, v in edges), default=1.0) or 1.0
+    for k, i, j, v in sorted(edges, key=lambda e: abs(e[3])):
+        strength = abs(v) / peak
+        color = (*(config.COLOR_BRAIN_POS if v > 0 else config.COLOR_BRAIN_NEG),
+                 round(50 + 205 * strength))
+        (ax, ay), (bx, by) = nodes[k][i], nodes[k + 1][j]
+        pygame.draw.line(layer, color, (ax - x0, ay - y0), (bx - x0, by - y0),
+                         1 + round(2 * strength))
+    screen.blit(layer, (x0, y0))
+
+    radii = (4, 5, 5, 6)
+    for k, a in enumerate(acts):
+        for (nx, ny), v in zip(nodes[k], a):
+            pygame.draw.circle(screen, _activation_color(v), (nx, ny), radii[k])
+            pygame.draw.circle(screen, (200, 200, 200), (nx, ny), radii[k], 1)
+    for (nx, ny), label, v in zip(nodes[0], INPUT_LABELS, acts[0]):
+        screen.blit(font.render(label, True, config.COLOR_TEXT), (x0 + 8, ny - 5))
+        screen.blit(font.render(f"{v:+.2f}", True, _activation_color(v)), (x0 + 82, ny - 5))
+    for (nx, ny), label, v in zip(nodes[-1], OUTPUT_LABELS, acts[-1]):
+        screen.blit(font.render(label, True, config.COLOR_TEXT), (nx + 10, ny - 11))
+        screen.blit(font.render(f"{v:+.2f}", True, _activation_color(v)), (nx + 10, ny + 1))
+
+    y = top + net_h + 6
+    badge = ("EATING (brain ignored)" if c.eating_ticks > 0
+             else "MATE-SEEKING (steering blended)" if c.mate_override else None)
+    if badge:
+        screen.blit(font.render(badge, True, config.COLOR_BEST_CREATURE), (x0 + 8, y))
+    y += row_h
+    for out_idx in (0, 1):
+        drivers = "  ".join(f"{label} {v:+.2f}" for label, v in top_drivers(c.brain, acts, out_idx))
+        screen.blit(font.render(f"{OUTPUT_LABELS[out_idx]}: {drivers}", True, config.COLOR_TEXT),
+                    (x0 + 8, y))
+        y += row_h
+
+    history = sim_state["brain_history"]
+    n_out, gap = len(OUTPUT_LABELS), 6
+    spark_w = (w - 16 - gap * (n_out - 1)) // n_out
+    spark_h = y0 + h - 8 - (y + 14)
+    for k, label in enumerate(OUTPUT_LABELS):
+        sx = x0 + 8 + k * (spark_w + gap)
+        screen.blit(font.render(label, True, config.COLOR_TEXT), (sx, y + 2))
+        rect = pygame.Rect(sx, y + 14, spark_w, spark_h)
+        pygame.draw.rect(screen, (30, 36, 34), rect)
+        pygame.draw.line(screen, (80, 80, 80), (rect.left, rect.centery),
+                         (rect.right - 1, rect.centery))
+        if len(history) > 1:
+            step = (spark_w - 1) / (config.BRAIN_VIEW_HISTORY - 1)
+            pts = [(rect.left + i * step, rect.centery - max(-1.0, min(1.0, o[k])) * spark_h / 2)
+                   for i, o in enumerate(history)]
+            pygame.draw.lines(screen, _activation_color(history[-1][k]), False, pts)
+
+
 def draw_minimap(screen, sim_state):
     mmap = sim_state["renderer"].minimap_bg.copy()
     sx = config.MINIMAP_WIDTH / config.WORLD_WIDTH
@@ -219,6 +317,8 @@ def draw_elements(screen, font, sim_state):
         info_lines = [f"{k}: {v}" for k, v in selected.get_info().items()]
         _draw_text_block(screen, font, info_lines, config.SCREEN_WIDTH - 450, 16,
                          title="Selected Creature")
+        if sim_state["show_brain"] and selected.brain_inputs is not None:
+            draw_brain_panel(screen, sim_state)
     scale = sim_state["chart_scale"]
     chart_w, chart_h = round(config.CHART_SIZE[0] * scale), round(config.CHART_SIZE[1] * scale)
     spacing = round(5 * scale)
@@ -311,6 +411,8 @@ def handle_events(sim_state, prometheus_metrics):
             if event.key == pygame.K_RETURN:
                 sim_state["fps_limited"] = not sim_state["fps_limited"]
                 print(f"FPS Limiting {'Enabled' if sim_state['fps_limited'] else 'Disabled'}")
+            if event.key == pygame.K_n:
+                sim_state["show_brain"] = not sim_state["show_brain"]
             if event.key == pygame.K_d:
                 sim_state["drawing_enabled"] = not sim_state["drawing_enabled"]
                 print(f"Drawing {'Enabled' if sim_state['drawing_enabled'] else 'Disabled'}")
@@ -416,6 +518,9 @@ def main():
         "ticks_per_frame": 1,
         "chart_scale": config.CHART_SCALE_DEFAULT,
         "tps": 0,
+        "show_brain": True,
+        "brain_history": deque(maxlen=config.BRAIN_VIEW_HISTORY),
+        "brain_history_owner": None,
         "renderer": Renderer(config.WORLD_WIDTH, config.WORLD_HEIGHT, obstacles),
     })
 
@@ -428,6 +533,7 @@ def main():
             if not sim_state["paused"]:
                 for _ in range(sim_state["ticks_per_frame"]):
                     update_world(sim_state, prometheus_metrics)
+                    _record_brain(sim_state)
                     if (sim_state.get("background_mode") and sim_state["worker_processes"]
                             and sim_state["tick"] % config.WORKER_SYNC_INTERVAL == 0):
                         _sync_worker_brains(sim_state)

@@ -171,6 +171,14 @@ CHART_SCALE_DEFAULT = 2.0    # [ / ] in game.py zoom the charts
 CHART_SCALE_MIN, CHART_SCALE_MAX, CHART_SCALE_STEP = 1.0, 3.0, 0.25
 HUD_FONT_SIZE = 18
 
+# --- Brain panel (game.py, N toggles) ---
+BRAIN_VIEW_EDGE_FRACTION = 0.15  # strongest share of connections drawn
+BRAIN_VIEW_HISTORY = 200         # ticks of output history in the sparklines
+BRAIN_PANEL_SIZE = (430, 520)
+COLOR_BRAIN_NEG = (70, 140, 255)
+COLOR_BRAIN_ZERO = (90, 90, 90)
+COLOR_BRAIN_POS = (255, 150, 40)
+
 # --- Sprite rendering (render.py) ---
 SPRITE_ANGLE_STEPS = 72      # rotation buckets for cached creature sprites (5 degrees)
 SPRITE_CACHE_LIMIT = 8000    # rotated sprites kept before the cache is flushed

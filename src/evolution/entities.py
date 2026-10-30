@@ -64,6 +64,9 @@ class Creature:
         self.meal_health = 0.0              # herbivore: health still to absorb from the meal
         self.meal_carcass = None            # carnivore: carcass being eaten
         self.fat = 0.0                      # surplus food; slows the creature, burned when starving
+        self.brain_inputs = None            # last tick's brain input/output rows (brain panel)
+        self.brain_outputs = None
+        self.mate_override = False          # last tick's outputs were steered toward a mate
         self.age = 0
         self.is_adult = False
 

@@ -307,11 +307,13 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
     if len(all_outputs):
         signals = np.maximum(0.0, all_outputs[:, 2]).tolist()
         memories = all_outputs[:, 3:3 + NUM_MEMORY].tolist()
-        for c, sig, mem in zip(all_creatures, signals, memories):
+        for c, sig, mem, x, y in zip(all_creatures, signals, memories, all_inputs, all_outputs):
             c.signal, c.memory = sig, mem
+            c.brain_inputs, c.brain_outputs = x, y
     tick = sim_state["tick"]
-    for c, outputs in zip(all_creatures, all_outputs):
-        outputs = _apply_mate_seeking_drive(c, list(outputs), herb_grid, carn_grid)
+    for c, raw in zip(all_creatures, all_outputs):
+        outputs = _apply_mate_seeking_drive(c, list(raw), herb_grid, carn_grid)
+        c.mate_override = outputs[0] != raw[0] or outputs[1] != raw[1]
         c.act(outputs, sim_state["food_items"], sim_state["creatures"], sim_state["obstacles"], grid,
               food_grid=food_grid, herb_grid=herb_grid, carcass_grid=carcass_grid, tick=tick)
 
