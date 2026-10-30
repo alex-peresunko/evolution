@@ -134,3 +134,29 @@ def test_stochastic_round_hits_the_mean():
     draws = [_stochastic_round(1.25) for _ in range(4000)]
     assert set(draws) == {1, 2}
     assert sum(draws) / len(draws) == pytest.approx(1.25, abs=0.03)
+
+
+_DIVERGED = ({"color": 0.0, "size": 6, "lifespan": 1500}, {"color": 1.0, "size": 20, "lifespan": 15000})
+
+
+def test_incompatible_pair_does_not_breed():
+    from evolution.genetics import compatible
+    from evolution.simulation import update_world
+    sim, p1, p2 = _breeding_sim(*_DIVERGED)
+    assert not compatible(p1.genes, p2.genes)
+    update_world(sim)
+    assert not _offspring(sim, (p1.id, p2.id))
+
+
+def test_mate_seeking_ignores_incompatible_partners():
+    from evolution.simulation import _apply_mate_seeking_drive
+    sim, p1, p2 = _breeding_sim(*_DIVERGED)
+    p2.pos = p2._vec2(700, 400)
+    for g in (sim["herb_grid"],):
+        g.clear()
+        g.insert(p1)
+        g.insert(p2)
+    p1._nearest_smell_strength = 0.0
+    assert _apply_mate_seeking_drive(p1, [0.0, 0.0], sim["herb_grid"], sim["carn_grid"]) == [0.0, 0.0]
+    p2.genes = dict(p1.genes)
+    assert _apply_mate_seeking_drive(p1, [0.0, 0.0], sim["herb_grid"], sim["carn_grid"]) != [0.0, 0.0]

@@ -3,7 +3,7 @@ import numpy as np
 
 from .neural_network import NeuralNetwork
 from .config import (ADDITIVE_GENE_MUTATION, GENE_MIN_MAX, GENE_MUTATION_AMOUNT, MUTATION_AMOUNT,
-                     MUTATION_RATE)
+                     MUTATION_RATE, SPECIATION_DISTANCE)
 
 
 def combine_brains(brain1: NeuralNetwork, brain2: NeuralNetwork) -> NeuralNetwork:
@@ -50,3 +50,16 @@ def mutate_genes(genes, default_genes, gene_constraints=None):
         mutated_genes[key] = float(np.clip(parent_value + _mutation(key, parent_value),
                                            min_val, max_val))
     return mutated_genes
+
+
+def genetic_distance(genes1, genes2, gene_constraints=None):
+    """RMS difference of the genes both carry, each scaled by its allowed range."""
+    constraints = gene_constraints or GENE_MIN_MAX
+    diffs = [((genes1[k] - genes2[k]) / (hi - lo)) ** 2
+             for k, (lo, hi) in constraints.items() if k in genes1 and k in genes2]
+    return (sum(diffs) / len(diffs)) ** 0.5 if diffs else 0.0
+
+
+def compatible(genes1, genes2, gene_constraints=None):
+    """Whether two creatures are close enough genetically to breed (reproductive isolation)."""
+    return genetic_distance(genes1, genes2, gene_constraints) <= SPECIATION_DISTANCE

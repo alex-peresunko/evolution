@@ -188,6 +188,8 @@ MUTATION_RATE = 0.08
 MUTATION_AMOUNT = 0.15
 GENE_MUTATION_AMOUNT = 0.10      # multiplicative, +-10% of the gene
 ADDITIVE_GENE_MUTATION = {"color": 0.03}  # genes mutated by +-amount instead
+# Speciation: mates must be within this RMS gene distance (each gene / its GENE_MIN_MAX range).
+SPECIATION_DISTANCE = 0.12
 SURVIVAL_RATE = 0.15
 AUTOSAVE_INTERVAL = 100
 RESPAWN_IMMUNITY_TICKS = 500
@@ -219,6 +221,8 @@ COLOR_BRAIN_POS = (255, 150, 40)
 # --- Sprite rendering (render.py) ---
 SPRITE_ANGLE_STEPS = 72      # rotation buckets for cached creature sprites (5 degrees)
 SPRITE_CACHE_LIMIT = 8000    # rotated sprites kept before the cache is flushed
+COLOR_BUCKETS = 11           # sprite tints for the color gene (odd: the default 0.5 is untinted)
+COLOR_HUE_RANGE = 100        # degrees of hue shift across the color gene's range
 NIGHT_MAX_ALPHA = 150
 SIGNAL_RENDER_THRESHOLD = 0.6
 COLOR_HIT = (255, 40, 30)

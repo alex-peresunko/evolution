@@ -20,7 +20,7 @@ from .config import (
 )
 from .entities import Carcass, Creature, Food, Obstacle
 from .spatial import SpatialHashGrid
-from .genetics import combine_brains, combine_genes, mutate_brain, mutate_genes
+from .genetics import combine_brains, combine_genes, compatible, mutate_brain, mutate_genes
 from .neural_network import NeuralNetwork
 from .perception import perceive_all
 from .brain_store import (read_saved_history, read_saved_score, save_brain, save_brain_if_better,
@@ -135,12 +135,14 @@ def _apply_mate_seeking_drive(c, outputs, herb_grid, carn_grid):
     if c.health < c.max_health * REPRODUCTION_HEALTH_THRESHOLD:
         return outputs
     my_grid = carn_grid if c.is_carnivore else herb_grid
+    constraints = CARNIVORE_GENE_MIN_MAX if c.is_carnivore else GENE_MIN_MAX
     nearby = my_grid.query(c.pos, MATE_ATTRACTION_RADIUS)
     eligible = [
         m for m in nearby
         if m.id != c.id and m.is_adult
         and m.health >= m.max_health * REPRODUCTION_HEALTH_THRESHOLD
         and m.hunger < HUNGER_MAX * MATE_SEEK_HUNGER_THRESHOLD
+        and compatible(c.genes, m.genes, constraints)
     ]
     if not eligible:
         return outputs
@@ -421,11 +423,12 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
         for i, p1 in enumerate(eligible):
             if p1.id in reproduced_ids or len(group) + len(new_offspring) >= pop_cap:
                 continue
+            constraints = CARNIVORE_GENE_MIN_MAX if p1.is_carnivore else GENE_MIN_MAX
             potential_mates = [eligible[j] for j in np.flatnonzero(close[i])
-                               if eligible[j].id not in reproduced_ids]
+                               if eligible[j].id not in reproduced_ids
+                               and compatible(p1.genes, eligible[j].genes, constraints)]
             if potential_mates:
                 best_mate = max(potential_mates, key=lambda mate: mate.attractiveness)
-                constraints = CARNIVORE_GENE_MIN_MAX if p1.is_carnivore else GENE_MIN_MAX
                 litter = min(_stochastic_round((p1.genes["litter_size"] + best_mate.genes["litter_size"]) / 2),
                              pop_cap - len(group) - len(new_offspring))
                 for _ in range(litter):

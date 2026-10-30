@@ -2,8 +2,9 @@
 
 Only game.py imports this module, so the simulation library stays pygame-free.
 Every sprite is drawn once at SS× resolution and smoothscaled down (anti-aliasing),
-then cached by quantized (size, health, walk frame, angle); a frame is mostly blits.
+then cached by quantized (size, health, walk frame, colour gene, angle); a frame is mostly blits.
 """
+import colorsys
 import math
 import random
 import time
@@ -74,6 +75,24 @@ def _faded_palette(palette, health_level):
         else:
             lum = int(0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2])
             out[k] = _mix(c, (lum, lum, int(lum * 0.95)), t)
+    return out
+
+
+def color_bucket(color_gene):
+    return min(config.COLOR_BUCKETS - 1, int(color_gene * config.COLOR_BUCKETS))
+
+
+def _tinted_palette(palette, bucket):
+    """Hue-rotate the palette by the colour gene's bucket (the middle bucket is ~unchanged);
+    eyes, pupils, fangs and claws keep their colours."""
+    shift = ((bucket + 0.5) / config.COLOR_BUCKETS - 0.5) * config.COLOR_HUE_RANGE / 360
+    out = {}
+    for k, c in palette.items():
+        if k in _NO_FADE:
+            out[k] = c
+            continue
+        h, s, v = colorsys.rgb_to_hsv(*(x / 255 for x in c))
+        out[k] = tuple(round(x * 255) for x in colorsys.hsv_to_rgb((h + shift) % 1, s, v))
     return out
 
 
@@ -281,14 +300,14 @@ class Renderer:
                       for v in range(FOOD_VARIANTS)]
 
     # --- sprite caches -----------------------------------------------------
-    def _creature_sprite(self, carn, sb, hl, frame, ai):
+    def _creature_sprite(self, carn, sb, hl, frame, cb, ai):
         """Rotated sprite with its drop shadow baked in, plus the blit offset from the
         creature's position to the sprite's top-left corner."""
-        key = (carn, sb, hl, frame, ai)
+        key = (carn, sb, hl, frame, cb, ai)
         if len(self._rotated) >= config.SPRITE_CACHE_LIMIT:
             for k in list(islice(self._rotated, config.SPRITE_CACHE_LIMIT // 2)):
                 del self._rotated[k]
-        base_key = key[:4]
+        base_key = key[:5]
         entry = self._base.get(base_key)
         if entry is None:
             entry = self._base[base_key] = self._build_creature(*base_key)
@@ -307,7 +326,7 @@ class Renderer:
         return val
 
     @staticmethod
-    def _build_creature(carn, sb, hl, frame):
+    def _build_creature(carn, sb, hl, frame, cb):
         """Unrotated sprite facing +x, its shadow silhouette, and the x offset of the
         sprite centre from the creature origin."""
         x0, x1, y_half = (-2.04, 1.74, 0.8) if carn else (-1.32, 1.4, 0.9)
@@ -315,7 +334,7 @@ class Renderer:
         h = math.ceil(2 * y_half * sb) + 2
         ox = 1 - x0 * sb
         big = pygame.Surface((w * SS, h * SS), pygame.SRCALPHA)
-        pal = _faded_palette(CARNIVORE_PALETTE if carn else HERBIVORE_PALETTE, hl)
+        pal = _faded_palette(_tinted_palette(CARNIVORE_PALETTE if carn else HERBIVORE_PALETTE, cb), hl)
         (_draw_carnivore if carn else _draw_herbivore)(big, ox * SS, h * SS / 2, sb * SS, pal, frame)
         sprite = pygame.transform.smoothscale(big, (w, h))
         shadow = _blur(sprite, 2)
@@ -480,7 +499,8 @@ class Renderer:
                     phases[c.id] = phase
                 frame = int(phase) % WALK_FRAMES
 
-            key = (c.is_carnivore, sb, hl, frame, int(c.angle * angle_scale + 0.5) % steps)
+            key = (c.is_carnivore, sb, hl, frame, color_bucket(c.genes["color"]),
+                   int(c.angle * angle_scale + 0.5) % steps)
             entry = rotated.get(key)
             if entry is None:
                 entry = self._creature_sprite(*key)

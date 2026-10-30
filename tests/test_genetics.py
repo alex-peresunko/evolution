@@ -92,3 +92,17 @@ def test_old_gene_dicts_get_defaults_for_new_genes():
                      "attractiveness")}
     child = combine_genes(old, old, config.DEFAULT_HERBIVORE_GENES)
     assert set(child) == set(config.DEFAULT_HERBIVORE_GENES)
+
+
+def test_genetic_distance_is_symmetric_and_range_scaled():
+    from evolution.genetics import compatible, genetic_distance
+    g = config.DEFAULT_HERBIVORE_GENES
+    assert genetic_distance(g, g) == 0 and compatible(g, g)
+    lo, hi = config.GENE_MIN_MAX["color"]
+    far = {**g, "color": hi}
+    near = {**g, "color": g["color"] + 0.01}
+    assert genetic_distance(g, far) == genetic_distance(far, g)
+    n = len(config.GENE_MIN_MAX)
+    assert genetic_distance(g, far) == pytest.approx(((hi - g["color"]) / (hi - lo)) / n ** 0.5)
+    assert compatible(g, near)
+    assert not compatible({**g, "color": lo, "size": 5}, {**g, "color": hi, "size": 25})
