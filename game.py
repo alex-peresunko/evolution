@@ -14,9 +14,11 @@ from prometheus_client import start_http_server
 
 from evolution import config
 from evolution.entities import Creature, Food, Obstacle
-from evolution.simulation import (update_world, create_initial_population, build_sim_state,
-                                  food_cap, restore_progress, save_hall_of_fame, season_name,
-                                  species_history)
+from evolution.simulation import (update_world, create_start_populations, build_sim_state,
+                                  food_cap, restore_progress, restore_start_progress,
+                                  save_hall_of_fame, season_name, species_history)
+from evolution.brain_history import (add_start_arguments, archive_after_start,
+                                     check_load_argument, format_listing, start_source)
 from evolution.genetics import mutate_brain, mutate_genes
 from evolution.neural_network import NeuralNetwork
 from evolution.metrics import GameMetrics
@@ -567,7 +569,7 @@ def _set_performance_qos():
         pass
 
 
-def main():
+def main(new=False, load=None):
     _set_performance_qos()
     global MINIMAP_RECT
     pygame.init()
@@ -579,14 +581,9 @@ def main():
     )
 
     world_bounds = (config.WORLD_WIDTH, config.WORLD_HEIGHT)
-    herbivores, h_gen = create_initial_population(
-        config.NUM_HERBIVOROUS, False, world_bounds,
-        vec2_factory=_vec2, rect_factory=_rect,
-    )
-    carnivores, c_gen = create_initial_population(
-        config.NUM_CARNIVORES, True, world_bounds,
-        vec2_factory=_vec2, rect_factory=_rect,
-    )
+    source = start_source(new, load)
+    herbivores, carnivores, generation = create_start_populations(
+        world_bounds, source, vec2_factory=_vec2, rect_factory=_rect)
     food_items = [Food(world_bounds, vec2_factory=_vec2) for _ in range(config.NUM_FOOD)]
     obstacles = [
         Obstacle(
@@ -601,7 +598,7 @@ def main():
 
     sim_state = build_sim_state(world_bounds, herbivores, carnivores, food_items, obstacles)
     sim_state.update({
-        "generation": max(h_gen, c_gen),
+        "generation": generation,
         "paused": False,
         "clock": pygame.time.Clock(),
         "selected_creature": None,
@@ -623,6 +620,10 @@ def main():
         "renderer": Renderer(config.WORLD_WIDTH, config.WORLD_HEIGHT, obstacles),
     })
 
+    restore_start_progress(sim_state, source)
+    snapshot = archive_after_start(source, new)
+    if snapshot:
+        print(f"Previous best brains kept in {snapshot}")
     prometheus_metrics = GameMetrics(sim_state)
 
     tps_window_start, tps_window_tick = time.perf_counter(), sim_state["tick"]
@@ -657,5 +658,13 @@ def main():
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    add_start_arguments(parser)
+    args = parser.parse_args()
+    if args.list_brains:
+        print(format_listing())
+        sys.exit(0)
+    check_load_argument(parser, args)
     start_http_server(8000)
-    main()
+    main(new=args.new, load=args.load)

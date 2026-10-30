@@ -505,7 +505,7 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
 
 
 def create_initial_population(count, is_carnivore, world_bounds, brain_file=None,
-                               *, vec2_factory=None, rect_factory=None):
+                               *, vec2_factory=None, rect_factory=None, save_dir="saved_brains"):
     default_genes = DEFAULT_CARNIVORE_GENES if is_carnivore else DEFAULT_HERBIVORE_GENES
     species_name = "carnivore" if is_carnivore else "herbivore"
     constraints = CARNIVORE_GENE_MIN_MAX if is_carnivore else GENE_MIN_MAX
@@ -513,7 +513,8 @@ def create_initial_population(count, is_carnivore, world_bounds, brain_file=None
     try:
         if brain_file is None:
             raise FileNotFoundError
-        progenitor_brain, gen, progenitor_genes = NeuralNetwork.load(brain_file, BRAIN_TOPOLOGY)
+        progenitor_brain, gen, progenitor_genes = NeuralNetwork.load(brain_file, BRAIN_TOPOLOGY,
+                                                                     save_dir=save_dir)
         if progenitor_genes is None:
             progenitor_genes = default_genes
         print(f"Loading initial {species_name} population from {brain_file} (Gen {gen}).")
@@ -529,6 +530,35 @@ def create_initial_population(count, is_carnivore, world_bounds, brain_file=None
     except FileNotFoundError:
         print(f"No saved brain found for {species_name}s. Creating a new random population.")
         return [Creature(world_bounds, is_carnivore=is_carnivore, **kwargs) for _ in range(count)], 1
+
+
+def create_start_populations(world_bounds, source, *, vec2_factory=None, rect_factory=None):
+    """(herbivores, carnivores, generation) from the best_brain_*.json in folder source, or
+    random populations when source is None."""
+    pops, gens = [], []
+    for count, is_carnivore, species in ((NUM_HERBIVOROUS, False, "herbivore"),
+                                         (NUM_CARNIVORES, True, "carnivore")):
+        pop, gen = create_initial_population(
+            count, is_carnivore, world_bounds,
+            f"best_brain_{species}.json" if source else None,
+            vec2_factory=vec2_factory, rect_factory=rect_factory,
+            save_dir=source or "saved_brains")
+        pops.append(pop)
+        gens.append(gen)
+    return pops[0], pops[1], max(gens)
+
+
+def restore_start_progress(sim_state, source):
+    """restore_progress for each species loaded from source; population[0] is the unmutated
+    progenitor create_initial_population puts first."""
+    if source is None:
+        return
+    for species, key in (("herbivore", "creatures"), ("carnivore", "carnivores")):
+        filename = f"best_brain_{species}.json"
+        if sim_state[key] and read_saved_score(filename, save_dir=source) is not None:
+            progenitor = sim_state[key][0]
+            restore_progress(sim_state, species, progenitor.brain, progenitor.genes, filename,
+                             save_dir=source)
 
 
 def _fmt_genes(genes):

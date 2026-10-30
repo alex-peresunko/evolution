@@ -1,5 +1,6 @@
-"""Pretrain both species' brains by imitating evolution.imitation.teacher_actions, then save them
-so game.py (L) and game_headless.py start from creatures that already seek food and flee.
+"""Pretrain both species' brains by imitating evolution.imitation.teacher_actions and save them
+as a history snapshot (game.py --load), so evolution starts from creatures that already seek food
+and flee.
 
 Data collection is DAgger-style: round 1 drives the world with random brains, later rounds with
 the current student, so the teacher labels the states the student actually visits."""
@@ -9,6 +10,7 @@ import random
 import numpy as np
 
 from evolution import config
+from evolution.brain_history import best_file, new_snapshot_dir, prune
 from evolution.brain_store import save_brain
 from evolution.entities import Food, Obstacle
 from evolution.imitation import loss, teacher_actions, train_brain
@@ -56,7 +58,7 @@ def main():
     parser.add_argument("--ticks", type=int, default=1500, help="world ticks per round")
     parser.add_argument("--steps", type=int, default=4000, help="Adam steps per round")
     parser.add_argument("--install", action="store_true",
-                        help="overwrite best_brain_*.json instead of writing pretrained_*.json")
+                        help="overwrite best_brain_*.json instead of adding a history snapshot")
     args = parser.parse_args()
 
     students = {sp: None for sp in SPECIES}
@@ -73,12 +75,15 @@ def main():
             students[sp] = brain
             print(f"round {r} {sp}: {len(X)} rows, loss {before:.4f} -> {after:.4f}")
 
-    prefix = "best_brain" if args.install else "pretrained_brain"
+    save_dir = "saved_brains" if args.install else new_snapshot_dir("pretrained")
     for sp in SPECIES:
         default = config.DEFAULT_CARNIVORE_GENES if sp == "carnivore" else \
             config.DEFAULT_HERBIVORE_GENES
-        save_brain(students[sp], f"{prefix}_{sp}.json", generation=1, genes=dict(default),
-                   score=0.0)
+        save_brain(students[sp], best_file(sp), generation=1, genes=dict(default), score=0.0,
+                   save_dir=save_dir)
+    if not args.install:
+        prune(protect=save_dir)
+        print(f"Saved to {save_dir}; start from it with: python game.py --load 1")
 
 
 if __name__ == "__main__":

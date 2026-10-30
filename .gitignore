@@ -163,3 +163,4 @@ cython_debug/
 
 # Project temp files
 saved_brains/worker*
+saved_brains/history/

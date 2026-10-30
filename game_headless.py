@@ -8,22 +8,20 @@ from prometheus_client import start_http_server
 
 from evolution import config
 from evolution.entities import Creature, Food, Obstacle
-from evolution.simulation import (update_world, create_initial_population, build_sim_state,
-                                  restore_progress, autosave_hall_of_fame, save_hall_of_fame)
+from evolution.simulation import (update_world, create_start_populations, build_sim_state,
+                                  restore_start_progress, autosave_hall_of_fame,
+                                  save_hall_of_fame)
 from evolution.metrics import GameMetrics
-from evolution.brain_store import read_saved_score
+from evolution.brain_history import (SAVE_DIR, add_start_arguments, archive_after_start,
+                                     check_load_argument, format_listing, start_source)
 from evolution.islands import SPECIES, import_if_better, main_file
 
 
-def main(worker_id=None):
+def main(worker_id=None, new=False, load=None):
     world_bounds = (config.WORLD_WIDTH, config.WORLD_HEIGHT)
-    herbivores, h_gen = create_initial_population(
-        config.NUM_HERBIVOROUS, False, world_bounds, "best_brain_herbivore.json"
-    )
-    carnivores, c_gen = create_initial_population(
-        config.NUM_CARNIVORES, True, world_bounds, "best_brain_carnivore.json"
-    )
-
+    # Island workers always start from the main sim's best brains and never touch the history.
+    source = SAVE_DIR if worker_id is not None else start_source(new, load)
+    herbivores, carnivores, generation = create_start_populations(world_bounds, source)
     food_items = [Food(world_bounds) for _ in range(config.NUM_FOOD)]
     obstacles = [
         Obstacle(
@@ -36,11 +34,12 @@ def main(worker_id=None):
     ]
 
     sim_state = build_sim_state(world_bounds, herbivores, carnivores, food_items, obstacles)
-    sim_state["generation"] = max(h_gen, c_gen)
-    for species, population in (("herbivore", herbivores), ("carnivore", carnivores)):
-        filename = f"best_brain_{species}.json"
-        if read_saved_score(filename) is not None:  # population[0] is the unmutated progenitor
-            restore_progress(sim_state, species, population[0].brain, population[0].genes, filename)
+    sim_state["generation"] = generation
+    restore_start_progress(sim_state, source)
+    if worker_id is None:
+        snapshot = archive_after_start(source, new)
+        if snapshot:
+            print(f"Previous best brains kept in {snapshot}")
     prometheus_metrics = GameMetrics(sim_state)
     # SIGTERM (game.py stopping its workers, `docker stop`) runs the finally-block save too.
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
@@ -102,7 +101,12 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--worker-id", type=int, default=None)
+    add_start_arguments(parser)
     args = parser.parse_args()
+    if args.list_brains:
+        print(format_listing())
+        sys.exit(0)
+    check_load_argument(parser, args)
     if args.worker_id is None:
         start_http_server(8000)
-    main(worker_id=args.worker_id)
+    main(worker_id=args.worker_id, new=args.new, load=args.load)

@@ -7,10 +7,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 poetry install                                   # deps (Python >=3.12)
 
-poetry run python game.py                        # graphical (requires display)
+poetry run python game.py                        # graphical (requires display); continues from best_brain_*.json
+poetry run python game.py --new                  # random brains; current best brains move to history
+poetry run python game.py --list-brains          # list history snapshots (also game_headless.py)
+poetry run python game.py --load 2               # start from snapshot #2 (1 = newest) or a folder name
 poetry run python game_headless.py               # headless, auto-loads saved brains, Prometheus on :8000
 poetry run python game_headless_multiproc.py     # headless + ProcessPoolExecutor
-poetry run python pretrain.py                    # behavior-cloning pretrain -> pretrained_brain_*.json (--install: best_brain_*.json)
+poetry run python pretrain.py                    # behavior-cloning pretrain -> history snapshot *-pretrained (--install: best_brain_*.json)
 
 poetry run pytest                                # all tests (no pygame required)
 poetry run pytest tests/test_genetics.py         # one file
@@ -126,7 +129,9 @@ Details:
 
 ### Saved brains
 
-`brain_store.save_brain`/`load_brain` write JSON to `saved_brains/` (weights as nested lists plus topology, generation, genes, score). `NeuralNetwork.load` handles topology mismatches, so old brains survive architecture changes. Main files: `best_brain_{herbivore,carnivore}.json`. These are tracked in git. Autosaves and exit saves write them through `save_brain_if_better`, which only overwrites a file when the new score is higher. The manual **S** key in `game.py` always overwrites. `game_headless.py` loads them on startup, while `game.py` starts with a random population and loads them only when **L** is pressed. Each file also stores that species' chart `history` (score and longevity, capped at `CHART_HISTORY_SAVE_MAX`). After a load, `simulation.restore_progress` restores the history and seeds the Hall of Fame with the saved score, so charts continue instead of restarting. When the brain isn't better, headless exit still updates the history (`update_saved_history`). `game_headless_multiproc.py` doesn't write history.
+`brain_store.save_brain`/`load_brain` write JSON to `saved_brains/` (weights as nested lists plus topology, generation, genes, score). `NeuralNetwork.load` handles topology mismatches, so old brains survive architecture changes. Main files: `best_brain_{herbivore,carnivore}.json`. These are tracked in git. Autosaves and exit saves write them through `save_brain_if_better`, which only overwrites a file when the new score is higher. The manual **S** key in `game.py` always overwrites. `game.py` and `game_headless.py` start from them (`create_start_populations`) unless given `--new` or `--load`; **L** reloads them mid-run. Each file also stores that species' chart `history` (score and longevity, capped at `CHART_HISTORY_SAVE_MAX`). After a load, `simulation.restore_progress` restores the history and seeds the Hall of Fame with the saved score, so charts continue instead of restarting. When the brain isn't better, headless exit still updates the history (`update_saved_history`). `game_headless_multiproc.py` doesn't write history.
+
+**Brain history** (`brain_history.py`): every start of `game.py`/`game_headless.py` (not island workers) snapshots the current best files as a pair into `saved_brains/history/<YYYYmmdd-HHMMSS>[-label]/` (git-ignored), after the starting populations were read. A snapshot is skipped when the brains equal the newest one; chart history and uptime are ignored in that comparison because every exit rewrites them. `--new` and `--load` move the best files out instead of copying, so the run's own records save from scratch through `save_brain_if_better`. Only the newest `BRAIN_HISTORY_KEEP` snapshots are kept, plus the one loaded this run.
 
 ## game.py controls
 

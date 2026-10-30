@@ -205,6 +205,7 @@ ELITE_REINJECT_COUNT = 2
 # Mate choice: attractiveness / default plus this weight times score / best candidate's score.
 MATE_SCORE_WEIGHT = 0.0
 AUTOSAVE_INTERVAL = 100
+BRAIN_HISTORY_KEEP = 10           # snapshots of earlier best brains kept in saved_brains/history
 RESPAWN_IMMUNITY_TICKS = 500
 
 # --- Colors (pygame only) ---
