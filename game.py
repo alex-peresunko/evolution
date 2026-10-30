@@ -21,7 +21,7 @@ from evolution.neural_network import NeuralNetwork
 from evolution.metrics import GameMetrics
 from evolution.brain_store import save_brain
 from evolution.brain_view import (INPUT_LABELS, OUTPUT_LABELS, activations, edge_contributions,
-                                  strong_edges, top_drivers)
+                                  labels, network_layout, strong_edges, top_drivers)
 from evolution.camera import follow_target, viewport_origin
 from evolution.render import Renderer
 from evolution.islands import (clear_island_files, import_if_better, publish_hall_of_fame,
@@ -209,11 +209,12 @@ def draw_brain_panel(screen, sim_state):
                 (x0 + 8, y0 + 6))
 
     acts = activations(c.brain, c.brain_inputs)
-    top, row_h = y0 + 26, 14
-    net_h = row_h * len(INPUT_LABELS)
-    col_x = [x0 + 128, x0 + 210, x0 + 290, x0 + 360]
-    nodes = [[(col_x[k], round(top + (i + 0.5) * net_h / len(a))) for i in range(len(a))]
-             for k, a in enumerate(acts)]
+    in_labels = labels(INPUT_LABELS, len(acts[0]), "in")
+    out_labels = labels(OUTPUT_LABELS, len(acts[-1]), "out")
+    row_h, spark_h = 14, 32
+    top = y0 + 26
+    net_bottom = y0 + h - 8 - spark_h - 14 - 3 * row_h - 6  # room for badge, drivers, sparklines
+    nodes, radii = network_layout([len(a) for a in acts], x0 + 128, top, x0 + w - 70, net_bottom)
 
     edges = strong_edges(edge_contributions(c.brain, acts))
     layer = _EDGE_LAYER.get((w, h))
@@ -230,19 +231,29 @@ def draw_brain_panel(screen, sim_state):
                          1 + round(2 * strength))
     screen.blit(layer, (x0, y0))
 
-    radii = (4, 5, 5, 6)
     for k, a in enumerate(acts):
         for (nx, ny), v in zip(nodes[k], a):
             pygame.draw.circle(screen, _activation_color(v), (nx, ny), radii[k])
-            pygame.draw.circle(screen, (200, 200, 200), (nx, ny), radii[k], 1)
-    for (nx, ny), label, v in zip(nodes[0], INPUT_LABELS, acts[0]):
-        screen.blit(font.render(label, True, config.COLOR_TEXT), (x0 + 8, ny - 5))
+            if radii[k] >= 3:
+                pygame.draw.circle(screen, (200, 200, 200), (nx, ny), radii[k], 1)
+    in_gap = (net_bottom - top) / len(acts[0])
+    for idx in range(0, len(acts[0]), math.ceil(11 / in_gap)):  # skip labels that would overlap
+        ny, v = nodes[0][idx][1], acts[0][idx]
+        screen.blit(font.render(in_labels[idx], True, config.COLOR_TEXT), (x0 + 8, ny - 5))
         screen.blit(font.render(f"{v:+.2f}", True, _activation_color(v)), (x0 + 82, ny - 5))
-    for (nx, ny), label, v in zip(nodes[-1], OUTPUT_LABELS, acts[-1]):
-        screen.blit(font.render(label, True, config.COLOR_TEXT), (nx + 10, ny - 11))
-        screen.blit(font.render(f"{v:+.2f}", True, _activation_color(v)), (nx + 10, ny + 1))
+    out_gap = (net_bottom - top) / len(acts[-1])
+    for idx in range(0, len(acts[-1]), math.ceil(11 / out_gap)):
+        (nx, ny), v = nodes[-1][idx], acts[-1][idx]
+        name = font.render(out_labels[idx], True, config.COLOR_TEXT)
+        value = font.render(f"{v:+.2f}", True, _activation_color(v))
+        if out_gap >= 24:  # name above value
+            screen.blit(name, (nx + 10, ny - 11))
+            screen.blit(value, (nx + 10, ny + 1))
+        else:
+            screen.blit(name, (nx + 10, ny - 5))
+            screen.blit(value, (nx + 14 + name.get_width(), ny - 5))
 
-    y = top + net_h + 6
+    y = net_bottom + 6
     badge = ("EATING (brain ignored)" if c.eating_ticks > 0
              else "MATE-SEEKING (steering blended)" if c.mate_override else None)
     if badge:
@@ -250,15 +261,14 @@ def draw_brain_panel(screen, sim_state):
     y += row_h
     for out_idx in (0, 1):
         drivers = "  ".join(f"{label} {v:+.2f}" for label, v in top_drivers(c.brain, acts, out_idx))
-        screen.blit(font.render(f"{OUTPUT_LABELS[out_idx]}: {drivers}", True, config.COLOR_TEXT),
+        screen.blit(font.render(f"{out_labels[out_idx]}: {drivers}", True, config.COLOR_TEXT),
                     (x0 + 8, y))
         y += row_h
 
     history = sim_state["brain_history"]
-    n_out, gap = len(OUTPUT_LABELS), 6
+    n_out, gap = len(out_labels), 6
     spark_w = (w - 16 - gap * (n_out - 1)) // n_out
-    spark_h = y0 + h - 8 - (y + 14)
-    for k, label in enumerate(OUTPUT_LABELS):
+    for k, label in enumerate(out_labels):
         sx = x0 + 8 + k * (spark_w + gap)
         screen.blit(font.render(label, True, config.COLOR_TEXT), (sx, y + 2))
         rect = pygame.Rect(sx, y + 14, spark_w, spark_h)

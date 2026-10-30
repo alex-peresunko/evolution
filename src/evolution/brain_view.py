@@ -14,6 +14,25 @@ INPUT_LABELS = (
     + [f"mem{i}_in" for i in range(NUM_MEMORY)]
 )
 OUTPUT_LABELS = ["turn", "speed", "signal"] + [f"mem{i}" for i in range(NUM_MEMORY)]
+NODE_RADIUS_MIN, NODE_RADIUS_MAX = 2, 6
+
+
+def labels(names, n, prefix):
+    """n labels: the known names, padded with prefix+index if the brain has more nodes."""
+    return list(names[:n]) + [f"{prefix}{i}" for i in range(len(names), n)]
+
+
+def network_layout(layer_sizes, left, top, right, bottom):
+    """Node centers per layer, with columns spread evenly from left to right and each column's
+    nodes evenly from top to bottom, plus a per-layer node radius that fits the spacing."""
+    n = len(layer_sizes)
+    nodes, radii = [], []
+    for k, size in enumerate(layer_sizes):
+        x = left + (right - left) * k / (n - 1) if n > 1 else left
+        gap = (bottom - top) / size
+        nodes.append([(round(x), round(top + (i + 0.5) * gap)) for i in range(size)])
+        radii.append(max(NODE_RADIUS_MIN, min(NODE_RADIUS_MAX, int(gap * 0.4))))
+    return nodes, radii
 
 
 def activations(brain, inputs):
@@ -53,4 +72,5 @@ def input_attribution(brain, acts, out_idx):
 def top_drivers(brain, acts, out_idx, n=3):
     """The n inputs with the largest |attribution| to output out_idx, as (label, value)."""
     attr = input_attribution(brain, acts, out_idx)
-    return [(INPUT_LABELS[i], float(attr[i])) for i in np.argsort(-np.abs(attr))[:n]]
+    names = labels(INPUT_LABELS, len(attr), "in")
+    return [(names[i], float(attr[i])) for i in np.argsort(-np.abs(attr))[:n]]
