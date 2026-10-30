@@ -3,6 +3,15 @@ import os
 import numpy as np
 
 
+def write_json_atomic(path, data):
+    """Write to a temp file and rename it over path, so concurrent readers (the island sync in
+    game.py) never see a half-written file."""
+    tmp = f"{path}.{os.getpid()}.tmp"
+    with open(tmp, "w") as f:
+        json.dump(data, f, indent=4, sort_keys=True)
+    os.replace(tmp, path)
+
+
 class NeuralNetwork:
     def __init__(self, layer_sizes):
         self.layer_sizes = layer_sizes
@@ -58,8 +67,7 @@ class NeuralNetwork:
             data["metric_game_uptime_seconds"] = uptime_seconds
         if history is not None:
             data["history"] = history
-        with open(os.path.join(save_dir, filename), "w") as f:
-            json.dump(data, f, indent=4, sort_keys=True)
+        write_json_atomic(os.path.join(save_dir, filename), data)
         print(f"Brain saved to {filename}")
 
     @staticmethod
@@ -69,6 +77,13 @@ class NeuralNetwork:
             raise FileNotFoundError(f"Brain file not found at {filepath}")
         with open(filepath) as f:
             data = json.load(f)
+        nn = NeuralNetwork.from_data(data, target_topology)
+        print(f"Brain loaded from {filepath} into topology {target_topology}")
+        return nn, data.get("generation", 1), data.get("genes")
+
+    @staticmethod
+    def from_data(data, target_topology):
+        """Brain from a saved file's parsed JSON, copied into target_topology."""
         saved_weights = [np.array(w) for w in data["weights"]]
         saved_biases = [np.array(b) for b in data["biases"]]
         nn = NeuralNetwork(target_topology)
@@ -81,5 +96,4 @@ class NeuralNetwork:
                 cols_b = min(tb[1], sb[1])
                 nn.weights[i][:rows_w, :cols_w] = saved_weights[i][:rows_w, :cols_w]
                 nn.biases[i][:, :cols_b] = saved_biases[i][:, :cols_b]
-        print(f"Brain loaded from {filepath} into topology {target_topology}")
-        return nn, data.get("generation", 1), data.get("genes")
+        return nn

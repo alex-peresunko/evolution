@@ -1,7 +1,7 @@
 import json
 import os
 
-from .neural_network import NeuralNetwork
+from .neural_network import NeuralNetwork, write_json_atomic
 
 
 def save_brain(nn, filename, generation, genes, score, metrics=None, save_dir="saved_brains",
@@ -38,8 +38,7 @@ def update_saved_history(filename, history, save_dir="saved_brains"):
     except (FileNotFoundError, json.JSONDecodeError):
         return False
     data["history"] = history
-    with open(path, "w") as f:
-        json.dump(data, f, indent=4, sort_keys=True)
+    write_json_atomic(path, data)
     return True
 
 

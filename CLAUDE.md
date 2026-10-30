@@ -44,7 +44,16 @@ Evolution is continuous: creatures die and are "retired" (`_retire_creature` upd
 
 ### Island workers (game.py)
 
-Pressing **B** (background mode) in `game.py` spawns `cpu_count()-1` subprocesses of `game_headless.py --worker-id N`. Each worker runs an independent world, skips the Prometheus server, logs to `saved_brains/worker_N.log`, and saves its best brains as `saved_brains/worker_N_{herbivore,carnivore}.json`. `_sync_worker_brains` polls those files by mtime and promotes a worker's brain into the main Hall of Fame when its score is higher.
+Pressing **B** (background mode) in `game.py` spawns `cpu_count()-1` subprocesses of `game_headless.py --worker-id N`. Each worker runs an independent world, skips the Prometheus server, and logs to `saved_brains/worker_N.log`. The brain exchange lives in `islands.py`:
+- Workers save their Hall of Fame to `saved_brains/worker_N_{species}.json`.
+- Every `WORKER_SYNC_INTERVAL` main ticks, `_sync_worker_brains` imports any worker brain that beats the main Hall of Fame (`import_if_better`). The brain and `ISLAND_IMMIGRANTS - 1` mutated copies replace the weakest creatures of that species, so the visible population evolves from it. The main autosave then persists it to `best_brain_*.json`.
+- The main sim publishes its Hall of Fame (the best across all islands) to `worker_main_{species}.json`, and every worker imports that in turn.
+- Starting background mode clears the old `worker_*.json` files.
+- Brain files are written atomically (temp file plus `os.replace`), so a reader never sees half a file.
+- Stopping (B again, closing the window, Ctrl+C or a crash) SIGTERMs the workers. They save unsaved records on SIGTERM, then the main sim does a final sync and saves its Hall of Fame. A worker also exits by itself if its parent `game.py` dies.
+- Only the main process writes `best_brain_*.json` while workers are running.
+
+Hall of Fame autosaves happen at most once per `AUTOSAVE_INTERVAL` ticks. A record set inside that window is kept in `hof_unsaved` and written later (`autosave_hall_of_fame`).
 
 ### Vector type injection
 

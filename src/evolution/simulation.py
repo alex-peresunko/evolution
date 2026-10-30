@@ -21,7 +21,8 @@ from .spatial import SpatialHashGrid
 from .genetics import combine_brains, combine_genes, mutate_genes
 from .neural_network import NeuralNetwork
 from .perception import perceive_all
-from .brain_store import read_saved_history, read_saved_score, save_brain, save_brain_if_better
+from .brain_store import (read_saved_history, read_saved_score, save_brain, save_brain_if_better,
+                          update_saved_history)
 
 
 def build_sim_state(world_bounds, creatures, carnivores, food_items, obstacles):
@@ -54,6 +55,7 @@ def build_sim_state(world_bounds, creatures, carnivores, food_items, obstacles):
         "generation": 1,
         "tick": 0,
         "last_autosave_tick": 0,
+        "hof_unsaved": set(),
         "hall_of_fame": {
             "herbivore": {"score": -1, "genes": None, "brain": None},
             "carnivore": {"score": -1, "genes": None, "brain": None},
@@ -188,25 +190,48 @@ def _retire_creature(c, sim_state, prometheus_metrics=None, worker_id=None):
     hof = sim_state["hall_of_fame"]
     if c.score > hof[species]["score"]:
         hof[species] = {"score": c.score, "brain": c.brain.copy(), "genes": c.genes.copy()}
-        tick = sim_state["tick"]
-        if tick - sim_state["last_autosave_tick"] >= AUTOSAVE_INTERVAL:
-            # Worker files are per-run scratch; main files must only ever improve.
-            if worker_id is not None:
-                save = save_brain
-                filename = f"worker_{worker_id}_{species}.json"
-            else:
-                save = save_brain_if_better
-                filename = f"best_brain_{species}.json"
-            written = save(
-                c.brain, filename,
-                generation=sim_state["generation"],
-                genes=c.genes,
-                score=c.score,
-                metrics=prometheus_metrics,
-                history=species_history(sim_state, species),
-            )
-            if written is not False:
-                sim_state["last_autosave_tick"] = tick
+        sim_state.setdefault("hof_unsaved", set()).add(species)
+        autosave_hall_of_fame(sim_state, prometheus_metrics, worker_id)
+
+
+def autosave_hall_of_fame(sim_state, prometheus_metrics=None, worker_id=None, force=False):
+    """Write Hall of Fame records not saved yet, at most once per AUTOSAVE_INTERVAL ticks
+    (unless force). A record set inside the interval waits for the next call instead of being
+    dropped. Worker files are per-run scratch; main files must only ever improve."""
+    unsaved = sim_state.get("hof_unsaved")
+    tick = sim_state["tick"]
+    if not unsaved or (not force and tick - sim_state["last_autosave_tick"] < AUTOSAVE_INTERVAL):
+        return
+    for species in sorted(unsaved):
+        hof = sim_state["hall_of_fame"][species]
+        if worker_id is not None:
+            save, filename = save_brain, f"worker_{worker_id}_{species}.json"
+        else:
+            save, filename = save_brain_if_better, f"best_brain_{species}.json"
+        written = save(hof["brain"], filename, generation=sim_state["generation"],
+                       genes=hof["genes"], score=hof["score"], metrics=prometheus_metrics,
+                       history=species_history(sim_state, species))
+        if written is not False:
+            sim_state["last_autosave_tick"] = tick
+    unsaved.clear()
+
+
+def save_hall_of_fame(sim_state, prometheus_metrics=None):
+    """Exit save: each species' Hall of Fame into best_brain_*.json if it beats the saved score,
+    otherwise only the file's chart history is updated."""
+    for species in ("herbivore", "carnivore"):
+        hof = sim_state["hall_of_fame"][species]
+        filename = f"best_brain_{species}.json"
+        history = species_history(sim_state, species)
+        if hof["brain"] is None:
+            print(f"No {species} in Hall of Fame to save.")
+        elif not save_brain_if_better(hof["brain"], filename,
+                                      generation=sim_state["generation"], genes=hof["genes"],
+                                      score=hof["score"], metrics=prometheus_metrics,
+                                      history=history):
+            update_saved_history(filename, history)
+            print(f"Kept existing {filename} (saved score "
+                  f"{read_saved_score(filename):.3f} >= {hof['score']:.3f}), updated its chart history")
 
 
 def _repopulate_from_hof(is_carnivore, count, default_genes, sim_state,
@@ -301,6 +326,7 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
                 _retire_creature(c, sim_state, prometheus_metrics, worker_id)
     sim_state["creatures"] = alive_herbs
     sim_state["carnivores"] = alive_carns
+    autosave_hall_of_fame(sim_state, prometheus_metrics, worker_id)
 
     # Detect extinction and repopulate from Hall of Fame
     _vec2 = sim_state["creatures"][0]._vec2 if sim_state["creatures"] else (

@@ -1,3 +1,5 @@
+import os
+import signal
 import sys
 import time
 import random
@@ -7,9 +9,10 @@ from prometheus_client import start_http_server
 from evolution import config
 from evolution.entities import Creature, Food, Obstacle
 from evolution.simulation import (update_world, create_initial_population, build_sim_state,
-                                  restore_progress, species_history)
+                                  restore_progress, autosave_hall_of_fame, save_hall_of_fame)
 from evolution.metrics import GameMetrics
-from evolution.brain_store import read_saved_score, save_brain_if_better, update_saved_history
+from evolution.brain_store import read_saved_score
+from evolution.islands import SPECIES, import_if_better, main_file
 
 
 def main(worker_id=None):
@@ -39,6 +42,10 @@ def main(worker_id=None):
         if read_saved_score(filename) is not None:  # population[0] is the unmutated progenitor
             restore_progress(sim_state, species, population[0].brain, population[0].genes, filename)
     prometheus_metrics = GameMetrics(sim_state)
+    # SIGTERM (game.py stopping its workers, `docker stop`) runs the finally-block save too.
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    parent_pid = os.getppid()
+    island_seen = {}
 
     last_time = time.time()
     ticks_this_second = 0
@@ -53,6 +60,14 @@ def main(worker_id=None):
 
             update_world(sim_state, prometheus_metrics, worker_id=worker_id)
             prometheus_metrics.update(sim_state, dt)
+            if worker_id is not None and sim_state["tick"] % config.WORKER_SYNC_INTERVAL == 0:
+                if os.getppid() != parent_pid:
+                    print(f"\n[W{worker_id}] game.py is gone, exiting.")
+                    break
+                for species in SPECIES:  # the best brain across all islands, via game.py
+                    if import_if_better(sim_state, species, main_file(species), island_seen):
+                        print(f"\n[W{worker_id}] Imported main {species} brain "
+                              f"(score {sim_state['hall_of_fame'][species]['score']:.3f})")
 
             ticks_this_second += 1
             if now - last_tps_report_time >= 1.0:
@@ -74,20 +89,12 @@ def main(worker_id=None):
     except KeyboardInterrupt:
         print("\nSimulation stopped by user.")
     finally:
-        print("\nSaving best brains from Hall of Fame on exit...")
-        for species in ("herbivore", "carnivore"):
-            hof = sim_state["hall_of_fame"][species]
-            filename = f"best_brain_{species}.json"
-            history = species_history(sim_state, species)
-            if hof["brain"] is None:
-                print(f"No {species} in Hall of Fame to save.")
-            elif not save_brain_if_better(hof["brain"], filename,
-                                          generation=sim_state["generation"], genes=hof["genes"],
-                                          score=hof["score"], metrics=prometheus_metrics,
-                                          history=history):
-                update_saved_history(filename, history)
-                print(f"Kept existing {filename} (saved score "
-                      f"{read_saved_score(filename):.3f} >= {hof['score']:.3f}), updated its chart history")
+        if worker_id is not None:  # game.py imports these and owns the best_brain files
+            print("\nSaving unsaved Hall of Fame records to worker files...")
+            autosave_hall_of_fame(sim_state, prometheus_metrics, worker_id, force=True)
+        else:
+            print("\nSaving best brains from Hall of Fame on exit...")
+            save_hall_of_fame(sim_state, prometheus_metrics)
         print("Exiting.")
 
 

@@ -1,6 +1,5 @@
 import random
 import math
-import json
 import os
 import subprocess
 import sys
@@ -15,12 +14,14 @@ from prometheus_client import start_http_server
 from evolution import config
 from evolution.entities import Creature, Food, Obstacle
 from evolution.simulation import (update_world, create_initial_population, build_sim_state,
-                                  restore_progress, species_history)
+                                  restore_progress, save_hall_of_fame, species_history)
 from evolution.genetics import mutate_genes
 from evolution.neural_network import NeuralNetwork
 from evolution.metrics import GameMetrics
 from evolution.brain_store import save_brain
 from evolution.render import Renderer
+from evolution.islands import (clear_island_files, import_if_better, publish_hall_of_fame,
+                               worker_file)
 
 # pygame-specific vector/rect factories
 _vec2 = pygame.math.Vector2
@@ -38,6 +39,9 @@ _PANELS = {}
 def _start_worker_processes(sim_state):
     n = max(1, (cpu_count() or 2) - 1)
     os.makedirs("saved_brains", exist_ok=True)
+    clear_island_files()
+    sim_state["island_seen"], sim_state["island_published"] = {}, {}
+    publish_hall_of_fame(sim_state, sim_state["island_published"])  # workers start from our best
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
     workers = []
@@ -48,48 +52,44 @@ def _start_worker_processes(sim_state):
             [sys.executable, "game_headless.py", "--worker-id", str(i)],
             stdout=log_file, stderr=log_file, env=env,
         )
-        workers.append({"id": i, "proc": p, "log": log_file,
-                        "herbivore_mtime": 0, "carnivore_mtime": 0})
+        workers.append({"id": i, "proc": p, "log": log_file})
     sim_state["worker_processes"] = workers
     print(f"[Islands] Started {n} worker process(es). Logs: saved_brains/worker_N.log")
 
 
 def _stop_worker_processes(sim_state):
-    for w in sim_state.get("worker_processes", []):
+    """Stop the workers (they save their Hall of Fame on SIGTERM), then import what they saved."""
+    workers = sim_state.get("worker_processes", [])
+    if not workers:
+        return
+    for w in workers:
         w["proc"].terminate()
-        if w.get("log"):
-            w["log"].close()
+    for w in workers:
+        try:
+            w["proc"].wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            w["proc"].kill()
+            w["proc"].wait()
+        w["log"].close()
+    _sync_worker_brains(sim_state)
     sim_state["worker_processes"] = []
     print("[Islands] Worker processes stopped.")
 
 
 def _sync_worker_brains(sim_state):
-    hof = sim_state["hall_of_fame"]
+    """Import worker brains that beat the main Hall of Fame (immigrants join the population),
+    then publish the main Hall of Fame for the workers."""
     for w in sim_state.get("worker_processes", []):
-        for species, suffix in [("herbivore", "herbivore.json"), ("carnivore", "carnivore.json")]:
-            filepath = os.path.join("saved_brains", f"worker_{w['id']}_{suffix}")
-            mtime_key = f"{species}_mtime"
-            try:
-                mtime = os.path.getmtime(filepath)
-                if mtime <= w[mtime_key]:
-                    continue
-                w[mtime_key] = mtime
-                with open(filepath) as f:
-                    data = json.load(f)
-                worker_score = data.get("score", 0)
-                if worker_score > hof[species]["score"]:
-                    old_score = hof[species]["score"]
-                    brain, _, genes = NeuralNetwork.load(
-                        f"worker_{w['id']}_{suffix}", config.BRAIN_TOPOLOGY
-                    )
-                    hof[species] = {"score": worker_score, "brain": brain, "genes": genes}
-                    delta = worker_score - old_score
-                    print(
-                        f"[Island sync] {species.capitalize()} HoF upgraded by worker {w['id']}: "
-                        f"{old_score:.3f} -> {worker_score:.3f} (+{delta:.3f})"
-                    )
-            except (FileNotFoundError, json.JSONDecodeError, Exception):
-                pass
+        for species in ("herbivore", "carnivore"):
+            imported = import_if_better(sim_state, species, worker_file(w["id"], species),
+                                        sim_state["island_seen"])
+            if imported:
+                old_score, new_score = imported
+                sim_state["hof_unsaved"].add(species)  # persisted by the next autosave
+                print(f"[Island sync] {species.capitalize()} HoF upgraded by worker {w['id']}: "
+                      f"{old_score:.3f} -> {new_score:.3f} (+{new_score - old_score:.3f}); "
+                      f"{config.ISLAND_IMMIGRANTS} immigrants joined")
+    publish_hall_of_fame(sim_state, sim_state["island_published"])
 
 
 # =============================================================================
@@ -237,7 +237,6 @@ def handle_events(sim_state, prometheus_metrics):
     global MINIMAP_RECT
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            _stop_worker_processes(sim_state)
             sim_state["running"] = False
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_s:
@@ -416,27 +415,32 @@ def main():
     prometheus_metrics = GameMetrics(sim_state)
 
     tps_window_start, tps_window_tick = time.perf_counter(), sim_state["tick"]
-    while sim_state["running"]:
-        handle_events(sim_state, prometheus_metrics)
-        if not sim_state["paused"]:
-            for _ in range(sim_state["ticks_per_frame"]):
-                update_world(sim_state, prometheus_metrics)
-                if (sim_state.get("background_mode") and sim_state["worker_processes"]
-                        and sim_state["tick"] % config.WORKER_SYNC_INTERVAL == 0):
-                    _sync_worker_brains(sim_state)
-        now = time.perf_counter()
-        if now - tps_window_start >= 1.0:
-            sim_state["tps"] = int((sim_state["tick"] - tps_window_tick) / (now - tps_window_start))
-            tps_window_start, tps_window_tick = now, sim_state["tick"]
-        if sim_state["drawing_enabled"]:
-            draw_elements(screen, font, sim_state)
-        if sim_state["fps_limited"]:
-            sim_state["clock"].tick(60)
-        else:
-            sim_state["clock"].tick()
-        dt = sim_state["clock"].get_time() / 1000.0
-        prometheus_metrics.update(sim_state, dt)
-    pygame.quit()
+    try:
+        while sim_state["running"]:
+            handle_events(sim_state, prometheus_metrics)
+            if not sim_state["paused"]:
+                for _ in range(sim_state["ticks_per_frame"]):
+                    update_world(sim_state, prometheus_metrics)
+                    if (sim_state.get("background_mode") and sim_state["worker_processes"]
+                            and sim_state["tick"] % config.WORKER_SYNC_INTERVAL == 0):
+                        _sync_worker_brains(sim_state)
+            now = time.perf_counter()
+            if now - tps_window_start >= 1.0:
+                sim_state["tps"] = int((sim_state["tick"] - tps_window_tick) / (now - tps_window_start))
+                tps_window_start, tps_window_tick = now, sim_state["tick"]
+            if sim_state["drawing_enabled"]:
+                draw_elements(screen, font, sim_state)
+            if sim_state["fps_limited"]:
+                sim_state["clock"].tick(60)
+            else:
+                sim_state["clock"].tick()
+            dt = sim_state["clock"].get_time() / 1000.0
+            prometheus_metrics.update(sim_state, dt)
+    finally:  # also on Ctrl+C or a crash, so workers are never left running
+        _stop_worker_processes(sim_state)
+        print("Saving Hall of Fame on exit...")
+        save_hall_of_fame(sim_state, prometheus_metrics)
+        pygame.quit()
 
 
 if __name__ == "__main__":

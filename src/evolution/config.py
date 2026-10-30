@@ -23,7 +23,8 @@ GRID_CELL_SIZE = 200
 # --- Score / Worker sync ---
 SCORE_SAMPLE_INTERVAL = 200
 CHART_HISTORY_SAVE_MAX = 500  # chart samples per series kept in a saved brain file
-WORKER_SYNC_INTERVAL = 300
+WORKER_SYNC_INTERVAL = 300       # ticks between island brain exchanges (background mode)
+ISLAND_IMMIGRANTS = 4            # weakest creatures replaced by an imported better brain
 
 # --- Gene Defaults ---
 DEFAULT_HERBIVORE_GENES = {
