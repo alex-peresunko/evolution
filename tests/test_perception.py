@@ -5,13 +5,15 @@ import numpy as np
 import pytest
 
 from evolution import config
+from evolution.brain_view import INPUT_LABELS
 from evolution.entities import Carcass, Creature, Food, Obstacle
 from evolution.perception import perceive_all
 
 WORLD_BOUNDS = (config.WORLD_WIDTH, config.WORLD_HEIGHT)
 
 
-def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasses=(), light=1.0):
+def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasses=(), light=1.0,
+                   season=0.0):
     """The original per-creature, pure-Python Creature.see(), plus scalar versions of the
     later inputs (kin, signal, carcass, light, memory); perceive_all must match it."""
     eye = self.sight_distance * (config.NIGHT_SIGHT_FACTOR + (1 - config.NIGHT_SIGHT_FACTOR) * light)
@@ -138,6 +140,7 @@ def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasse
                 best = along
         target_whiskers.append(best)
         inputs.append(0.0 if best is None else 1.0 - best / eye)
+    inputs.append(season)
     return inputs, whiskers, target_whiskers, nearest_target_dist, nearest_smell_strength
 
 
@@ -174,11 +177,12 @@ def test_perceive_all_matches_reference(seed, n_herb, n_carn, n_food, light):
     carcasses = [Carcass(_random_creature(rnd, rnd.random() < 0.5, obstacles)) for _ in range(seed * 4)]
     everyone = herbs + carns
 
-    got = perceive_all(everyone, food, herbs, carns, obstacles, carcasses, light)
+    season = light - 0.5
+    got = perceive_all(everyone, food, herbs, carns, obstacles, carcasses, light, season)
     assert got.shape == (len(everyone), config.BRAIN_TOPOLOGY[0])
     for row, c in zip(got, everyone):
         inputs, whiskers, target_whiskers, target_dist, smell = _reference_see(c, food, obstacles, herbs, carns,
-                                                              carcasses, light)
+                                                              carcasses, light, season)
         np.testing.assert_allclose(row, inputs, atol=1e-9)
         np.testing.assert_allclose(c.whiskers, whiskers, atol=1e-9)
         assert [d is None for d in c.target_whiskers] == [d is None for d in target_whiskers]
@@ -205,7 +209,8 @@ def test_target_whisker_sees_food_ahead_and_is_occluded():
     c.pos, c.angle = c._vec2(500, 500), 0.0
     food = Food(WORLD_BOUNDS)
     food.pos = food._vec2(500 + c.sight_distance / 2, 503)
-    tw = slice(config.BRAIN_INPUTS - config.NUM_WHISKERS, config.BRAIN_INPUTS)
+    first = INPUT_LABELS.index("food_w0")
+    tw = slice(first, first + config.NUM_WHISKERS)
     centre = config.NUM_WHISKERS // 2
 
     inputs = perceive_all([c], [food], [c], [], [])

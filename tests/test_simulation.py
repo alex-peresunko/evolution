@@ -118,3 +118,34 @@ def test_update_world_stores_signal_and_memory():
         assert 0.0 <= c.signal <= 1.0
         assert len(c.memory) == config.NUM_MEMORY
     assert any(m != 0.0 for c in sim_state["creatures"] for m in c.memory)
+
+
+def test_seasons_scale_the_food_cap():
+    from evolution.simulation import food_cap, season, season_name
+    year = config.SEASON_LENGTH_TICKS
+    assert season(0) == pytest.approx(0) and season_name(0) == "Spring"
+    assert season(year // 4) == pytest.approx(1) and season_name(year // 4) == "Summer"
+    assert season_name(year // 2) == "Autumn"
+    assert season(3 * year // 4) == pytest.approx(-1) and season_name(3 * year // 4) == "Winter"
+    assert food_cap(1) > food_cap(0) == config.NUM_FOOD * 1.5 > food_cap(-1) > 0
+
+
+def test_winter_stops_food_respawn_above_the_cap(monkeypatch):
+    sim_state = _make_sim(n_herbs=0, n_carns=0, n_food=0)
+    sim_state["tick"] = 3 * config.SEASON_LENGTH_TICKS // 4 - 1   # next tick is midwinter
+    import evolution.simulation as simulation
+    from evolution.simulation import food_cap
+    winter_cap = food_cap(-1)
+    sim_state["food_items"] = [Food(WORLD_BOUNDS) for _ in range(math.ceil(winter_cap))]
+    monkeypatch.setattr(simulation, "_repopulate_from_hof", lambda *a, **k: [])
+    update_world(sim_state)
+    assert sim_state["season"] == pytest.approx(-1)
+    assert len(sim_state["food_items"]) <= math.ceil(winter_cap)
+
+
+def test_season_is_the_last_brain_input():
+    sim_state = _make_sim()
+    sim_state["tick"] = config.SEASON_LENGTH_TICKS // 8
+    update_world(sim_state)
+    for c in sim_state["creatures"] + sim_state["carnivores"]:
+        assert c.brain_inputs[-1] == pytest.approx(sim_state["season"])

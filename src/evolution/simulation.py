@@ -16,6 +16,7 @@ from .config import (
     REPRODUCTION_POP_CAP_FACTOR, RESPAWN_IMMUNITY_TICKS,
     LITTER_ENDOWMENT, LITTER_SPREAD,
     SCORE_SAMPLE_INTERVAL, CHART_HISTORY_SAVE_MAX, NUM_MEMORY, DAY_LENGTH_TICKS,
+    SEASON_LENGTH_TICKS, SEASON_FOOD_AMPLITUDE,
     FOOD_PATCH_COUNT, FOOD_PATCH_SHARE, FOOD_PATCH_RADIUS, FOOD_PATCH_SPEED, FOOD_PATCH_TURN,
 )
 from .entities import Carcass, Creature, Food, Obstacle
@@ -44,6 +45,7 @@ def build_sim_state(world_bounds, creatures, carnivores, food_items, obstacles):
             for _ in range(FOOD_PATCH_COUNT)
         ],
         "light": 1.0,
+        "season": 0.0,
         "creatures": creatures,
         "carnivores": carnivores,
         "food_items": food_items,
@@ -101,6 +103,21 @@ def batch_forward(creatures, inputs_list):
 def day_light(tick):
     """0 at midnight, 1 at noon; a run starts at noon."""
     return 0.5 + 0.5 * math.cos(2 * math.pi * tick / DAY_LENGTH_TICKS)
+
+
+def season(tick):
+    """-1 at midwinter, 1 at midsummer; a run starts in spring (0, rising)."""
+    return math.sin(2 * math.pi * tick / SEASON_LENGTH_TICKS)
+
+
+def season_name(tick):
+    phase = (tick / SEASON_LENGTH_TICKS) % 1
+    return ("Spring", "Summer", "Autumn", "Winter")[int((phase + 0.125) * 4) % 4]
+
+
+def food_cap(season_value):
+    """Most food items on the map at once: plentiful summers, lean winters."""
+    return NUM_FOOD * 1.5 * (1 + SEASON_FOOD_AMPLITUDE * season_value)
 
 
 def _update_food_patches(sim_state):
@@ -292,6 +309,7 @@ def _repopulate_from_hof(is_carnivore, count, default_genes, sim_state,
 def update_world(sim_state, prometheus_metrics=None, worker_id=None):
     sim_state["tick"] += 1
     sim_state["light"] = light = day_light(sim_state["tick"])
+    sim_state["season"] = season_value = season(sim_state["tick"])
     grid = sim_state["grid"]
     for food in sim_state["food_items"]:
         food.update()
@@ -300,7 +318,7 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
     ]
     if "food_patches" in sim_state:
         _update_food_patches(sim_state)
-    if random.random() < FOOD_RESPAWN_RATE and len(sim_state["food_items"]) < NUM_FOOD * 1.5:
+    if random.random() < FOOD_RESPAWN_RATE and len(sim_state["food_items"]) < food_cap(season_value):
         sim_state["food_items"].append(_spawn_food(sim_state))
     carcasses = sim_state.setdefault("carcasses", [])
     for carcass in carcasses:
@@ -327,7 +345,8 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
         carcass_grid.insert(cc)
 
     all_inputs = perceive_all(all_creatures, sim_state["food_items"], sim_state["creatures"],
-                              sim_state["carnivores"], sim_state["obstacles"], carcasses, light)
+                              sim_state["carnivores"], sim_state["obstacles"], carcasses, light,
+                              season_value)
     all_outputs = batch_forward(all_creatures, all_inputs)
     if len(all_outputs):
         signals = np.maximum(0.0, all_outputs[:, 2]).tolist()

@@ -167,6 +167,10 @@ FOOD_PATCH_TURN = 0.05
 DAY_LENGTH_TICKS = 3600
 NIGHT_SIGHT_FACTOR = 0.35       # share of sight distance left at midnight
 
+# --- Seasons ---
+SEASON_LENGTH_TICKS = 8 * DAY_LENGTH_TICKS   # one year; a run starts in spring
+SEASON_FOOD_AMPLITUDE = 0.6     # food cap x (1 + 0.6 * season): summer 1.6x, winter 0.4x
+
 # --- Neural Network ---
 NUM_WHISKERS = 3
 NUM_MEMORY = 2
@@ -179,6 +183,7 @@ BRAIN_INPUTS = (
     + 2 + 1       # carcass angle/dist, light
     + NUM_MEMORY
     + NUM_WHISKERS  # target whiskers (food / prey along each ray)
+    + 1             # season
 )
 BRAIN_OUTPUTS = 3 + NUM_MEMORY  # rotation, speed, signal, memory
 BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]

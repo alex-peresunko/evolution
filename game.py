@@ -15,7 +15,8 @@ from prometheus_client import start_http_server
 from evolution import config
 from evolution.entities import Creature, Food, Obstacle
 from evolution.simulation import (update_world, create_initial_population, build_sim_state,
-                                  restore_progress, save_hall_of_fame, species_history)
+                                  food_cap, restore_progress, save_hall_of_fame, season_name,
+                                  species_history)
 from evolution.genetics import mutate_brain, mutate_genes
 from evolution.neural_network import NeuralNetwork
 from evolution.metrics import GameMetrics
@@ -357,6 +358,7 @@ def draw_elements(screen, font, sim_state):
         f"Lineages: H {sim_state['lineages']['herbivore']}  C {sim_state['lineages']['carnivore']}",
         f"Food: {len(sim_state['food_items'])}   Carcasses: {len(sim_state.get('carcasses', ()))}",
         _time_of_day(sim_state.get("light", 1.0)),
+        f"Season: {season_name(sim_state['tick'])} (food cap {food_cap(sim_state['season']):.0f})",
         f"Top Herbivore Score: {max([c.score for c in sim_state['creatures']] + [0]):.2f}",
         f"Top Carnivore Score: {max([c.score for c in sim_state['carnivores']] + [0]):.2f}",
         f"Longest H: {sim_state['max_age_herbivore']} ticks",

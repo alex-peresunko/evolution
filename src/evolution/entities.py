@@ -306,9 +306,10 @@ class Creature:
         gain = self._gain_meat(eaten)
         self.score += gain / CARNIVORE_HEALTH_PER_FOOD * SCAVENGE_SCORE_FACTOR
 
-    def see(self, food_items, obstacles, herbivores=None, carnivores=None, carcasses=(), light=1.0):
+    def see(self, food_items, obstacles, herbivores=None, carnivores=None, carcasses=(), light=1.0,
+            season=0.0):
         return perceive_all([self], food_items, herbivores or [], carnivores or [], obstacles,
-                            carcasses, light)[0].tolist()
+                            carcasses, light, season)[0].tolist()
 
     def think(self, inputs):
         return self.brain.forward(inputs)

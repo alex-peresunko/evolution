@@ -36,11 +36,23 @@ World mechanics, all tuned through `config.py`:
 - **Weight:** food eaten at full health is stored as `c.fat` (`Creature._absorb`, `FAT_STORE_EFFICIENCY`, capped at `FAT_MAX`). Fat grows the body (`c.size`, `FAT_SIZE_FACTOR`) and lowers speed (`FAT_SPEED_PENALTY`). It burns slowly (`FAT_BURN_PER_TICK`) and pays the starvation penalty before health does. Carnivore meals continue past full health until the carnivore is stuffed (`_is_stuffed`).
 - **Food patches:** `sim_state["food_patches"]` drift around the map, and most respawned food lands near one.
 - **Day/night:** `day_light(tick)` goes into `sim_state["light"]`. At night vision cones and target whiskers shrink (`NIGHT_SIGHT_FACTOR`), while obstacle whiskers and smell don't.
+- **Upkeep:** the base per-tick health loss is `Creature.upkeep()`. It is `HEALTH_LOSS_PER_TICK` times a weighted sum (`UPKEEP_WEIGHTS`, summing to 1) of trait/species-default ratios:
+  - the lean body, Kleiber-scaled (`KLEIBER_EXPONENT`);
+  - sight distance × angle;
+  - stamina;
+  - lifespan;
+  - attractiveness.
+
+  A creature with default genes pays exactly `HEALTH_LOSS_PER_TICK`, and every other trait has a cost.
+- **Life history:** past its `lifespan` gene, a creature loses an extra `Creature.senescence()` per tick. A pair has a litter of `stochastic_round(mean litter_size)` young, which split `LITTER_ENDOWMENT` of max health between them.
+- **Speciation:** only pairs within `SPECIATION_DISTANCE` (`genetics.genetic_distance`, the RMS of gene differences scaled by `GENE_MIN_MAX` ranges) breed or seek each other. The neutral `color` gene hue-shifts the sprite (`COLOR_BUCKETS`, `COLOR_HUE_RANGE`).
+- **Seasons:** `season(tick)` runs over `SEASON_LENGTH_TICKS` and goes into `sim_state["season"]` (-1 is midwinter, 1 is midsummer). It scales the food cap (`food_cap`, `SEASON_FOOD_AMPLITUDE`) and is the last brain input.
+- **Lineage:** a child inherits `lineage` (the founder id) from its first parent and gets `parent_ids` and `descent`. At each score sample, `sample_genes` records the species' mean genes in `sim_state["gene_history"]` and the number of live lineages in `sim_state["lineages"]`.
 - **Signal and memory:** after `batch_forward`, the extra outputs are stored as `c.signal` (heard by kin within `SIGNAL_RADIUS`, with a small health cost) and `c.memory` (fed back as inputs next tick).
 
 Evolution is continuous: creatures die and are "retired" (`_retire_creature` updates the Hall of Fame and saves the brain), and eligible nearby adults reproduce (brain crossover + gene averaging + mutation, in `genetics.py`). The reproduction cooldown is counted in ticks (`REPRODUCTION_COOLDOWN_TICKS`), so behavior doesn't depend on simulation speed. After an extinction, the species is repopulated from the Hall of Fame.
 
-**`game_headless_multiproc.py` diverges:** it has its own `update_world` and a *generational* `evolve_population`, and it ships `LeanCreature`/`LeanFood` dataclasses to worker processes for IPC. Changes to `simulation.update_world` do not carry over to it automatically. It only stores signal/memory: it keeps instant kills and has no carcasses, food patches or night.
+**`game_headless_multiproc.py` diverges:** it has its own `update_world` and a *generational* `evolve_population`, and it ships `LeanCreature`/`LeanFood` dataclasses to worker processes for IPC. Changes to `simulation.update_world` do not carry over to it automatically. It only stores signal/memory: it keeps instant kills and has no carcasses, food patches, night, seasons, litters or speciation. Upkeep, senescence and the heritable mutation rate do reach it, because they live in `Creature`/`genetics`.
 
 ### Island workers (game.py)
 
@@ -69,7 +81,7 @@ Hall of Fame autosaves happen at most once per `AUTOSAVE_INTERVAL` ticks. A reco
 
 ### Neural network
 
-Topology is `config.BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]` = `[31, 16, 8, 5]`, tanh on all layers. Changing the inputs in `perception.perceive_all` means updating the `BRAIN_INPUTS` formula too. Append new inputs/outputs at the end: `NeuralNetwork.load` copies the overlapping top-left block, so saved brains keep their existing wiring. Inputs, in order:
+Topology is `config.BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]` = `[32, 16, 8, 5]`, tanh on all layers. Changing the inputs in `perception.perceive_all` means updating the `BRAIN_INPUTS` formula too. Append new inputs/outputs at the end: `NeuralNetwork.load` copies the overlapping top-left block, so saved brains keep their existing wiring. Inputs, in order:
 
 ```
 whisker[0..2]                obstacle proximity (1 = touching)
@@ -87,13 +99,23 @@ memory[0..NUM_MEMORY-1]            own memory outputs from the previous tick
 target_whisker[0..2]               food (herbivore) / prey or carcass (carnivore) within
                                    WHISKER_TARGET_WIDTH of each whisker ray, up to the night-
                                    shrunk sight, occluded by obstacles (1 = touching, 0 = none)
+season                             -1 = midwinter, 1 = midsummer
 ```
 
 Outputs: `[rotation_delta, speed, signal, memory...]`. `_apply_mate_seeking_drive` may override them for adults.
 
 ### Genes
 
-`size`, `max_speed`, `sight_distance`, `sight_angle`, `max_stamina`, `attractiveness`, all clamped by `config.GENE_MIN_MAX`. Larger size reduces speed, and stamina adds to effective size.
+Genes:
+- traits: `size`, `max_speed`, `sight_distance`, `sight_angle`, `max_stamina`, `attractiveness`;
+- life history (shared by both species, `_LIFE_HISTORY_GENES`): `mutation_rate` and `mutation_amount` (the offspring's brain mutation, applied via `genetics.mutate_brain`), `lifespan`, `litter_size` and `color`.
+
+Details:
+- All genes are clamped by `config.GENE_MIN_MAX`.
+- Genes mutate multiplicatively (±`GENE_MUTATION_AMOUNT`), except those listed in `ADDITIVE_GENE_MUTATION` (`color`).
+- `Creature` fills in missing genes from the species defaults, so older saves load.
+- Larger size reduces speed, and stamina adds to effective size.
+- Never call `brain.mutate(MUTATION_RATE, ...)` directly for offspring or copies. Use `mutate_brain(brain, genes)` so the heritable rate applies.
 
 ### Saved brains
 
@@ -101,7 +123,7 @@ Outputs: `[rotation_delta, speed, signal, memory...]`. `_apply_mate_seeking_driv
 
 ## game.py controls
 
-Space pause · +/- simulation speed (1–32 ticks per frame) · S save brains · L load brains · Enter toggle FPS cap · [ / ] shrink/grow the score charts · D toggle drawing · N toggle the brain panel of the selected creature (node activations, strongest weight×activation connections, top input drivers, output history) · B background mode + island workers · left-click: spawn food / select creature (the camera follows it; when it dies, it jumps to the best of that species; a minimap click stops following) · minimap drag to pan.
+Space pause · +/- simulation speed (1–32 ticks per frame) · S save brains · L load brains · Enter toggle FPS cap · [ / ] shrink/grow the score charts · D toggle drawing · G toggle the gene-drift chart (species mean genes ÷ defaults, for the selected creature's species) · N toggle the brain panel of the selected creature (node activations, strongest weight×activation connections, top input drivers, output history) · B background mode + island workers · left-click: spawn food / select creature (the camera follows it; when it dies, it jumps to the best of that species; a minimap click stops following) · minimap drag to pan.
 
 ## Metrics
 
