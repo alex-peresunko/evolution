@@ -106,3 +106,17 @@ def test_genetic_distance_is_symmetric_and_range_scaled():
     assert genetic_distance(g, far) == pytest.approx(((hi - g["color"]) / (hi - lo)) / n ** 0.5)
     assert compatible(g, near)
     assert not compatible({**g, "color": lo, "size": 5}, {**g, "color": hi, "size": 25})
+
+
+def test_combine_brains_takes_each_neuron_from_one_parent():
+    import numpy as np
+    np.random.seed(3)
+    brain1 = NeuralNetwork([4, 6, 2])
+    brain2 = NeuralNetwork([4, 6, 2])
+    child = combine_brains(brain1, brain2)
+    for w, b, w1, b1, w2, b2 in zip(child.weights, child.biases, brain1.weights, brain1.biases,
+                                    brain2.weights, brain2.biases):
+        for j in range(w.shape[1]):
+            from_1 = (w[:, j] == w1[:, j]).all() and b[0, j] == b1[0, j]
+            from_2 = (w[:, j] == w2[:, j]).all() and b[0, j] == b2[0, j]
+            assert from_1 or from_2

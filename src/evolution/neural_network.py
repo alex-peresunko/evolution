@@ -17,7 +17,7 @@ class NeuralNetwork:
         self.layer_sizes = layer_sizes
         self.weights, self.biases = [], []
         for i in range(len(layer_sizes) - 1):
-            w = np.random.randn(layer_sizes[i], layer_sizes[i + 1]) * 0.1
+            w = np.random.randn(layer_sizes[i], layer_sizes[i + 1]) / np.sqrt(layer_sizes[i])
             self.weights.append(w)
             b = np.random.randn(1, layer_sizes[i + 1]) * 0.1
             if i == len(layer_sizes) - 2:
@@ -35,13 +35,9 @@ class NeuralNetwork:
     def mutate(self, mutation_rate, mutation_amount):
         for i in range(len(self.weights)):
             w_mask = np.random.rand(*self.weights[i].shape) < mutation_rate
-            self.weights[i] += w_mask * np.random.uniform(
-                -mutation_amount, mutation_amount, self.weights[i].shape
-            )
+            self.weights[i] += w_mask * np.random.randn(*self.weights[i].shape) * mutation_amount
             b_mask = np.random.rand(*self.biases[i].shape) < mutation_rate
-            self.biases[i] += b_mask * np.random.uniform(
-                -mutation_amount, mutation_amount, self.biases[i].shape
-            )
+            self.biases[i] += b_mask * np.random.randn(*self.biases[i].shape) * mutation_amount
 
     def copy(self):
         new_nn = NeuralNetwork(self.layer_sizes)

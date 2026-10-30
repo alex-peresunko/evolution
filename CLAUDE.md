@@ -10,6 +10,7 @@ poetry install                                   # deps (Python >=3.12)
 poetry run python game.py                        # graphical (requires display)
 poetry run python game_headless.py               # headless, auto-loads saved brains, Prometheus on :8000
 poetry run python game_headless_multiproc.py     # headless + ProcessPoolExecutor
+poetry run python pretrain.py                    # behavior-cloning pretrain -> pretrained_brain_*.json (--install: best_brain_*.json)
 
 poetry run pytest                                # all tests (no pygame required)
 poetry run pytest tests/test_genetics.py         # one file
@@ -50,7 +51,7 @@ World mechanics, all tuned through `config.py`:
 - **Lineage:** a child inherits `lineage` (the founder id) from its first parent and gets `parent_ids` and `descent`. At each score sample, `sample_genes` records the species' mean genes in `sim_state["gene_history"]` and the number of live lineages in `sim_state["lineages"]`.
 - **Signal and memory:** after `batch_forward`, the extra outputs are stored as `c.signal` (heard by kin within `SIGNAL_RADIUS`, with a small health cost) and `c.memory` (fed back as inputs next tick).
 
-Evolution is continuous: creatures die and are "retired" (`_retire_creature` updates the Hall of Fame and saves the brain), and eligible nearby adults reproduce (brain crossover + gene averaging + mutation, in `genetics.py`). The reproduction cooldown is counted in ticks (`REPRODUCTION_COOLDOWN_TICKS`), so behavior doesn't depend on simulation speed. After an extinction, the species is repopulated from the Hall of Fame.
+Evolution is continuous: creatures die and are "retired" (`_retire_creature` updates the Hall of Fame and saves the brain), and eligible nearby adults reproduce (brain crossover + gene averaging + mutation, in `genetics.py`). Crossover is neuron-wise: each neuron's incoming weights and bias come from one parent. Mates are ranked by attractiveness. Two optional selection boosts are off by default (both 0), because an A/B run showed no gain: `MATE_SCORE_WEIGHT` adds score to mate ranking, and `ELITE_REINJECT_INTERVAL` periodically replaces the weakest `ELITE_REINJECT_COUNT` creatures of each species with the Hall of Fame brain and mutated copies (`islands.inject_immigrants`). The reproduction cooldown is counted in ticks (`REPRODUCTION_COOLDOWN_TICKS`), so behavior doesn't depend on simulation speed. After an extinction, the species is repopulated from the Hall of Fame.
 
 **`game_headless_multiproc.py` diverges:** it has its own `update_world` and a *generational* `evolve_population`, and it ships `LeanCreature`/`LeanFood` dataclasses to worker processes for IPC. Changes to `simulation.update_world` do not carry over to it automatically. It only stores signal/memory: it keeps instant kills and has no carcasses, food patches, night, seasons, litters or speciation. Upkeep, senescence and the heritable mutation rate do reach it, because they live in `Creature`/`genetics`.
 
@@ -118,6 +119,10 @@ Details:
 - `Creature` fills in missing genes from the species defaults, so older saves load.
 - Larger size reduces speed, and stamina adds to effective size.
 - Never call `brain.mutate(MUTATION_RATE, ...)` directly for offspring or copies. Use `mutate_brain(brain, genes)` so the heritable rate applies.
+
+### Pretraining (imitation.py)
+
+`imitation.teacher_actions` is a hand-written policy over perception rows: seek the target, follow carcasses and smell (carnivores), flee strong predator smell (herbivores), and steer off near obstacles. Its column indices must match `perceive_all`'s layout. `train_brain` fits a brain to it with numpy backprop (Adam, MSE). `pretrain.py` collects rows DAgger-style (round 1 uses random brains, later rounds the current student) and disables Hall of Fame autosave in its worlds.
 
 ### Saved brains
 

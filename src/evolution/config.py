@@ -198,6 +198,12 @@ ADDITIVE_GENE_MUTATION = {"color": 0.03}  # genes mutated by +-amount instead
 # Speciation: mates must be within this RMS gene distance (each gene / its GENE_MIN_MAX range).
 SPECIATION_DISTANCE = 0.12
 SURVIVAL_RATE = 0.15
+# Every ELITE_REINJECT_INTERVAL ticks the lowest-scoring ELITE_REINJECT_COUNT creatures of each
+# species are replaced by the Hall of Fame brain and mutated copies (0 disables).
+ELITE_REINJECT_INTERVAL = 0
+ELITE_REINJECT_COUNT = 2
+# Mate choice: attractiveness / default plus this weight times score / best candidate's score.
+MATE_SCORE_WEIGHT = 0.0
 AUTOSAVE_INTERVAL = 100
 RESPAWN_IMMUNITY_TICKS = 500
 

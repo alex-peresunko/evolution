@@ -149,3 +149,36 @@ def test_season_is_the_last_brain_input():
     update_world(sim_state)
     for c in sim_state["creatures"] + sim_state["carnivores"]:
         assert c.brain_inputs[-1] == pytest.approx(sim_state["season"])
+
+
+def test_elite_reinjection_replaces_the_weakest_with_hall_of_fame():
+    from evolution.neural_network import NeuralNetwork
+    from evolution.simulation import _reinject_elites
+
+    sim_state = _make_sim(n_herbs=10, n_carns=2)
+    for i, c in enumerate(sim_state["creatures"]):
+        c.score = i
+    weakest = {id(c) for c in sim_state["creatures"][:config.ELITE_REINJECT_COUNT]}
+    elite = NeuralNetwork(config.BRAIN_TOPOLOGY)
+    sim_state["hall_of_fame"]["herbivore"] = {
+        "score": 99, "brain": elite, "genes": dict(config.DEFAULT_HERBIVORE_GENES)}
+    carnivores = list(sim_state["carnivores"])
+    _reinject_elites(sim_state)
+    assert len(sim_state["creatures"]) == 10
+    assert not weakest & {id(c) for c in sim_state["creatures"]}
+    assert any((c.brain.weights[0] == elite.weights[0]).all() for c in sim_state["creatures"])
+    assert sim_state["carnivores"] == carnivores  # no Hall of Fame, too few to touch
+
+
+def test_mate_preference_weighs_score_against_attractiveness(monkeypatch):
+    from evolution import simulation
+    from evolution.simulation import _mate_preference
+
+    monkeypatch.setattr(simulation, "MATE_SCORE_WEIGHT", 1.0)
+
+    plain_skilled, pretty_unskilled = Creature(WORLD_BOUNDS), Creature(WORLD_BOUNDS)
+    plain_skilled.score, plain_skilled.attractiveness = 10.0, 10
+    pretty_unskilled.score, pretty_unskilled.attractiveness = 0.0, 15
+    mates = [plain_skilled, pretty_unskilled]
+    key = _mate_preference(mates, config.DEFAULT_HERBIVORE_GENES)
+    assert max(mates, key=key) is plain_skilled

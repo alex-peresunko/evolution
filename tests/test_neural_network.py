@@ -56,3 +56,10 @@ def test_load_topology_mismatch_no_crash():
     assert nn2.layer_sizes == [6, 3, 2]
     out = nn2.forward([0.0] * 6)
     assert len(out) == 2
+
+
+def test_random_brains_behave_differently():
+    np.random.seed(11)
+    x = np.random.uniform(-1, 1, 32)
+    turns = [NeuralNetwork([32, 16, 8, 5]).forward(x)[0] for _ in range(50)]
+    assert np.std(turns) > 0.2

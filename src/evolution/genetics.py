@@ -7,12 +7,12 @@ from .config import (ADDITIVE_GENE_MUTATION, GENE_MIN_MAX, GENE_MUTATION_AMOUNT,
 
 
 def combine_brains(brain1: NeuralNetwork, brain2: NeuralNetwork) -> NeuralNetwork:
+    """Each neuron's incoming weights and bias come from one parent, as a unit."""
     child = brain1.copy()
     for i in range(len(child.weights)):
-        mask = np.random.rand(*child.weights[i].shape) < 0.5
-        child.weights[i][mask] = brain2.weights[i][mask]
-        mask_b = np.random.rand(*child.biases[i].shape) < 0.5
-        child.biases[i][mask_b] = brain2.biases[i][mask_b]
+        from_2 = np.random.rand(child.weights[i].shape[1]) < 0.5
+        child.weights[i][:, from_2] = brain2.weights[i][:, from_2]
+        child.biases[i][:, from_2] = brain2.biases[i][:, from_2]
     return child
 
 

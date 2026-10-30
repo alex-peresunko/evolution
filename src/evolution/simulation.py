@@ -14,6 +14,7 @@ from .config import (
     MATE_SEEK_DANGER_THRESHOLD, MATE_SEEK_BLEND, MATE_SEEK_MIN_SPEED,
     REPRODUCTION_HEALTH_THRESHOLD, MAX_REPRODUCTIONS, REPRODUCTION_COOLDOWN_TICKS,
     REPRODUCTION_POP_CAP_FACTOR, RESPAWN_IMMUNITY_TICKS,
+    ELITE_REINJECT_INTERVAL, ELITE_REINJECT_COUNT, MATE_SCORE_WEIGHT,
     LITTER_ENDOWMENT, LITTER_SPREAD,
     SCORE_SAMPLE_INTERVAL, CHART_HISTORY_SAVE_MAX, NUM_MEMORY, DAY_LENGTH_TICKS,
     SEASON_LENGTH_TICKS, SEASON_FOOD_AMPLITUDE,
@@ -22,6 +23,7 @@ from .config import (
 from .entities import Carcass, Creature, Food, Obstacle
 from .spatial import SpatialHashGrid
 from .genetics import combine_brains, combine_genes, compatible, mutate_brain, mutate_genes
+from .islands import inject_immigrants
 from .neural_network import NeuralNetwork
 from .perception import perceive_all
 from .brain_store import (read_saved_history, read_saved_score, save_brain, save_brain_if_better,
@@ -306,6 +308,21 @@ def _repopulate_from_hof(is_carnivore, count, default_genes, sim_state,
     return new_pop
 
 
+def _reinject_elites(sim_state):
+    for species, key in (("herbivore", "creatures"), ("carnivore", "carnivores")):
+        hof = sim_state["hall_of_fame"][species]
+        # Never replace a whole small population: the survivors carry the current diversity.
+        if hof["brain"] is not None and len(sim_state[key]) > 2 * ELITE_REINJECT_COUNT:
+            inject_immigrants(sim_state, species, hof["brain"], hof["genes"],
+                              count=ELITE_REINJECT_COUNT)
+
+
+def _mate_preference(mates, default_genes):
+    top_score = max((m.score for m in mates), default=0) or 1.0
+    return lambda m: (m.attractiveness / default_genes["attractiveness"]
+                      + MATE_SCORE_WEIGHT * m.score / top_score)
+
+
 def update_world(sim_state, prometheus_metrics=None, worker_id=None):
     sim_state["tick"] += 1
     sim_state["light"] = light = day_light(sim_state["tick"])
@@ -395,6 +412,9 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
             )
             sim_state["generation"] += 1
 
+    if ELITE_REINJECT_INTERVAL and sim_state["tick"] % ELITE_REINJECT_INTERVAL == 0:
+        _reinject_elites(sim_state)
+
     if sim_state["tick"] % SCORE_SAMPLE_INTERVAL == 0:
         sim_state["herbivore_score_history"].append(sim_state["hall_of_fame"]["herbivore"]["score"])
         sim_state["carnivore_score_history"].append(sim_state["hall_of_fame"]["carnivore"]["score"])
@@ -447,7 +467,8 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
                                if eligible[j].id not in reproduced_ids
                                and compatible(p1.genes, eligible[j].genes, constraints)]
             if potential_mates:
-                best_mate = max(potential_mates, key=lambda mate: mate.attractiveness)
+                best_mate = max(potential_mates,
+                                key=_mate_preference(potential_mates, default_genes))
                 litter = min(_stochastic_round((p1.genes["litter_size"] + best_mate.genes["litter_size"]) / 2),
                              pop_cap - len(group) - len(new_offspring))
                 for _ in range(litter):
