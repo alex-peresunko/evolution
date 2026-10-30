@@ -1,5 +1,5 @@
 from evolution import config
-from evolution.camera import follow_target, viewport_origin
+from evolution.camera import follow_target, min_zoom, viewport_origin, zoom_at
 from evolution.entities import Creature
 from evolution.simulation import build_sim_state
 
@@ -47,3 +47,20 @@ def test_viewport_origin_centers_and_clamps():
     assert viewport_origin(10, 10, world, screen) == (0, 0)
     assert viewport_origin(3990, 1990, world, screen) == (3000, 1500)
     assert viewport_origin(500, 300, screen, screen) == (0, 0)
+
+
+def test_min_zoom_fits_the_world():
+    assert min_zoom((4000, 2000), (1000, 500)) == 0.25
+    assert min_zoom((1920, 900), (1920, 900)) == 1.0
+
+
+def test_zoom_keeps_the_point_under_the_cursor():
+    world, screen = (4000, 2000), (1000, 500)
+    cam = zoom_at((1000, 500), 1.0, 2.0, (300, 200), world, screen)
+    assert cam == (1150, 600)  # world (1300, 700) is still under screen (300, 200)
+    assert zoom_at(cam, 2.0, 1.0, (300, 200), world, screen) == (1000, 500)
+
+
+def test_zoom_out_clamps_to_the_world():
+    world = screen = (1000, 500)
+    assert zoom_at((400, 200), 2.0, 1.0, (500, 250), world, screen) == (0, 0)

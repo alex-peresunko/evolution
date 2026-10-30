@@ -79,6 +79,8 @@ Hall of Fame autosaves happen at most once per `AUTOSAVE_INTERVAL` ticks. A reco
 - pulsing rings around creatures that are signalling;
 - a night overlay scaled by `sim_state["light"]`, with food glowing through it.
 
+Zoom (`sim_state["zoom"]`, mouse wheel): at zoom 1 the view is drawn straight to the screen. Otherwise `draw_world` renders the visible world rect (screen size / zoom) to an off-screen surface at native scale and smoothscales it up, so sprite caches are unaffected. Screen↔world conversions in `game.py` go through `_screen_to_world` / `_view_size`, and the zoom math (`zoom_at`, `min_zoom`) lives in `camera.py`.
+
 ### Neural network
 
 Topology is `config.BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]` = `[32, 16, 8, 5]`, tanh on all layers. Changing the inputs in `perception.perceive_all` means updating the `BRAIN_INPUTS` formula too. Append new inputs/outputs at the end: `NeuralNetwork.load` copies the overlapping top-left block, so saved brains keep their existing wiring. Inputs, in order:
@@ -123,7 +125,7 @@ Details:
 
 ## game.py controls
 
-Space pause · +/- simulation speed (1–32 ticks per frame) · S save brains · L load brains · Enter toggle FPS cap · [ / ] shrink/grow the score charts · D toggle drawing · G toggle the gene-drift chart (species mean genes ÷ defaults, for the selected creature's species) · N toggle the brain panel of the selected creature (node activations, strongest weight×activation connections, top input drivers, output history) · B background mode + island workers · left-click: spawn food / select creature (the camera follows it; when it dies, it jumps to the best of that species; a minimap click stops following) · minimap drag to pan.
+Space pause · +/- simulation speed (1–32 ticks per frame) · S save brains · L load brains · Enter toggle FPS cap · [ / ] shrink/grow the score charts · D toggle drawing · G toggle the gene-drift chart (species mean genes ÷ defaults, for the selected creature's species) · N toggle the brain panel of the selected creature (node activations, strongest weight×activation connections, top input drivers, output history) · B background mode + island workers · mouse wheel zoom (`ZOOM_STEP` per notch, up to `ZOOM_MAX`, around the cursor) · left-click: spawn food / select creature (the camera follows it; when it dies, it jumps to the best of that species; a minimap click stops following) · minimap drag to pan.
 
 ## Metrics
 

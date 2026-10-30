@@ -23,7 +23,7 @@ from evolution.metrics import GameMetrics
 from evolution.brain_store import save_brain
 from evolution.brain_view import (INPUT_LABELS, OUTPUT_LABELS, activations, edge_contributions,
                                   labels, network_layout, strong_edges, top_drivers)
-from evolution.camera import follow_target, viewport_origin
+from evolution.camera import follow_target, min_zoom, viewport_origin, zoom_at
 from evolution.render import Renderer
 from evolution.islands import (clear_island_files, import_if_better, publish_hall_of_fame,
                                worker_file)
@@ -207,10 +207,36 @@ def draw_gene_chart(screen, rect, species, gene_history, scale):
             pygame.draw.lines(screen, color, False, points, max(1, round(scale)))
 
 
+_WORLD_SIZE = (config.WORLD_WIDTH, config.WORLD_HEIGHT)
+_SCREEN_SIZE = (config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
+
+
+def _view_size(sim_state):
+    """The camera's view in world units."""
+    zoom = sim_state["zoom"]
+    return config.SCREEN_WIDTH / zoom, config.SCREEN_HEIGHT / zoom
+
+
+def _screen_to_world(pos, sim_state):
+    zoom = sim_state["zoom"]
+    return sim_state["cam_x"] + pos[0] / zoom, sim_state["cam_y"] + pos[1] / zoom
+
+
 def _set_viewport_center(wx, wy, sim_state):
     sim_state["cam_x"], sim_state["cam_y"] = viewport_origin(
-        wx, wy, (config.WORLD_WIDTH, config.WORLD_HEIGHT),
-        (config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
+        wx, wy, _WORLD_SIZE, _view_size(sim_state))
+
+
+def _zoom(sim_state, notches, anchor):
+    """Zoom by ZOOM_STEP per wheel notch around the screen point anchor."""
+    zoom = sim_state["zoom"]
+    new_zoom = min(config.ZOOM_MAX, max(min_zoom(_WORLD_SIZE, _SCREEN_SIZE),
+                                        zoom * config.ZOOM_STEP ** notches))
+    if abs(new_zoom - 1.0) < 1e-6:
+        new_zoom = 1.0  # snap back to the renderer's direct, unscaled path
+    sim_state["cam_x"], sim_state["cam_y"] = zoom_at(
+        (sim_state["cam_x"], sim_state["cam_y"]), zoom, new_zoom, anchor, _WORLD_SIZE, _SCREEN_SIZE)
+    sim_state["zoom"] = new_zoom
 
 
 def _follow_selected(sim_state):
@@ -337,8 +363,9 @@ def draw_minimap(screen, sim_state):
         if c.is_best:
             pygame.draw.circle(mmap, config.COLOR_BEST_CREATURE,
                                (int(c.pos.x * sx), int(c.pos.y * sy)), 3)
+    vw, vh = _view_size(sim_state)
     vr = pygame.Rect(int(sim_state["cam_x"] * sx), int(sim_state["cam_y"] * sy),
-                     max(1, int(config.SCREEN_WIDTH * sx)), max(1, int(config.SCREEN_HEIGHT * sy)))
+                     max(1, int(vw * sx)), max(1, int(vh * sy)))
     pygame.draw.rect(mmap, config.COLOR_TEXT, vr, 1)
     screen.blit(mmap, (config.MINIMAP_X, config.MINIMAP_Y))
     pygame.draw.rect(screen, config.COLOR_TEXT,
@@ -365,6 +392,7 @@ def draw_elements(screen, font, sim_state):
         f"Longest C: {sim_state['max_age_carnivore']} ticks",
         f"FPS: {int(sim_state['clock'].get_fps())} [{limit_status}]",
         f"Speed: x{sim_state['ticks_per_frame']}  ({sim_state['tps']} ticks/s)",
+        f"Zoom: x{sim_state['zoom']:.2f}",
     ]
     _draw_text_block(screen, font, stats, 10, text_y)
     selected = sim_state.get("selected_creature")
@@ -497,8 +525,7 @@ def handle_events(sim_state, prometheus_metrics):
                 wy = (event.pos[1] - config.MINIMAP_Y) / config.MINIMAP_HEIGHT * config.WORLD_HEIGHT
                 _set_viewport_center(wx, wy, sim_state)
             else:
-                world_mx = event.pos[0] + sim_state["cam_x"]
-                world_my = event.pos[1] + sim_state["cam_y"]
+                world_mx, world_my = _screen_to_world(event.pos, sim_state)
                 found = False
                 for c in sim_state["creatures"] + sim_state["carnivores"]:
                     if c.pos.distance_to((world_mx, world_my)) < c.size:
@@ -517,6 +544,8 @@ def handle_events(sim_state, prometheus_metrics):
                 wx = (event.pos[0] - config.MINIMAP_X) / config.MINIMAP_WIDTH * config.WORLD_WIDTH
                 wy = (event.pos[1] - config.MINIMAP_Y) / config.MINIMAP_HEIGHT * config.WORLD_HEIGHT
                 _set_viewport_center(wx, wy, sim_state)
+        elif event.type == pygame.MOUSEWHEEL and event.y:
+            _zoom(sim_state, event.y, pygame.mouse.get_pos())
         elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
             sim_state["minimap_dragging"] = False
 
@@ -578,6 +607,7 @@ def main():
         "worker_processes": [],
         "cam_x": 0.0,
         "cam_y": 0.0,
+        "zoom": 1.0,
         "minimap_dragging": False,
         "ticks_per_frame": 1,
         "chart_scale": config.CHART_SCALE_DEFAULT,

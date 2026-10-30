@@ -8,6 +8,8 @@ WORLD_HEIGHT = 900
 MINIMAP_WIDTH = 200
 MINIMAP_HEIGHT = int(WORLD_HEIGHT / WORLD_WIDTH * MINIMAP_WIDTH)
 MINIMAP_X, MINIMAP_Y = 10, 10
+ZOOM_MAX = 4.0               # mouse wheel zoom in game.py; the minimum fits the world
+ZOOM_STEP = 1.15             # zoom factor per wheel notch
 
 # --- Population ---
 NUM_HERBIVOROUS = 20

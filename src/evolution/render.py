@@ -296,6 +296,7 @@ class Renderer:
         self._phase = {}
         self._carcasses = {}
         self._night = None
+        self._view = None
         self._food = [[self._build_food(v, lvl) for lvl in range(FOOD_LEVELS)]
                       for v in range(FOOD_VARIANTS)]
 
@@ -443,7 +444,21 @@ class Renderer:
 
     # --- frame ---------------------------------------------------------------
     def draw_world(self, screen, sim_state):
+        """Draw the camera's view; when zoomed, render the visible world rect off-screen at
+        native scale and smoothscale it onto the screen."""
         self.frame += 1
+        zoom = sim_state.get("zoom", 1.0)
+        if zoom == 1.0:
+            self._draw_view(screen, sim_state)
+            return
+        sw, sh = screen.get_size()
+        size = (math.ceil(sw / zoom), math.ceil(sh / zoom))
+        if self._view is None or self._view.get_size() != size:
+            self._view = pygame.Surface(size).convert(screen)
+        self._draw_view(self._view, sim_state)
+        pygame.transform.smoothscale(self._view, (sw, sh), screen)
+
+    def _draw_view(self, screen, sim_state):
         cam_x, cam_y = sim_state["cam_x"], sim_state["cam_y"]
         sw, sh = screen.get_size()
         screen.blit(self.background, (0, 0), (int(cam_x), int(cam_y), sw, sh))
