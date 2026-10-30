@@ -16,7 +16,7 @@ from evolution.entities import Creature, Food, Obstacle
 from evolution.math_types import Vector2
 from evolution.spatial import SpatialHashGrid
 from evolution.simulation import create_initial_population, _apply_mate_seeking_drive
-from evolution.genetics import combine_brains, combine_genes, mutate_genes
+from evolution.genetics import combine_brains, combine_genes, mutate_brain, mutate_genes
 from evolution.metrics import GameMetrics
 from evolution.brain_store import read_saved_score, save_brain, save_brain_if_better
 
@@ -256,8 +256,8 @@ def evolve_population(sim_state, prometheus_metrics):
                 new_pop.append(progenitor)
                 for _ in range((count - 1) // 2):
                     b = progenitor_record["brain"].copy()
-                    b.mutate(config.MUTATION_RATE, config.MUTATION_AMOUNT)
                     g = mutate_genes(progenitor_record["genes"], default_genes)
+                    mutate_brain(b, g)
                     new_pop.append(Creature(sim_state["world_bounds"], brain=b,
                                             is_carnivore=is_carnivore, genes=g))
             while len(new_pop) < count:
@@ -274,8 +274,8 @@ def evolve_population(sim_state, prometheus_metrics):
                 new_brain = combine_brains(parent1.brain, parent2.brain)
             else:
                 new_brain = parent1.brain.copy()
-            new_brain.mutate(config.MUTATION_RATE, config.MUTATION_AMOUNT)
             new_genes = mutate_genes(parent1.genes, default_genes)
+            mutate_brain(new_brain, new_genes)
             new_pop.append(Creature(sim_state["world_bounds"], brain=new_brain,
                                     is_carnivore=is_carnivore, genes=new_genes))
         return new_pop

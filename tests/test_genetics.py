@@ -49,3 +49,46 @@ def test_combine_brains_values_mixed():
     matches_2 = np.sum(child.weights[0] == brain2.weights[0])
     total = child.weights[0].size
     assert matches_1 < total or matches_2 < total
+
+
+def test_mutate_brain_uses_the_creatures_own_rates():
+    import numpy as np
+
+    from evolution.genetics import mutate_brain
+    brain = NeuralNetwork([4, 3, 2])
+    frozen = brain.copy()
+    mutate_brain(frozen, {"mutation_rate": 0.0, "mutation_amount": 0.5})
+    for a, b in zip(frozen.weights, brain.weights):
+        np.testing.assert_array_equal(a, b)
+    wild = brain.copy()
+    mutate_brain(wild, {"mutation_rate": 1.0, "mutation_amount": 0.5})
+    assert all((a != b).all() for a, b in zip(wild.weights, brain.weights))
+
+
+def test_mutation_genes_are_inherited_and_clamped():
+    random.seed(3)
+    lo, hi = config.GENE_MIN_MAX["mutation_rate"]
+    g1 = {**config.DEFAULT_HERBIVORE_GENES, "mutation_rate": hi}
+    g2 = {**config.DEFAULT_HERBIVORE_GENES, "mutation_rate": hi}
+    child = combine_genes(g1, g2, config.DEFAULT_HERBIVORE_GENES)
+    assert hi * 0.85 <= child["mutation_rate"] <= hi
+
+
+def test_color_mutates_additively_within_bounds():
+    random.seed(4)
+    genes = {**config.DEFAULT_HERBIVORE_GENES, "color": 0.0}
+    amount = config.ADDITIVE_GENE_MUTATION["color"]
+    seen = set()
+    for _ in range(200):
+        c = mutate_genes(genes, config.DEFAULT_HERBIVORE_GENES)["color"]
+        assert 0.0 <= c <= amount
+        seen.add(c > 0)
+    assert seen == {True, False}  # moves off 0 although a multiplicative step could not
+
+
+def test_old_gene_dicts_get_defaults_for_new_genes():
+    old = {k: config.DEFAULT_HERBIVORE_GENES[k]
+           for k in ("size", "max_speed", "sight_distance", "sight_angle", "max_stamina",
+                     "attractiveness")}
+    child = combine_genes(old, old, config.DEFAULT_HERBIVORE_GENES)
+    assert set(child) == set(config.DEFAULT_HERBIVORE_GENES)

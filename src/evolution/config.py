@@ -27,13 +27,21 @@ WORKER_SYNC_INTERVAL = 300       # ticks between island brain exchanges (backgro
 ISLAND_IMMIGRANTS = 4            # weakest creatures replaced by an imported better brain
 
 # --- Gene Defaults ---
+# Shared by both species: brain mutation of the offspring, aging, litter size and a neutral
+# colour marker (drawn as a hue shift, used for speciation).
+_LIFE_HISTORY_GENES = {
+    "mutation_rate": 0.08, "mutation_amount": 0.15,
+    "lifespan": 10000, "litter_size": 1.0, "color": 0.5,
+}
 DEFAULT_HERBIVORE_GENES = {
     "size": 10, "max_speed": 5, "sight_distance": 150,
     "sight_angle": math.radians(180), "max_stamina": 1000, "attractiveness": 10,
+    **_LIFE_HISTORY_GENES,
 }
 DEFAULT_CARNIVORE_GENES = {
     "size": 6, "max_speed": 10, "sight_distance": 600,
     "sight_angle": math.radians(120), "max_stamina": 1200, "attractiveness": 10,
+    **_LIFE_HISTORY_GENES,
 }
 
 # --- Gene Constraints ---
@@ -44,6 +52,11 @@ GENE_MIN_MAX = {
     "sight_angle": (math.radians(10), math.radians(360)),
     "max_stamina": (500, 2500),
     "attractiveness": (1, 100),
+    "mutation_rate": (0.005, 0.4),
+    "mutation_amount": (0.02, 0.6),
+    "lifespan": (2000, 40000),
+    "litter_size": (1, 4),
+    "color": (0, 1),
 }
 CARNIVORE_GENE_MIN_MAX = {**GENE_MIN_MAX, "max_speed": (2, 15)}
 
@@ -65,6 +78,16 @@ REPRODUCTION_HEALTH_THRESHOLD = 0.6
 MAX_REPRODUCTIONS = 50
 HEALTH_LOSS_PER_TICK = 1
 HEALTH_LOSS_SPEED_FACTOR = 0.1
+# Upkeep: HEALTH_LOSS_PER_TICK times a weighted sum of trait / species-default ratios. The
+# weights sum to 1, so a creature with default genes pays exactly HEALTH_LOSS_PER_TICK.
+UPKEEP_WEIGHTS = {
+    "body": 0.5,            # (lean size / default size) ** KLEIBER_EXPONENT
+    "sight": 0.25,          # sight_distance * sight_angle
+    "stamina": 0.1,
+    "lifespan": 0.1,        # somatic maintenance
+    "attractiveness": 0.05,  # costly display (handicap)
+}
+KLEIBER_EXPONENT = 0.75
 REPRODUCTION_COOLDOWN_TICKS = 180   # 3 s at 60 TPS
 REPRODUCTION_POP_CAP_FACTOR = 10
 MATE_SELECTION_RADIUS = 50
@@ -153,7 +176,8 @@ BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]
 # --- Evolution ---
 MUTATION_RATE = 0.08
 MUTATION_AMOUNT = 0.15
-GENE_MUTATION_AMOUNT = 0.10
+GENE_MUTATION_AMOUNT = 0.10      # multiplicative, +-10% of the gene
+ADDITIVE_GENE_MUTATION = {"color": 0.03}  # genes mutated by +-amount instead
 SURVIVAL_RATE = 0.15
 AUTOSAVE_INTERVAL = 100
 RESPAWN_IMMUNITY_TICKS = 500

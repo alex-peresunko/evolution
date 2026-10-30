@@ -19,6 +19,7 @@ from .config import (
     RETALIATION_DAMAGE, CARCASS_MEAT_PER_SIZE, CARCASS_LIFETIME, CARCASS_EAT_RATE,
     SCAVENGE_SCORE_FACTOR, SIGNAL_HEALTH_COST, HERBIVORE_EAT_TICKS, CARNIVORE_EAT_TICKS,
     FAT_MAX, FAT_STORE_EFFICIENCY, FAT_BURN_PER_TICK, FAT_SPEED_PENALTY, FAT_SIZE_FACTOR,
+    UPKEEP_WEIGHTS, KLEIBER_EXPONENT,
 )
 from .math_types import Vector2 as _HeadlessVector2, SimpleRect as _HeadlessRect
 from .neural_network import NeuralNetwork
@@ -70,10 +71,8 @@ class Creature:
         self.age = 0
         self.is_adult = False
 
-        if genes:
-            self.genes = genes
-        else:
-            self.genes = DEFAULT_CARNIVORE_GENES.copy() if is_carnivore else DEFAULT_HERBIVORE_GENES.copy()
+        default_genes = DEFAULT_CARNIVORE_GENES if is_carnivore else DEFAULT_HERBIVORE_GENES
+        self.genes = {**default_genes, **(genes or {})}   # older saves lack the newer genes
 
         gene_constraints = CARNIVORE_GENE_MIN_MAX if is_carnivore else GENE_MIN_MAX
         for key, value in self.genes.items():
@@ -91,17 +90,36 @@ class Creature:
         self.max_stamina = base_stamina + (self.genetic_size * SIZE_STAMINA_FACTOR)
         self.stamina = self.max_stamina
 
-        base_size = DEFAULT_CARNIVORE_GENES["size"] if is_carnivore else DEFAULT_HERBIVORE_GENES["size"]
+        base_size = default_genes["size"]
         size_diff = self.genetic_size - base_size
         self.effective_max_speed = self.genetic_max_speed / (1 + max(0, size_diff * SIZE_SPEED_PENALTY_FACTOR))
 
         self.size = self.genetic_size * JUVENILE_SIZE_FACTOR
         self.max_speed = self.effective_max_speed * JUVENILE_SIZE_FACTOR
 
+        self.trait_upkeep = self._trait_upkeep(default_genes)
+
         self.whiskers = [0.0] * NUM_WHISKERS
         self.target_whiskers = [None] * NUM_WHISKERS
         self.whisker_angles = np.linspace(-self.sight_angle / 2, self.sight_angle / 2, NUM_WHISKERS)
         self.brain = brain if brain else NeuralNetwork(BRAIN_TOPOLOGY)
+
+    def _trait_upkeep(self, default_genes):
+        """Non-body share of the upkeep multiplier: each costly trait relative to its default."""
+        g, d = self.genes, default_genes
+        ratios = {
+            "sight": (g["sight_distance"] * g["sight_angle"]) / (d["sight_distance"] * d["sight_angle"]),
+            "stamina": g["max_stamina"] / d["max_stamina"],
+            "lifespan": g["lifespan"] / d["lifespan"],
+            "attractiveness": g["attractiveness"] / d["attractiveness"],
+        }
+        return sum(UPKEEP_WEIGHTS[k] * r for k, r in ratios.items())
+
+    def upkeep(self, growth_factor=1.0):
+        """Per-tick health cost of staying alive: Kleiber-scaled lean body plus costly traits."""
+        default_size = (DEFAULT_CARNIVORE_GENES if self.is_carnivore else DEFAULT_HERBIVORE_GENES)["size"]
+        body = (self.genetic_size * growth_factor / default_size) ** KLEIBER_EXPONENT
+        return HEALTH_LOSS_PER_TICK * (UPKEEP_WEIGHTS["body"] * body + self.trait_upkeep)
 
     def perceive_and_think(self, local_food, local_herbivores, local_carnivores, obstacles):
         inputs = self.see(local_food, obstacles, local_herbivores, local_carnivores)
@@ -154,7 +172,7 @@ class Creature:
         from_fat = min(self.fat, hunger_penalty)   # starvation is paid from fat first
         self.fat -= from_fat
         hunger_penalty -= from_fat
-        self.health -= (HEALTH_LOSS_PER_TICK + (new_speed * HEALTH_LOSS_SPEED_FACTOR) + hunger_penalty
+        self.health -= (self.upkeep(growth_factor) + (new_speed * HEALTH_LOSS_SPEED_FACTOR) + hunger_penalty
                         + self.signal * SIGNAL_HEALTH_COST)
         self.current_speed = new_speed
 
@@ -301,6 +319,7 @@ class Creature:
             "Score": round(self.score, 2),
             "Eating": self.eating_ticks,
             "Fat": f"{int(self.fat)}/{FAT_MAX}",
+            "Upkeep": round(self.upkeep(), 2),
             "Signal": round(self.signal, 2),
             "Memory": " ".join(f"{m:+.2f}" for m in self.memory),
             "Reproductions": self.reproductions,

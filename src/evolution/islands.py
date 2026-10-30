@@ -16,12 +16,10 @@ from .config import (
     DEFAULT_HERBIVORE_GENES,
     GENE_MIN_MAX,
     ISLAND_IMMIGRANTS,
-    MUTATION_AMOUNT,
-    MUTATION_RATE,
     RESPAWN_IMMUNITY_TICKS,
 )
 from .entities import Creature
-from .genetics import mutate_genes
+from .genetics import mutate_brain, mutate_genes
 from .neural_network import NeuralNetwork
 
 SAVE_DIR = "saved_brains"
@@ -59,8 +57,8 @@ def inject_immigrants(sim_state, species, brain, genes, count=ISLAND_IMMIGRANTS)
     for i in range(count):
         b, g = brain.copy(), dict(genes)
         if i:
-            b.mutate(MUTATION_RATE, MUTATION_AMOUNT)
             g = mutate_genes(genes, default_genes, gene_constraints=constraints)
+            mutate_brain(b, g)
         c = Creature(sim_state["world_bounds"], brain=b, is_carnivore=is_carnivore, genes=g,
                      **kwargs)
         c.respawn_immunity_ticks = RESPAWN_IMMUNITY_TICKS

@@ -8,7 +8,7 @@ from .config import (
     NUM_HERBIVOROUS, NUM_CARNIVORES, NUM_FOOD, WORLD_WIDTH, WORLD_HEIGHT, GRID_CELL_SIZE,
     DEFAULT_HERBIVORE_GENES, DEFAULT_CARNIVORE_GENES, GENE_MIN_MAX, CARNIVORE_GENE_MIN_MAX,
     HERBIVORE_HEALTH, CARNIVORE_HEALTH, FOOD_RESPAWN_RATE,
-    BRAIN_TOPOLOGY, MUTATION_RATE, MUTATION_AMOUNT, AUTOSAVE_INTERVAL,
+    BRAIN_TOPOLOGY, AUTOSAVE_INTERVAL,
     MATE_SELECTION_RADIUS, MATE_ATTRACTION_RADIUS, MATE_SEEK_HUNGER_THRESHOLD,
     MATE_SEEK_DANGER_THRESHOLD, MATE_SEEK_BLEND, MATE_SEEK_MIN_SPEED,
     REPRODUCTION_HEALTH_THRESHOLD, MAX_REPRODUCTIONS, REPRODUCTION_COOLDOWN_TICKS,
@@ -18,7 +18,7 @@ from .config import (
 )
 from .entities import Carcass, Creature, Food, Obstacle
 from .spatial import SpatialHashGrid
-from .genetics import combine_brains, combine_genes, mutate_genes
+from .genetics import combine_brains, combine_genes, mutate_brain, mutate_genes
 from .neural_network import NeuralNetwork
 from .perception import perceive_all
 from .brain_store import (read_saved_history, read_saved_score, save_brain, save_brain_if_better,
@@ -248,8 +248,8 @@ def _repopulate_from_hof(is_carnivore, count, default_genes, sim_state,
         ))
         for _ in range((count - 1) // 2):
             b = hof["brain"].copy()
-            b.mutate(MUTATION_RATE, MUTATION_AMOUNT)
             g = mutate_genes(hof["genes"], default_genes, gene_constraints=constraints)
+            mutate_brain(b, g)
             new_pop.append(Creature(
                 sim_state["world_bounds"], brain=b,
                 is_carnivore=is_carnivore, genes=g, **kwargs
@@ -404,7 +404,7 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
                 constraints = CARNIVORE_GENE_MIN_MAX if p1.is_carnivore else GENE_MIN_MAX
                 child_genes = combine_genes(p1.genes, best_mate.genes, default_genes, gene_constraints=constraints)
                 child_brain = combine_brains(p1.brain, best_mate.brain)
-                child_brain.mutate(MUTATION_RATE, MUTATION_AMOUNT)
+                mutate_brain(child_brain, child_genes)
                 child = Creature(
                     sim_state["world_bounds"], brain=child_brain,
                     is_carnivore=p1.is_carnivore, genes=child_genes,
@@ -443,8 +443,8 @@ def create_initial_population(count, is_carnivore, world_bounds, brain_file=None
                             genes=progenitor_genes, **kwargs)]
         for _ in range(count - 1):
             mutated_brain = progenitor_brain.copy()
-            mutated_brain.mutate(MUTATION_RATE, MUTATION_AMOUNT)
             mutated_genes = mutate_genes(progenitor_genes, default_genes, gene_constraints=constraints)
+            mutate_brain(mutated_brain, mutated_genes)
             new_pop.append(Creature(world_bounds, brain=mutated_brain, is_carnivore=is_carnivore,
                                     genes=mutated_genes, **kwargs))
         return new_pop, gen

@@ -16,7 +16,7 @@ from evolution import config
 from evolution.entities import Creature, Food, Obstacle
 from evolution.simulation import (update_world, create_initial_population, build_sim_state,
                                   restore_progress, save_hall_of_fame, species_history)
-from evolution.genetics import mutate_genes
+from evolution.genetics import mutate_brain, mutate_genes
 from evolution.neural_network import NeuralNetwork
 from evolution.metrics import GameMetrics
 from evolution.brain_store import save_brain
@@ -377,8 +377,8 @@ def handle_events(sim_state, prometheus_metrics):
                                                vec2_factory=_vec2, rect_factory=_rect)]
                     for _ in range(config.NUM_HERBIVOROUS - 1):
                         mb = brain.copy()
-                        mb.mutate(config.MUTATION_RATE, config.MUTATION_AMOUNT)
                         mg = mutate_genes(genes, config.DEFAULT_HERBIVORE_GENES)
+                        mutate_brain(mb, mg)
                         new_herbivores.append(Creature(sim_state["world_bounds"], brain=mb, genes=mg,
                                                        vec2_factory=_vec2, rect_factory=_rect))
                     sim_state["creatures"] = new_herbivores
@@ -394,9 +394,9 @@ def handle_events(sim_state, prometheus_metrics):
                                                vec2_factory=_vec2, rect_factory=_rect)]
                     for _ in range(config.NUM_CARNIVORES - 1):
                         mb = brain_c.copy()
-                        mb.mutate(config.MUTATION_RATE, config.MUTATION_AMOUNT)
                         mg = mutate_genes(genes_c, config.DEFAULT_CARNIVORE_GENES,
                                          gene_constraints=config.CARNIVORE_GENE_MIN_MAX)
+                        mutate_brain(mb, mg)
                         new_carnivores.append(Creature(sim_state["world_bounds"], brain=mb,
                                                        is_carnivore=True, genes=mg,
                                                        vec2_factory=_vec2, rect_factory=_rect))
