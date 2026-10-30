@@ -39,6 +39,7 @@ _CHART_FONTS = {}
 SPEEDS = (1, 2, 4, 8, 16, 32)  # simulation ticks per drawn frame
 _PANELS = {}
 _EDGE_LAYER = {}
+_FADE_LAYER = {}
 
 
 # =============================================================================
@@ -115,13 +116,29 @@ def _draw_panel(screen, rect, alpha=config.HUD_PANEL_ALPHA):
     screen.blit(panel, rect.topleft)
 
 
+def _draw_faded(screen, rect, alpha, draw, *args):
+    """Run draw(surface, *args), which paints in screen coordinates inside rect, on a reusable
+    transparent layer, then blit that rect at alpha, so panel, text and lines fade together."""
+    layer = _FADE_LAYER.get(screen.get_size())
+    if layer is None:
+        layer = _FADE_LAYER[screen.get_size()] = pygame.Surface(screen.get_size(),
+                                                                 pygame.SRCALPHA)
+    layer.fill((0, 0, 0, 0), rect)
+    layer.set_clip(rect)
+    draw(layer, *args)
+    layer.set_clip(None)
+    layer.set_alpha(alpha)
+    screen.blit(layer, rect.topleft, area=rect)
+
+
 def _time_of_day(light):
     phase = "Day" if light > 0.66 else "Dusk/Dawn" if light > 0.33 else "Night"
     return f"Time: {phase} ({int(light * 100)}% light)"
 
 
-def _draw_text_block(screen, font, lines, x, y, title=None, right=None):
-    """right: the panel's right edge on screen; when given, x is ignored."""
+def _draw_text_block(screen, font, lines, x, y, title=None, right=None, alpha=None):
+    """right: the panel's right edge on screen; when given, x is ignored. alpha: fade the whole
+    block (panel and text) instead of only the panel background."""
     surfs = ([font.render(title, True, config.COLOR_BEST_CREATURE)] if title else [])
     surfs += [font.render(line, True, config.COLOR_TEXT) for line in lines]
     line_h = font.get_linesize()
@@ -129,11 +146,18 @@ def _draw_text_block(screen, font, lines, x, y, title=None, right=None):
     text_w = max(s.get_width() for s in surfs)
     if right is not None:
         x = right - pad - text_w
-    _draw_panel(screen, pygame.Rect(x - pad, y - pad, text_w + pad * 2,
-                                    line_h * len(surfs) + pad * 2))
-    for surf in surfs:
-        screen.blit(surf, (x, y))
-        y += line_h
+    rect = pygame.Rect(x - pad, y - pad, text_w + pad * 2, line_h * len(surfs) + pad * 2)
+
+    def paint(surface, y=y):
+        _draw_panel(surface, rect, config.HUD_PANEL_ALPHA if alpha is None else 255)
+        for surf in surfs:
+            surface.blit(surf, (x, y))
+            y += line_h
+
+    if alpha is None:
+        paint(screen)
+    else:
+        _draw_faded(screen, rect, alpha, paint)
 
 
 def _chart_font(size):
@@ -143,22 +167,13 @@ def _chart_font(size):
     return font
 
 
-def _draw_translucent(screen, rect, alpha, draw, *args):
-    """Run draw(surface, local_rect, *args) on an offscreen layer, then blit it at alpha, so
-    panel, text and lines all fade together."""
-    layer = pygame.Surface(rect.size, pygame.SRCALPHA)
-    draw(layer, pygame.Rect((0, 0), rect.size), *args)
-    layer.set_alpha(alpha)
-    screen.blit(layer, rect.topleft)
-
-
 def draw_dual_chart(screen, rect, title, series, scale, generation):
     """Translucent panel with one line per (history, color, label) series, each scaled to its
     own peak (species scores differ by orders of magnitude), sized by the zoomable chart scale."""
     font = _chart_font(round(config.CHART_FONT_SIZE * scale))
     line_h = font.get_linesize()
     pad = round(4 * scale)
-    _draw_panel(screen, rect, 255)  # faded as a whole by _draw_translucent
+    _draw_panel(screen, rect, 255)  # faded as a whole by _draw_faded
     screen.blit(font.render(title, True, config.COLOR_TEXT), (rect.x + pad, rect.y + pad))
     gens = font.render(f"Gen: {generation}", True, config.COLOR_TEXT)
     screen.blit(gens, (rect.right - gens.get_width() - pad, rect.y + pad))
@@ -186,7 +201,7 @@ def draw_gene_chart(screen, rect, species, gene_history, scale):
     font = _chart_font(round(config.CHART_FONT_SIZE * scale))
     line_h = font.get_linesize()
     pad = round(4 * scale)
-    _draw_panel(screen, rect, 255)  # faded as a whole by _draw_translucent
+    _draw_panel(screen, rect, 255)  # faded as a whole by _draw_faded
     screen.blit(font.render(f"Gene drift - {species}s (x default)", True, config.COLOR_TEXT),
                 (rect.x + pad, rect.y + pad))
     defaults = config.DEFAULT_CARNIVORE_GENES if species == "carnivore" else config.DEFAULT_HERBIVORE_GENES
@@ -280,13 +295,18 @@ def _activation_color(v):
     return tuple(round(z + (e - z) * abs(v)) for z, e in zip(config.COLOR_BRAIN_ZERO, end))
 
 
+def _brain_panel_rect():
+    w, h = config.BRAIN_PANEL_SIZE
+    return pygame.Rect(10, config.SCREEN_HEIGHT - h - 10, w, h)
+
+
 def draw_brain_panel(screen, sim_state):
     """Live network diagram of the selected creature: node activations, strongest
     connections (weight * activation), override badge, top input drivers, output sparklines."""
     c = sim_state["selected_creature"]
-    w, h = config.BRAIN_PANEL_SIZE
-    x0, y0 = 10, config.SCREEN_HEIGHT - h - 10
-    _draw_panel(screen, pygame.Rect(x0, y0, w, h))
+    panel = _brain_panel_rect()
+    (x0, y0), (w, h) = panel.topleft, panel.size
+    _draw_panel(screen, panel, 255)  # faded as a whole by _draw_faded
     font = _chart_font(15)
     kind = "Carnivore" if c.is_carnivore else "Herbivore"
     screen.blit(font.render(f"Brain - {kind} #{c.id}", True, config.COLOR_BEST_CREATURE),
@@ -414,9 +434,10 @@ def draw_elements(screen, font, sim_state):
     if selected:
         info_lines = [f"{k}: {v}" for k, v in selected.get_info().items()]
         _draw_text_block(screen, font, info_lines, None, 16, title="Selected Creature",
-                         right=config.SCREEN_WIDTH - 10)
+                         right=config.SCREEN_WIDTH - 10, alpha=config.SELECTED_ALPHA)
         if sim_state["show_brain"] and selected.brain_inputs is not None:
-            draw_brain_panel(screen, sim_state)
+            _draw_faded(screen, _brain_panel_rect(), config.SELECTED_ALPHA, draw_brain_panel,
+                        sim_state)
     scale = sim_state["chart_scale"]
     chart_w, chart_h = round(config.CHART_SIZE[0] * scale), round(config.CHART_SIZE[1] * scale)
     spacing = round(5 * scale)
@@ -427,16 +448,16 @@ def draw_elements(screen, font, sim_state):
                            chart_w, chart_h)
         series = [(sim_state[f"herbivore_{metric}_history"], config.COLOR_CREATURE, "Herb"),
                   (sim_state[f"carnivore_{metric}_history"], config.COLOR_CARNIVORE, "Carn")]
-        _draw_translucent(screen, rect, config.CHART_ALPHA, draw_dual_chart, title, series,
-                          scale, sim_state["generation"])
+        _draw_faded(screen, rect, config.CHART_ALPHA, draw_dual_chart, rect, title, series,
+                    scale, sim_state["generation"])
     if sim_state["show_genes"]:
         species = "carnivore" if selected and selected.is_carnivore else "herbivore"
         gene_w = round(chart_w * 1.6)
         rect = pygame.Rect(config.SCREEN_WIDTH - chart_w - gene_w - 20,
                            config.SCREEN_HEIGHT - 10 - chart_h * 2 - spacing, gene_w,
                            chart_h * 2 + spacing)
-        _draw_translucent(screen, rect, config.CHART_ALPHA, draw_gene_chart, species,
-                          sim_state["gene_history"][species], scale)
+        _draw_faded(screen, rect, config.CHART_ALPHA, draw_gene_chart, rect, species,
+                    sim_state["gene_history"][species], scale)
     if sim_state["paused"]:
         screen.blit(font.render("PAUSED", True, (255, 100, 100)),
                     (config.SCREEN_WIDTH // 2 - 60, 20))
