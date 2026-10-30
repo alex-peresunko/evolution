@@ -118,12 +118,16 @@ def _time_of_day(light):
     return f"Time: {phase} ({int(light * 100)}% light)"
 
 
-def _draw_text_block(screen, font, lines, x, y, title=None):
+def _draw_text_block(screen, font, lines, x, y, title=None, right=None):
+    """right: the panel's right edge on screen; when given, x is ignored."""
     surfs = ([font.render(title, True, config.COLOR_BEST_CREATURE)] if title else [])
     surfs += [font.render(line, True, config.COLOR_TEXT) for line in lines]
     line_h = font.get_linesize()
     pad = 6
-    _draw_panel(screen, pygame.Rect(x - pad, y - pad, max(s.get_width() for s in surfs) + pad * 2,
+    text_w = max(s.get_width() for s in surfs)
+    if right is not None:
+        x = right - pad - text_w
+    _draw_panel(screen, pygame.Rect(x - pad, y - pad, text_w + pad * 2,
                                     line_h * len(surfs) + pad * 2))
     for surf in surfs:
         screen.blit(surf, (x, y))
@@ -398,8 +402,8 @@ def draw_elements(screen, font, sim_state):
     selected = sim_state.get("selected_creature")
     if selected:
         info_lines = [f"{k}: {v}" for k, v in selected.get_info().items()]
-        _draw_text_block(screen, font, info_lines, config.SCREEN_WIDTH - 450, 16,
-                         title="Selected Creature")
+        _draw_text_block(screen, font, info_lines, None, 16, title="Selected Creature",
+                         right=config.SCREEN_WIDTH - 10)
         if sim_state["show_brain"] and selected.brain_inputs is not None:
             draw_brain_panel(screen, sim_state)
     scale = sim_state["chart_scale"]
