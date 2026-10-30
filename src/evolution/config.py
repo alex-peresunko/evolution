@@ -109,6 +109,13 @@ SCAVENGE_SCORE_FACTOR = 0.5
 HERBIVORE_EAT_TICKS = 45        # food's health is absorbed gradually over the meal
 CARNIVORE_EAT_TICKS = 60        # ticks spent at a carcass, eating CARCASS_EAT_RATE per tick
 
+# --- Weight (food eaten at full health is stored as fat) ---
+FAT_MAX = 3000                  # fat cap, in health units
+FAT_STORE_EFFICIENCY = 0.5      # fat gained per unit of surplus health
+FAT_BURN_PER_TICK = 0.5         # basal metabolism
+FAT_SPEED_PENALTY = 0.6         # speed / (1 + 0.6 * fat/FAT_MAX): full fat = 62% speed
+FAT_SIZE_FACTOR = 0.4           # body size * (1 + 0.4 * fat/FAT_MAX)
+
 # --- Kin sense / signals ---
 KIN_SENSE_RADIUS = 250
 KIN_DENSITY_NORM = 8

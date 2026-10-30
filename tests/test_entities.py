@@ -68,7 +68,7 @@ def test_creature_health_decreases_per_tick():
 def _adult_at(is_carnivore, x, y, angle=0.0, size=None):
     c = Creature(WORLD_BOUNDS, is_carnivore=is_carnivore)
     c.is_adult = True
-    c.size = size or c.genetic_size
+    c.genetic_size = c.size = size or c.genetic_size
     c.pos = c._vec2(x, y)
     c.angle = angle
     return c
@@ -204,3 +204,40 @@ def test_instant_eating_when_eat_ticks_zero(monkeypatch):
     herb.health = 1000
     _herbivore_step(herb, [Food(WORLD_BOUNDS, pos=(500, 400))], speed=0.0)
     assert herb.eating_ticks == 0 and herb.health > 1000 + 100
+
+
+def test_surplus_food_is_stored_as_fat():
+    herb = _adult_at(False, 500, 400)
+    _herbivore_step(herb, [Food(WORLD_BOUNDS, pos=(500, 400))], speed=0.0)
+    for _ in range(config.HERBIVORE_EAT_TICKS):
+        _herbivore_step(herb, [], speed=0.0)
+    assert herb.fat > 0
+    assert herb.health == pytest.approx(herb.max_health - config.HEALTH_LOSS_PER_TICK, abs=1)
+
+
+def test_fat_creature_is_bigger_and_slower():
+    lean, fat = _adult_at(False, 500, 400), _adult_at(False, 500, 400)
+    fat.fat = config.FAT_MAX
+    lean.act([0.0, 1.0], [], [], [], _empty_grid())
+    fat.act([0.0, 1.0], [], [], [], _empty_grid())
+    assert fat.current_speed < lean.current_speed
+    assert fat.size > fat.genetic_size == lean.size
+
+
+def test_starvation_is_paid_from_fat():
+    herb = _adult_at(False, 500, 400)
+    herb.fat, herb.hunger = 1000.0, 2 * config.HUNGER_MAX
+    health = herb.health
+    herb.act([0.0, 0.0], [], [], [], _empty_grid())
+    assert herb.health == pytest.approx(health - config.HEALTH_LOSS_PER_TICK)
+    assert herb.fat == pytest.approx(1000 - config.FAT_BURN_PER_TICK - config.HUNGER_HEALTH_PENALTY)
+
+
+def test_full_carnivore_keeps_eating_and_gains_fat():
+    carn = _adult_at(True, 500, 400, size=8)
+    carcass = Carcass(_adult_at(False, 505, 400, size=10))
+    _carnivore_step(carn, [], tick=1, carcasses=[carcass])
+    assert carn.eating_ticks == config.CARNIVORE_EAT_TICKS
+    for tick in range(2, 10):
+        carn.act([0.0, 1.0], [], [], [], _empty_grid(), tick=tick)
+    assert carn.eating_ticks > 0 and carn.fat > 0

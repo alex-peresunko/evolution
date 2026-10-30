@@ -18,6 +18,7 @@ from .config import (
     BITE_DAMAGE, BITE_COOLDOWN_TICKS, BITE_HEALTH_TRANSFER, BITE_SCORE, ADRENALINE_STAMINA,
     RETALIATION_DAMAGE, CARCASS_MEAT_PER_SIZE, CARCASS_LIFETIME, CARCASS_EAT_RATE,
     SCAVENGE_SCORE_FACTOR, SIGNAL_HEALTH_COST, HERBIVORE_EAT_TICKS, CARNIVORE_EAT_TICKS,
+    FAT_MAX, FAT_STORE_EFFICIENCY, FAT_BURN_PER_TICK, FAT_SPEED_PENALTY, FAT_SIZE_FACTOR,
 )
 from .math_types import Vector2 as _HeadlessVector2, SimpleRect as _HeadlessRect
 from .neural_network import NeuralNetwork
@@ -62,6 +63,7 @@ class Creature:
         self.eating_ticks = 0               # > 0 while standing still to eat
         self.meal_health = 0.0              # herbivore: health still to absorb from the meal
         self.meal_carcass = None            # carnivore: carcass being eaten
+        self.fat = 0.0                      # surplus food; slows the creature, burned when starving
         self.age = 0
         self.is_adult = False
 
@@ -106,16 +108,16 @@ class Creature:
         self.age += 1
         if self.respawn_immunity_ticks > 0:
             self.respawn_immunity_ticks -= 1
-        if not self.is_adult:
-            if self.age >= ADULTHOOD_AGE:
-                self.is_adult = True
-                self.size = self.genetic_size
-                self.max_speed = self.effective_max_speed
-            else:
-                growth_ratio = self.age / ADULTHOOD_AGE
-                growth_factor = JUVENILE_SIZE_FACTOR + (1 - JUVENILE_SIZE_FACTOR) * growth_ratio
-                self.size = self.genetic_size * growth_factor
-                self.max_speed = self.effective_max_speed * growth_factor
+        if not self.is_adult and self.age >= ADULTHOOD_AGE:
+            self.is_adult = True
+        if self.is_adult:
+            growth_factor = 1.0
+        else:
+            growth_ratio = self.age / ADULTHOOD_AGE
+            growth_factor = JUVENILE_SIZE_FACTOR + (1 - JUVENILE_SIZE_FACTOR) * growth_ratio
+        fat_ratio = self.fat / FAT_MAX
+        self.size = self.genetic_size * growth_factor * (1 + fat_ratio * FAT_SIZE_FACTOR)
+        self.max_speed = self.effective_max_speed * growth_factor
 
         if self.eating_ticks > 0:
             new_speed = 0.0
@@ -124,7 +126,9 @@ class Creature:
             speed_multiplier = max(0.1, self.health / self.max_health)
             is_exhausted = self.stamina <= 0
             speed_penalty = STAMINA_EXHAUSTION_PENALTY if is_exhausted else 1.0
-            new_speed = max(0, outputs[1]) * self.max_speed * speed_multiplier * speed_penalty
+            weight_penalty = 1 / (1 + fat_ratio * FAT_SPEED_PENALTY)
+            new_speed = (max(0, outputs[1]) * self.max_speed * speed_multiplier * speed_penalty
+                         * weight_penalty)
 
         if self.max_speed > 0 and new_speed / self.max_speed > STAMINA_DEPLETION_SPEED_THRESHOLD:
             speed_ratio = new_speed / self.max_speed
@@ -142,6 +146,10 @@ class Creature:
             HUNGER_HEALTH_PENALTY * min(1.0, max(0.0, (self.hunger - HUNGER_MAX) / HUNGER_MAX))
             if self.hunger > HUNGER_MAX else 0
         )
+        self.fat = max(0.0, self.fat - FAT_BURN_PER_TICK)
+        from_fat = min(self.fat, hunger_penalty)   # starvation is paid from fat first
+        self.fat -= from_fat
+        hunger_penalty -= from_fat
         self.health -= (HEALTH_LOSS_PER_TICK + (new_speed * HEALTH_LOSS_SPEED_FACTOR) + hunger_penalty
                         + self.signal * SIGNAL_HEALTH_COST)
         self.current_speed = new_speed
@@ -172,7 +180,7 @@ class Creature:
                     if HERBIVORE_EAT_TICKS > 0:
                         self.meal_health, self.eating_ticks = gain, HERBIVORE_EAT_TICKS
                     else:
-                        self.health = min(self.max_health, self.health + gain)
+                        self._absorb(gain)
                     self.hunger = 0
                     self.score += 1
                     break
@@ -194,18 +202,27 @@ class Creature:
     def _digest(self):
         """One tick of a herbivore meal: absorb an even share of the remaining health."""
         portion = self.meal_health / self.eating_ticks
-        self.health = min(self.max_health, self.health + portion)
+        self._absorb(portion)
         self.meal_health -= portion
         self.eating_ticks -= 1
         self.hunger = 0
+
+    def _absorb(self, amount):
+        """Add health up to max_health; the surplus is stored as fat. Returns the health gained."""
+        gain = max(0.0, min(self.max_health - self.health, amount))
+        self.health += gain
+        self.fat = min(FAT_MAX, self.fat + (amount - gain) * FAT_STORE_EFFICIENCY)
+        return gain
+
+    def _is_stuffed(self):
+        return self.health >= self.max_health and self.fat >= FAT_MAX
 
     def _stop_eating(self):
         self.eating_ticks, self.meal_health, self.meal_carcass = 0, 0.0, None
 
     def _gain_meat(self, amount):
         size_penalty_denom = 1 + (self.genetic_size - DEFAULT_CARNIVORE_GENES["size"]) * HEALTH_GAIN_SIZE_PENALTY
-        gain = min(self.max_health - self.health, amount / max(0.1, size_penalty_denom))
-        self.health += max(0.0, gain)
+        gain = self._absorb(amount / max(0.1, size_penalty_denom))
         self.hunger = 0
         return gain
 
@@ -238,14 +255,14 @@ class Creature:
             if carcass.meat <= 0 or self.pos.distance_to(carcass.pos) >= self.size + carcass.radius:
                 continue
             self._eat_from(carcass)
-            if CARNIVORE_EAT_TICKS > 0 and not carcass.is_gone() and self.health < self.max_health:
+            if CARNIVORE_EAT_TICKS > 0 and not carcass.is_gone() and not self._is_stuffed():
                 self.meal_carcass, self.eating_ticks = carcass, CARNIVORE_EAT_TICKS
             return
 
     def _continue_scavenging(self):
-        """One tick of a carnivore meal; ends early once the carcass is gone or health is full."""
+        """One tick of a carnivore meal; ends early once the carcass is gone or the carnivore is stuffed."""
         carcass = self.meal_carcass
-        if carcass is None or carcass.is_gone() or self.health >= self.max_health:
+        if carcass is None or carcass.is_gone() or self._is_stuffed():
             self._stop_eating()
             return
         self._eat_from(carcass)
@@ -279,6 +296,7 @@ class Creature:
             "Stamina": f"{int(self.stamina)}/{int(self.max_stamina)}",
             "Score": round(self.score, 2),
             "Eating": self.eating_ticks,
+            "Fat": f"{int(self.fat)}/{FAT_MAX}",
             "Signal": round(self.signal, 2),
             "Memory": " ".join(f"{m:+.2f}" for m in self.memory),
             "Reproductions": self.reproductions,
