@@ -222,6 +222,8 @@ CHART_FONT_SIZE = 15         # at chart scale 1.0
 CHART_SIZE = (150, 75)       # at chart scale 1.0
 CHART_SCALE_DEFAULT = 2.0    # [ / ] in game.py zoom the charts
 CHART_SCALE_MIN, CHART_SCALE_MAX, CHART_SCALE_STEP = 1.0, 3.0, 0.25
+CHART_PANEL_ALPHA = 80       # chart background opacity, 0 (clear) .. 255 (solid)
+HUD_PANEL_ALPHA = 165        # other HUD panels (stats, selected creature, brain)
 HUD_FONT_SIZE = 18
 
 # --- Brain panel (game.py, N toggles) ---

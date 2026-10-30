@@ -103,13 +103,13 @@ def _sync_worker_brains(sim_state):
 # =============================================================================
 # Rendering helpers
 # =============================================================================
-def _draw_panel(screen, rect):
-    """Translucent rounded HUD panel, cached per size."""
-    key = (rect.width, rect.height)
+def _draw_panel(screen, rect, alpha=config.HUD_PANEL_ALPHA):
+    """Translucent rounded HUD panel, cached per size and alpha."""
+    key = (rect.width, rect.height, alpha)
     panel = _PANELS.get(key)
     if panel is None:
-        panel = pygame.Surface(key, pygame.SRCALPHA)
-        pygame.draw.rect(panel, (12, 18, 16, 165), panel.get_rect(), border_radius=8)
+        panel = pygame.Surface(key[:2], pygame.SRCALPHA)
+        pygame.draw.rect(panel, (12, 18, 16, alpha), panel.get_rect(), border_radius=8)
         pygame.draw.rect(panel, (255, 255, 255, 45), panel.get_rect(), width=1, border_radius=8)
         _PANELS[key] = panel
     screen.blit(panel, rect.topleft)
@@ -149,7 +149,7 @@ def draw_dual_chart(screen, rect, title, series, scale, generation):
     font = _chart_font(round(config.CHART_FONT_SIZE * scale))
     line_h = font.get_linesize()
     pad = round(4 * scale)
-    _draw_panel(screen, rect)
+    _draw_panel(screen, rect, config.CHART_PANEL_ALPHA)
     screen.blit(font.render(title, True, config.COLOR_TEXT), (rect.x + pad, rect.y + pad))
     gens = font.render(f"Gen: {generation}", True, config.COLOR_TEXT)
     screen.blit(gens, (rect.right - gens.get_width() - pad, rect.y + pad))
@@ -177,7 +177,7 @@ def draw_gene_chart(screen, rect, species, gene_history, scale):
     font = _chart_font(round(config.CHART_FONT_SIZE * scale))
     line_h = font.get_linesize()
     pad = round(4 * scale)
-    _draw_panel(screen, rect)
+    _draw_panel(screen, rect, config.CHART_PANEL_ALPHA)
     screen.blit(font.render(f"Gene drift - {species}s (x default)", True, config.COLOR_TEXT),
                 (rect.x + pad, rect.y + pad))
     defaults = config.DEFAULT_CARNIVORE_GENES if species == "carnivore" else config.DEFAULT_HERBIVORE_GENES
