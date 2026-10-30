@@ -143,13 +143,22 @@ def _chart_font(size):
     return font
 
 
+def _draw_translucent(screen, rect, alpha, draw, *args):
+    """Run draw(surface, local_rect, *args) on an offscreen layer, then blit it at alpha, so
+    panel, text and lines all fade together."""
+    layer = pygame.Surface(rect.size, pygame.SRCALPHA)
+    draw(layer, pygame.Rect((0, 0), rect.size), *args)
+    layer.set_alpha(alpha)
+    screen.blit(layer, rect.topleft)
+
+
 def draw_dual_chart(screen, rect, title, series, scale, generation):
     """Translucent panel with one line per (history, color, label) series, each scaled to its
     own peak (species scores differ by orders of magnitude), sized by the zoomable chart scale."""
     font = _chart_font(round(config.CHART_FONT_SIZE * scale))
     line_h = font.get_linesize()
     pad = round(4 * scale)
-    _draw_panel(screen, rect, config.CHART_PANEL_ALPHA)
+    _draw_panel(screen, rect, 255)  # faded as a whole by _draw_translucent
     screen.blit(font.render(title, True, config.COLOR_TEXT), (rect.x + pad, rect.y + pad))
     gens = font.render(f"Gen: {generation}", True, config.COLOR_TEXT)
     screen.blit(gens, (rect.right - gens.get_width() - pad, rect.y + pad))
@@ -177,7 +186,7 @@ def draw_gene_chart(screen, rect, species, gene_history, scale):
     font = _chart_font(round(config.CHART_FONT_SIZE * scale))
     line_h = font.get_linesize()
     pad = round(4 * scale)
-    _draw_panel(screen, rect, config.CHART_PANEL_ALPHA)
+    _draw_panel(screen, rect, 255)  # faded as a whole by _draw_translucent
     screen.blit(font.render(f"Gene drift - {species}s (x default)", True, config.COLOR_TEXT),
                 (rect.x + pad, rect.y + pad))
     defaults = config.DEFAULT_CARNIVORE_GENES if species == "carnivore" else config.DEFAULT_HERBIVORE_GENES
@@ -418,14 +427,16 @@ def draw_elements(screen, font, sim_state):
                            chart_w, chart_h)
         series = [(sim_state[f"herbivore_{metric}_history"], config.COLOR_CREATURE, "Herb"),
                   (sim_state[f"carnivore_{metric}_history"], config.COLOR_CARNIVORE, "Carn")]
-        draw_dual_chart(screen, rect, title, series, scale, sim_state["generation"])
+        _draw_translucent(screen, rect, config.CHART_ALPHA, draw_dual_chart, title, series,
+                          scale, sim_state["generation"])
     if sim_state["show_genes"]:
         species = "carnivore" if selected and selected.is_carnivore else "herbivore"
         gene_w = round(chart_w * 1.6)
         rect = pygame.Rect(config.SCREEN_WIDTH - chart_w - gene_w - 20,
                            config.SCREEN_HEIGHT - 10 - chart_h * 2 - spacing, gene_w,
                            chart_h * 2 + spacing)
-        draw_gene_chart(screen, rect, species, sim_state["gene_history"][species], scale)
+        _draw_translucent(screen, rect, config.CHART_ALPHA, draw_gene_chart, species,
+                          sim_state["gene_history"][species], scale)
     if sim_state["paused"]:
         screen.blit(font.render("PAUSED", True, (255, 100, 100)),
                     (config.SCREEN_WIDTH // 2 - 60, 20))
