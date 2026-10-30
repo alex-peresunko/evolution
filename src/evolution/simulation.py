@@ -14,6 +14,7 @@ from .config import (
     MATE_SEEK_DANGER_THRESHOLD, MATE_SEEK_BLEND, MATE_SEEK_MIN_SPEED,
     REPRODUCTION_HEALTH_THRESHOLD, MAX_REPRODUCTIONS, REPRODUCTION_COOLDOWN_TICKS,
     REPRODUCTION_POP_CAP_FACTOR, RESPAWN_IMMUNITY_TICKS,
+    LITTER_ENDOWMENT, LITTER_SPREAD,
     SCORE_SAMPLE_INTERVAL, CHART_HISTORY_SAVE_MAX, NUM_MEMORY, DAY_LENGTH_TICKS,
     FOOD_PATCH_COUNT, FOOD_PATCH_SHARE, FOOD_PATCH_RADIUS, FOOD_PATCH_SPEED, FOOD_PATCH_TURN,
 )
@@ -183,6 +184,12 @@ def restore_progress(sim_state, species, brain, genes, filename, save_dir="saved
     for k in keys:
         h = sim_state[k]
         sim_state[k] = [h[0] if h else 0] * (length - len(h)) + h
+
+
+def _stochastic_round(x):
+    """floor(x), plus one with probability frac(x): 1.3 gives 2 young 30% of the time."""
+    n = int(x)
+    return n + (random.random() < x - n)
 
 
 def sample_genes(sim_state):
@@ -419,20 +426,28 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
             if potential_mates:
                 best_mate = max(potential_mates, key=lambda mate: mate.attractiveness)
                 constraints = CARNIVORE_GENE_MIN_MAX if p1.is_carnivore else GENE_MIN_MAX
-                child_genes = combine_genes(p1.genes, best_mate.genes, default_genes, gene_constraints=constraints)
-                child_brain = combine_brains(p1.brain, best_mate.brain)
-                mutate_brain(child_brain, child_genes)
-                child = Creature(
-                    sim_state["world_bounds"], brain=child_brain,
-                    is_carnivore=p1.is_carnivore, genes=child_genes,
-                    vec2_factory=p1._vec2, rect_factory=p1._rect,
-                )
-                child.pos = (p1.pos + best_mate.pos) / 2
-                child.lineage = p1.lineage
-                child.parent_ids = (p1.id, best_mate.id)
-                child.descent = max(p1.descent, best_mate.descent) + 1
-                child.birth_time = now
-                new_offspring.append(child)
+                litter = min(_stochastic_round((p1.genes["litter_size"] + best_mate.genes["litter_size"]) / 2),
+                             pop_cap - len(group) - len(new_offspring))
+                for _ in range(litter):
+                    child_genes = combine_genes(p1.genes, best_mate.genes, default_genes,
+                                                gene_constraints=constraints)
+                    child_brain = combine_brains(p1.brain, best_mate.brain)
+                    mutate_brain(child_brain, child_genes)
+                    child = Creature(
+                        sim_state["world_bounds"], brain=child_brain,
+                        is_carnivore=p1.is_carnivore, genes=child_genes,
+                        vec2_factory=p1._vec2, rect_factory=p1._rect,
+                    )
+                    child.pos = (p1.pos + best_mate.pos) / 2
+                    if litter > 1:
+                        a = random.uniform(0, 2 * math.pi)
+                        child.pos += child._vec2(math.cos(a), math.sin(a)) * LITTER_SPREAD
+                    child.health = child.max_health * min(1.0, LITTER_ENDOWMENT / litter)
+                    child.lineage = p1.lineage
+                    child.parent_ids = (p1.id, best_mate.id)
+                    child.descent = max(p1.descent, best_mate.descent) + 1
+                    child.birth_time = now
+                    new_offspring.append(child)
                 p1.health *= 0.7
                 best_mate.health *= 0.7
                 p1.reproductions += 1

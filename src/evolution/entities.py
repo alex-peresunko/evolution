@@ -19,7 +19,7 @@ from .config import (
     RETALIATION_DAMAGE, CARCASS_MEAT_PER_SIZE, CARCASS_LIFETIME, CARCASS_EAT_RATE,
     SCAVENGE_SCORE_FACTOR, SIGNAL_HEALTH_COST, HERBIVORE_EAT_TICKS, CARNIVORE_EAT_TICKS,
     FAT_MAX, FAT_STORE_EFFICIENCY, FAT_BURN_PER_TICK, FAT_SPEED_PENALTY, FAT_SIZE_FACTOR,
-    UPKEEP_WEIGHTS, KLEIBER_EXPONENT,
+    UPKEEP_WEIGHTS, KLEIBER_EXPONENT, SENESCENCE_RATE,
 )
 from .math_types import Vector2 as _HeadlessVector2, SimpleRect as _HeadlessRect
 from .neural_network import NeuralNetwork
@@ -124,6 +124,11 @@ class Creature:
         body = (self.genetic_size * growth_factor / default_size) ** KLEIBER_EXPONENT
         return HEALTH_LOSS_PER_TICK * (UPKEEP_WEIGHTS["body"] * body + self.trait_upkeep)
 
+    def senescence(self):
+        """Extra per-tick health loss of old age, growing linearly past the lifespan gene."""
+        lifespan = self.genes["lifespan"]
+        return SENESCENCE_RATE * max(0.0, self.age - lifespan) / lifespan
+
     def perceive_and_think(self, local_food, local_herbivores, local_carnivores, obstacles):
         inputs = self.see(local_food, obstacles, local_herbivores, local_carnivores)
         return self.think(inputs)
@@ -175,7 +180,7 @@ class Creature:
         from_fat = min(self.fat, hunger_penalty)   # starvation is paid from fat first
         self.fat -= from_fat
         hunger_penalty -= from_fat
-        self.health -= (self.upkeep(growth_factor) + (new_speed * HEALTH_LOSS_SPEED_FACTOR) + hunger_penalty
+        self.health -= (self.upkeep(growth_factor) + self.senescence() + (new_speed * HEALTH_LOSS_SPEED_FACTOR) + hunger_penalty
                         + self.signal * SIGNAL_HEALTH_COST)
         self.current_speed = new_speed
 

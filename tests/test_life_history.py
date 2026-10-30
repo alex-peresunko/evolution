@@ -86,3 +86,51 @@ def test_gene_history_sampled_per_species():
     assert history["size"].maxlen == config.CHART_HISTORY_SAVE_MAX
     assert not sim["gene_history"]["carnivore"]["size"]  # no carnivores: no sample
     assert sim["lineages"] == {"herbivore": 2, "carnivore": 0}
+
+
+def test_senescence_starts_at_the_lifespan_and_grows():
+    c = _adult(lifespan=4000)
+    c.age = 3999
+    assert c.senescence() == 0
+    c.age = 6000
+    mid = c.senescence()
+    c.age = 8000
+    assert 0 < mid < c.senescence() == pytest.approx(config.SENESCENCE_RATE)
+
+
+def test_old_creature_loses_more_health():
+    young, old = _adult(), _adult()
+    old.age = int(old.genes["lifespan"] * 2)
+    for c in (young, old):
+        c.act([0.0, 0.0], [], [], [], _grid())
+    assert old.max_health - old.health == pytest.approx(
+        young.max_health - young.health + old.senescence(), rel=1e-3)
+
+
+@pytest.mark.parametrize("is_carnivore", [False, True])
+def test_litter_splits_the_endowment(is_carnivore):
+    from evolution.simulation import update_world
+    sim, p1, p2 = _breeding_sim({"litter_size": 3}, {"litter_size": 3}, is_carnivore)
+    update_world(sim)
+    young = _offspring(sim, (p1.id, p2.id))
+    assert len(young) == 3
+    for c in young:
+        assert c.health == pytest.approx(c.max_health * config.LITTER_ENDOWMENT / 3)
+
+
+def test_single_young_gets_full_health():
+    from evolution.simulation import update_world
+    sim, p1, p2 = _breeding_sim()
+    update_world(sim)
+    (child,) = _offspring(sim, (p1.id, p2.id))
+    assert child.health == child.max_health
+
+
+def test_stochastic_round_hits_the_mean():
+    import random
+
+    from evolution.simulation import _stochastic_round
+    random.seed(0)
+    draws = [_stochastic_round(1.25) for _ in range(4000)]
+    assert set(draws) == {1, 2}
+    assert sum(draws) / len(draws) == pytest.approx(1.25, abs=0.03)

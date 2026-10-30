@@ -38,7 +38,7 @@ ISLAND_IMMIGRANTS = 4            # weakest creatures replaced by an imported bet
 # colour marker (drawn as a hue shift, used for speciation).
 _LIFE_HISTORY_GENES = {
     "mutation_rate": 0.08, "mutation_amount": 0.15,
-    "lifespan": 10000, "litter_size": 1.0, "color": 0.5,
+    "lifespan": 3000, "litter_size": 1.0, "color": 0.5,
 }
 DEFAULT_HERBIVORE_GENES = {
     "size": 10, "max_speed": 5, "sight_distance": 150,
@@ -61,7 +61,7 @@ GENE_MIN_MAX = {
     "attractiveness": (1, 100),
     "mutation_rate": (0.005, 0.4),
     "mutation_amount": (0.02, 0.6),
-    "lifespan": (2000, 40000),
+    "lifespan": (1000, 20000),
     "litter_size": (1, 4),
     "color": (0, 1),
 }
@@ -114,6 +114,9 @@ SIZE_STAMINA_FACTOR = 80
 
 # --- Life Stage ---
 ADULTHOOD_AGE = 200
+SENESCENCE_RATE = 3             # extra health loss per tick at twice the lifespan gene, linear
+LITTER_ENDOWMENT = 1.0          # share of max health split among a litter's young
+LITTER_SPREAD = 6               # px; littermates are placed around the parents' midpoint
 JUVENILE_SIZE_FACTOR = 0.2
 
 # --- Stamina ---
