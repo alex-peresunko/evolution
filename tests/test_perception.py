@@ -124,7 +124,21 @@ def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasse
         inputs += [0.0, 1.0]
     inputs.append(light)
     inputs.extend(self.memory)
-    return inputs, whiskers, nearest_target_dist, nearest_smell_strength
+
+    targets = list(herbivores) + list(carcasses) if self.is_carnivore else food_items
+    target_whiskers = []
+    for whisker_angle, obstacle_dist in zip(self.whisker_angles, whiskers):
+        ux, uy = math.cos(self.angle + whisker_angle), math.sin(self.angle + whisker_angle)
+        best = None
+        for t in targets:
+            dx, dy = t.pos.x - self.pos.x, t.pos.y - self.pos.y
+            along, perp = dx * ux + dy * uy, abs(dy * ux - dx * uy)
+            if (0 < along <= eye and along < obstacle_dist and perp <= config.WHISKER_TARGET_WIDTH
+                    and (best is None or along < best)):
+                best = along
+        target_whiskers.append(best)
+        inputs.append(0.0 if best is None else 1.0 - best / eye)
+    return inputs, whiskers, target_whiskers, nearest_target_dist, nearest_smell_strength
 
 
 def _random_creature(rnd, is_carnivore, obstacles):
@@ -163,10 +177,13 @@ def test_perceive_all_matches_reference(seed, n_herb, n_carn, n_food, light):
     got = perceive_all(everyone, food, herbs, carns, obstacles, carcasses, light)
     assert got.shape == (len(everyone), config.BRAIN_TOPOLOGY[0])
     for row, c in zip(got, everyone):
-        inputs, whiskers, target_dist, smell = _reference_see(c, food, obstacles, herbs, carns,
+        inputs, whiskers, target_whiskers, target_dist, smell = _reference_see(c, food, obstacles, herbs, carns,
                                                               carcasses, light)
         np.testing.assert_allclose(row, inputs, atol=1e-9)
         np.testing.assert_allclose(c.whiskers, whiskers, atol=1e-9)
+        assert [d is None for d in c.target_whiskers] == [d is None for d in target_whiskers]
+        np.testing.assert_allclose([d or 0 for d in c.target_whiskers],
+                                   [d or 0 for d in target_whiskers], atol=1e-9)
         if target_dist is None:
             assert c._nearest_target_dist is None
         else:
@@ -181,3 +198,21 @@ def test_whisker_starting_inside_obstacle_is_touching():
     inputs = perceive_all([c], [], [c], [], [obstacle])
     assert list(inputs[0, :config.NUM_WHISKERS]) == [1.0] * config.NUM_WHISKERS
     assert c.whiskers == [0.0] * config.NUM_WHISKERS
+
+
+def test_target_whisker_sees_food_ahead_and_is_occluded():
+    c = Creature(WORLD_BOUNDS)
+    c.pos, c.angle = c._vec2(500, 500), 0.0
+    food = Food(WORLD_BOUNDS)
+    food.pos = food._vec2(500 + c.sight_distance / 2, 503)
+    tw = slice(config.BRAIN_INPUTS - config.NUM_WHISKERS, config.BRAIN_INPUTS)
+    centre = config.NUM_WHISKERS // 2
+
+    inputs = perceive_all([c], [food], [c], [], [])
+    assert inputs[0, tw][centre] == pytest.approx(0.5)
+    assert c.target_whiskers[centre] == pytest.approx(c.sight_distance / 2)
+
+    wall = Obstacle(500 + c.sight_distance / 4, 480, 10, 40)
+    inputs = perceive_all([c], [food], [c], [], [wall])
+    assert inputs[0, tw][centre] == 0.0
+    assert c.target_whiskers[centre] is None

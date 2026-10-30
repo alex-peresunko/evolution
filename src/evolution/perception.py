@@ -2,7 +2,7 @@
 
 Row layout matches config.BRAIN_TOPOLOGY[0] (see CLAUDE.md, "Neural network").
 Side effects, read by act(), the mate-seeking drive and the renderer:
-c.whiskers, c._nearest_target_dist, c._nearest_smell_strength, c.effective_sight.
+c.whiskers, c.target_whiskers, c._nearest_target_dist, c._nearest_smell_strength, c.effective_sight.
 """
 import math
 
@@ -20,6 +20,7 @@ from .config import (
     NUM_WHISKERS,
     SIGNAL_RADIUS,
     SMELL_DISTANCE,
+    WHISKER_TARGET_WIDTH,
 )
 
 N_INPUTS = BRAIN_INPUTS
@@ -144,6 +145,22 @@ def _whiskers(xy, angle, sight, whisker_angles, obstacles):
     return np.minimum(dist, hit_dist)
 
 
+def _target_whiskers(xy, angle, length, whisker_angles, targets_xy, occlusion):
+    """Distance along each whisker ray to the nearest target within WHISKER_TARGET_WIDTH of
+    it, no farther than `length` and closer than the ray's obstacle hit; inf when none."""
+    n, w = whisker_angles.shape
+    if len(targets_xy) == 0:
+        return np.full((n, w), np.inf)
+    a = (angle[:, None] + whisker_angles)[..., None]
+    dx = targets_xy[None, None, :, 0] - xy[:, None, None, 0]
+    dy = targets_xy[None, None, :, 1] - xy[:, None, None, 1]
+    t = dx * np.cos(a) + dy * np.sin(a)
+    perp = np.abs(dy * np.cos(a) - dx * np.sin(a))
+    hit = ((t > 0) & (t <= length[:, None, None]) & (t < occlusion[..., None])
+           & (perp <= WHISKER_TARGET_WIDTH))
+    return np.where(hit, t, np.inf).min(axis=-1)
+
+
 def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carcasses=(),
                  light=1.0):
     """Brain inputs for `creatures` (any mix of species) as an (N, N_INPUTS) array.
@@ -174,6 +191,7 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
     out[:, :NUM_WHISKERS] = 1.0 - whisker_dist / sight[:, None]
     col = NUM_WHISKERS
 
+    target_whisker_dist = np.full((n, NUM_WHISKERS), np.inf)
     target_dist = np.ones(n)
     target_found = np.zeros(n, dtype=bool)
     smell_strength_self = np.zeros(n)
@@ -223,6 +241,14 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
         out[ci, social + 5], out[ci, social + 6] = cc_angle, cc_dist
     out[:, social + 7] = light
     out[:, social + 8:social + 8 + NUM_MEMORY] = [c.memory for c in creatures]
+    for gi, targets in ((ci, list(herbivores) + list(carcasses)), (hi, food_items)):
+        if len(gi):
+            target_whisker_dist[gi] = _target_whiskers(xy[gi], angle[gi], eye[gi],
+                                                       whisker_angles[gi], _xy(targets),
+                                                       whisker_dist[gi])
+    tw = social + 8 + NUM_MEMORY
+    out[:, tw:tw + NUM_WHISKERS] = np.where(np.isfinite(target_whisker_dist),
+                                            1.0 - target_whisker_dist / eye[:, None], 0.0)
 
     col += 6
     out[:, col] = s[:, 3] / s[:, 4]
@@ -236,6 +262,7 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
     out[:, col + 8] = np.minimum(1.0, s[:, 10] / HUNGER_MAX)
 
     wl = whisker_dist.tolist()
+    twl = [[d if math.isfinite(d) else None for d in row] for row in target_whisker_dist.tolist()]
     td = target_dist.tolist()
     tf = target_found.tolist()
     ss = smell_strength_self.tolist()
@@ -243,6 +270,7 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
     for i, c in enumerate(creatures):
         c.effective_sight = es[i]
         c.whiskers = wl[i]
+        c.target_whiskers = twl[i]
         c._nearest_target_dist = td[i] if tf[i] else None
         c._nearest_smell_strength = ss[i]
     return out

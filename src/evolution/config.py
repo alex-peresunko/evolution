@@ -137,6 +137,7 @@ NIGHT_SIGHT_FACTOR = 0.35       # share of sight distance left at midnight
 # --- Neural Network ---
 NUM_WHISKERS = 3
 NUM_MEMORY = 2
+WHISKER_TARGET_WIDTH = 12   # px; a target this close to a whisker ray is hit by it
 BRAIN_INPUTS = (
     NUM_WHISKERS  # obstacle proximity
     + 2 + 2 + 2   # target, smell, prey velocity
@@ -144,6 +145,7 @@ BRAIN_INPUTS = (
     + 3 + 2       # kin angle/dist/density, signal angle/strength
     + 2 + 1       # carcass angle/dist, light
     + NUM_MEMORY
+    + NUM_WHISKERS  # target whiskers (food / prey along each ray)
 )
 BRAIN_OUTPUTS = 3 + NUM_MEMORY  # rotation, speed, signal, memory
 BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]
@@ -163,6 +165,7 @@ COLOR_BEST_CREATURE = (255, 255, 0)
 COLOR_OBSTACLE = (60, 60, 60)
 COLOR_WHISKER = (0, 125, 0)
 COLOR_CARNIVORE_WHISKER = (125, 0, 0)
+COLOR_TARGET_WHISKER = (255, 220, 60)
 COLOR_TEXT = (255, 255, 255)
 COLOR_BIRTH = (0, 255, 255)
 CHART_FONT_SIZE = 15         # at chart scale 1.0

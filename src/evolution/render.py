@@ -553,6 +553,10 @@ class Renderer:
             ey = y + math.sin(c.angle + a) * c.whiskers[i]
             pygame.draw.aaline(screen, color, (x, y), (ex, ey))
             pygame.draw.circle(screen, color, (ex, ey), 2)
+            seen = c.target_whiskers[i]
+            if seen is not None:  # food / prey on this ray
+                tx, ty = x + math.cos(c.angle + a) * seen, y + math.sin(c.angle + a) * seen
+                pygame.draw.circle(screen, config.COLOR_TARGET_WHISKER, (tx, ty), 3)
 
     def _draw_selection(self, screen, c, x, y):
         sd, sa = c.effective_sight or c.sight_distance, c.sight_angle

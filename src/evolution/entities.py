@@ -99,6 +99,7 @@ class Creature:
         self.max_speed = self.effective_max_speed * JUVENILE_SIZE_FACTOR
 
         self.whiskers = [0.0] * NUM_WHISKERS
+        self.target_whiskers = [None] * NUM_WHISKERS
         self.whisker_angles = np.linspace(-self.sight_angle / 2, self.sight_angle / 2, NUM_WHISKERS)
         self.brain = brain if brain else NeuralNetwork(BRAIN_TOPOLOGY)
 

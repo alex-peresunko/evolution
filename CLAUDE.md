@@ -27,7 +27,7 @@ Shared library lives in `src/evolution/`; the three `game*.py` entry scripts are
 
 ### Simulation loop
 
-`simulation.build_sim_state()` returns a plain dict (`sim_state`) holding all world state: creature/food lists, four `SpatialHashGrid`s (general, food, herbivore, carnivore), score histories, tick/generation counters, and `hall_of_fame`. `simulation.update_world(sim_state, ...)` advances one tick and is shared by `game.py` and `game_headless.py`. Perception for all creatures is one vectorized numpy pass, `perception.perceive_all`, which returns the (N, `BRAIN_INPUTS`) input matrix and sets `c.whiskers`, `c._nearest_target_dist`, `c._nearest_smell_strength` and `c.effective_sight`. `Creature.see()` is a one-creature wrapper around it. `tests/test_perception.py` holds the original scalar implementation as a reference, and the vectorized code must keep matching it. NN inference for all creatures goes through `batch_forward()`, which stacks the per-creature weights and runs one vectorized `np.einsum` per layer. The stacks are cached until the population changes, which assumes a creature's brain never changes in place after it is created. Any change to `NeuralNetwork`'s weight/bias layout has to stay compatible with it.
+`simulation.build_sim_state()` returns a plain dict (`sim_state`) holding all world state: creature/food lists, four `SpatialHashGrid`s (general, food, herbivore, carnivore), score histories, tick/generation counters, and `hall_of_fame`. `simulation.update_world(sim_state, ...)` advances one tick and is shared by `game.py` and `game_headless.py`. Perception for all creatures is one vectorized numpy pass, `perception.perceive_all`, which returns the (N, `BRAIN_INPUTS`) input matrix and sets `c.whiskers`, `c.target_whiskers`, `c._nearest_target_dist`, `c._nearest_smell_strength` and `c.effective_sight`. `Creature.see()` is a one-creature wrapper around it. `tests/test_perception.py` holds the original scalar implementation as a reference, and the vectorized code must keep matching it. NN inference for all creatures goes through `batch_forward()`, which stacks the per-creature weights and runs one vectorized `np.einsum` per layer. The stacks are cached until the population changes, which assumes a creature's brain never changes in place after it is created. Any change to `NeuralNetwork`'s weight/bias layout has to stay compatible with it.
 
 World mechanics, all tuned through `config.py`:
 - **Chases:** carnivores bite instead of killing on contact. A bite needs contact, the prey within `CARNIVORE_BITE_ANGLE` of the carnivore's heading, and `BITE_COOLDOWN_TICKS` since the last bite (`Creature._try_bite`). Bitten prey gets an adrenaline stamina boost. Herbivores bigger than the carnivore deal retaliation damage. Death is simply `health <= 0`.
@@ -35,7 +35,7 @@ World mechanics, all tuned through `config.py`:
 - **Meals:** eating makes a creature stand still for `HERBIVORE_EAT_TICKS` / `CARNIVORE_EAT_TICKS` (`eating_ticks`; brain outputs are ignored meanwhile). Herbivores absorb a food item's health gradually (`_digest`); carnivores keep eating from `meal_carcass` until the meal ends, the carcass is gone, or health is full. A bite interrupts a herbivore's meal and forfeits the rest. Setting a duration to 0 restores instant eating.
 - **Weight:** food eaten at full health is stored as `c.fat` (`Creature._absorb`, `FAT_STORE_EFFICIENCY`, capped at `FAT_MAX`). Fat grows the body (`c.size`, `FAT_SIZE_FACTOR`) and lowers speed (`FAT_SPEED_PENALTY`). It burns slowly (`FAT_BURN_PER_TICK`) and pays the starvation penalty before health does. Carnivore meals continue past full health until the carnivore is stuffed (`_is_stuffed`).
 - **Food patches:** `sim_state["food_patches"]` drift around the map, and most respawned food lands near one.
-- **Day/night:** `day_light(tick)` goes into `sim_state["light"]`. At night vision cones shrink (`NIGHT_SIGHT_FACTOR`), while whiskers and smell don't.
+- **Day/night:** `day_light(tick)` goes into `sim_state["light"]`. At night vision cones and target whiskers shrink (`NIGHT_SIGHT_FACTOR`), while obstacle whiskers and smell don't.
 - **Signal and memory:** after `batch_forward`, the extra outputs are stored as `c.signal` (heard by kin within `SIGNAL_RADIUS`, with a small health cost) and `c.memory` (fed back as inputs next tick).
 
 Evolution is continuous: creatures die and are "retired" (`_retire_creature` updates the Hall of Fame and saves the brain), and eligible nearby adults reproduce (brain crossover + gene averaging + mutation, in `genetics.py`). The reproduction cooldown is counted in ticks (`REPRODUCTION_COOLDOWN_TICKS`), so behavior doesn't depend on simulation speed. After an extinction, the species is repopulated from the Hall of Fame.
@@ -69,7 +69,7 @@ Hall of Fame autosaves happen at most once per `AUTOSAVE_INTERVAL` ticks. A reco
 
 ### Neural network
 
-Topology is `config.BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]` = `[28, 16, 8, 5]`, tanh on all layers. Changing the inputs in `perception.perceive_all` means updating the `BRAIN_INPUTS` formula too. Append new inputs/outputs at the end: `NeuralNetwork.load` copies the overlapping top-left block, so saved brains keep their existing wiring. Inputs, in order:
+Topology is `config.BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]` = `[31, 16, 8, 5]`, tanh on all layers. Changing the inputs in `perception.perceive_all` means updating the `BRAIN_INPUTS` formula too. Append new inputs/outputs at the end: `NeuralNetwork.load` copies the overlapping top-left block, so saved brains keep their existing wiring. Inputs, in order:
 
 ```
 whisker[0..2]                obstacle proximity (1 = touching)
@@ -84,6 +84,9 @@ signal_angle, signal_strength      loudest same-species signal within SIGNAL_RAD
 carcass_angle, carcass_dist        carnivore only: nearest visible carcass, else (0, 1)
 light                              0 = midnight, 1 = noon
 memory[0..NUM_MEMORY-1]            own memory outputs from the previous tick
+target_whisker[0..2]               food (herbivore) / prey or carcass (carnivore) within
+                                   WHISKER_TARGET_WIDTH of each whisker ray, up to the night-
+                                   shrunk sight, occluded by obstacles (1 = touching, 0 = none)
 ```
 
 Outputs: `[rotation_delta, speed, signal, memory...]`. `_apply_mate_seeking_drive` may override them for adults.

@@ -6,12 +6,13 @@ from .config import BRAIN_VIEW_EDGE_FRACTION, NUM_MEMORY, NUM_WHISKERS
 
 # Same order as perception.perceive_all fills the input matrix.
 INPUT_LABELS = (
-    [f"whisker{i}" for i in range(NUM_WHISKERS)]
+    [f"obst_w{i}" for i in range(NUM_WHISKERS)]
     + ["target_ang", "target_dist", "smell_ang", "smell_str", "prey_vx", "prey_vy",
        "health", "sin_ang", "cos_ang", "size", "speed", "sight", "sight_ang", "stamina",
        "hunger", "kin_ang", "kin_dist", "kin_density", "signal_ang", "signal_str",
        "carcass_ang", "carcass_dist", "light"]
     + [f"mem{i}_in" for i in range(NUM_MEMORY)]
+    + [f"food_w{i}" for i in range(NUM_WHISKERS)]
 )
 OUTPUT_LABELS = ["turn", "speed", "signal"] + [f"mem{i}" for i in range(NUM_MEMORY)]
 NODE_RADIUS_MIN, NODE_RADIUS_MAX = 2, 6
