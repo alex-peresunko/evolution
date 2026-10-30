@@ -182,3 +182,14 @@ def test_mate_preference_weighs_score_against_attractiveness(monkeypatch):
     mates = [plain_skilled, pretty_unskilled]
     key = _mate_preference(mates, config.DEFAULT_HERBIVORE_GENES)
     assert max(mates, key=key) is plain_skilled
+
+
+def test_food_patches_bounce_off_world_edges():
+    from evolution.simulation import _update_food_patches
+
+    sim_state = _make_sim()
+    sim_state["food_patches"] = [{"x": WORLD_BOUNDS[0] - 0.1, "y": 300.0, "heading": 0.0}]
+    _update_food_patches(sim_state)
+    patch = sim_state["food_patches"][0]
+    assert patch["x"] <= WORLD_BOUNDS[0]
+    assert math.cos(patch["heading"]) < 0

@@ -12,6 +12,17 @@ from evolution.perception import perceive_all
 WORLD_BOUNDS = (config.WORLD_WIDTH, config.WORLD_HEIGHT)
 
 
+def _reference_edge_distance(pos, angle, world_bounds):
+    dists = []
+    for p, u, size in ((pos.x, math.cos(angle), world_bounds[0]),
+                       (pos.y, math.sin(angle), world_bounds[1])):
+        if u > 0:
+            dists.append((size - p) / u)
+        elif u < 0:
+            dists.append(-p / u)
+    return max(0.0, min(dists))
+
+
 def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasses=(), light=1.0,
                    season=0.0):
     """The original per-creature, pure-Python Creature.see(), plus scalar versions of the
@@ -23,7 +34,8 @@ def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasse
         end_point = self.pos + self._vec2(
             math.cos(self.angle + whisker_angle), math.sin(self.angle + whisker_angle),
         ) * self.sight_distance
-        closest_dist = self.sight_distance
+        closest_dist = min(self.sight_distance, _reference_edge_distance(
+            self.pos, self.angle + whisker_angle, self.world_bounds))
         for obs in obstacles:
             clipped_line = obs.rect.clipline(self.pos, end_point)
             if clipped_line:
@@ -221,3 +233,12 @@ def test_target_whisker_sees_food_ahead_and_is_occluded():
     inputs = perceive_all([c], [food], [c], [], [wall])
     assert inputs[0, tw][centre] == 0.0
     assert c.target_whiskers[centre] is None
+
+
+def test_whiskers_see_the_world_edge():
+    c = Creature(WORLD_BOUNDS)
+    c.pos = c._vec2(WORLD_BOUNDS[0] - 40, 500)
+    c.angle = 0.0
+    c.see([], [])
+    centre = config.NUM_WHISKERS // 2
+    assert c.whiskers[centre] == pytest.approx(40)

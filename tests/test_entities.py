@@ -241,3 +241,16 @@ def test_full_carnivore_keeps_eating_and_gains_fat():
     for tick in range(2, 10):
         carn.act([0.0, 1.0], [], [], [], _empty_grid(), tick=tick)
     assert carn.eating_ticks > 0 and carn.fat > 0
+
+
+def test_world_edge_is_a_wall_not_a_wrap():
+    bounds = (config.WORLD_WIDTH, config.WORLD_HEIGHT)
+    c = Creature(bounds)
+    c.pos = c._vec2(bounds[0] - c.size - 1, 400)
+    c.angle = 0.0  # heading straight at the right edge
+    health = c.health
+    for _ in range(5):
+        c.act([0.0, 1.0], [], [], [], SpatialHashGrid(*bounds, config.GRID_CELL_SIZE))
+        assert c.size <= c.pos.x <= bounds[0] - c.size
+    assert c.health < health - config.HEALTH_LOST_ON_HIT
+    assert math.isclose(c.pos.y, 400)

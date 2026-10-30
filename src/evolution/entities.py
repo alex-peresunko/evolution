@@ -168,9 +168,12 @@ class Creature:
             self.stamina += STAMINA_REGEN_RATE
         self.stamina = max(0, min(self.stamina, self.max_stamina))
 
-        self.pos += self._vec2(math.cos(self.angle), math.sin(self.angle)) * new_speed
-        self.pos.x %= self.world_bounds[0]
-        self.pos.y %= self.world_bounds[1]
+        heading = self._vec2(math.cos(self.angle), math.sin(self.angle))
+        self.pos += heading * new_speed
+        if self._outside_walls():  # world edges are walls, hit like an obstacle
+            self.health -= HEALTH_LOST_ON_HIT
+            self.pos -= heading * new_speed * 3
+            self._clamp_to_walls()
         self.hunger += 1
         hunger_penalty = (
             HUNGER_HEALTH_PENALTY * min(1.0, max(0.0, (self.hunger - HUNGER_MAX) / HUNGER_MAX))
@@ -228,6 +231,16 @@ class Creature:
             self.score += 0.001 * (1.0 - self._nearest_target_dist)
         elif self.is_carnivore and self._nearest_smell_strength > 0:
             self.score += 0.0005 * self._nearest_smell_strength
+
+    def _outside_walls(self):
+        w, h = self.world_bounds
+        return not (self.size <= self.pos.x <= w - self.size
+                    and self.size <= self.pos.y <= h - self.size)
+
+    def _clamp_to_walls(self):
+        w, h = self.world_bounds
+        self.pos.x = min(max(self.pos.x, self.size), w - self.size)
+        self.pos.y = min(max(self.pos.y, self.size), h - self.size)
 
     def _digest(self):
         """One tick of a herbivore meal: absorb an even share of the remaining health."""

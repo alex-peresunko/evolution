@@ -120,13 +120,25 @@ def _social(rel, signals):
     return kin_angle, kin_dist, density, sig_angle, strength
 
 
-def _whiskers(xy, angle, sight, whisker_angles, obstacles):
-    """Distance along each whisker to the first obstacle (Liang-Barsky clip), capped at the
-    sight distance. A whisker starting inside an obstacle is touching it (distance 0)."""
-    dist = np.repeat(sight[:, None], whisker_angles.shape[1], axis=1)
+def _edge_distance(xy, a, world_bounds):
+    """Distance along rays at angles a (N, W) from xy to the world edge."""
+    w, h = world_bounds
+    cos, sin = np.cos(a), np.sin(a)
+    x, y = xy[:, 0][:, None], xy[:, 1][:, None]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        tx = np.where(cos > 0, (w - x) / cos, np.where(cos < 0, -x / cos, np.inf))
+        ty = np.where(sin > 0, (h - y) / sin, np.where(sin < 0, -y / sin, np.inf))
+    return np.maximum(0.0, np.minimum(tx, ty))
+
+
+def _whiskers(xy, angle, sight, whisker_angles, obstacles, world_bounds):
+    """Distance along each whisker to the first obstacle (Liang-Barsky clip) or world edge,
+    capped at the sight distance. A whisker starting inside an obstacle is touching it
+    (distance 0)."""
+    a = angle[:, None] + whisker_angles
+    dist = np.minimum(sight[:, None], _edge_distance(xy, a, world_bounds))
     if not obstacles:
         return dist
-    a = angle[:, None] + whisker_angles
     dx = (np.cos(a) * sight[:, None])[..., None, None]
     dy = (np.sin(a) * sight[:, None])[..., None, None]
     x = xy[:, 0][:, None, None, None]
@@ -188,7 +200,8 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
     ids = _ids(creatures)
     whisker_angles = np.array([c.whisker_angles for c in creatures], dtype=np.float64)
 
-    whisker_dist = _whiskers(xy, angle, sight, whisker_angles, obstacles)
+    whisker_dist = _whiskers(xy, angle, sight, whisker_angles, obstacles,
+                             creatures[0].world_bounds)
     out[:, :NUM_WHISKERS] = 1.0 - whisker_dist / sight[:, None]
     col = NUM_WHISKERS
 

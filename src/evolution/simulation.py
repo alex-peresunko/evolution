@@ -6,7 +6,7 @@ from collections import deque
 import numpy as np
 
 from .config import (
-    NUM_HERBIVOROUS, NUM_CARNIVORES, NUM_FOOD, WORLD_WIDTH, WORLD_HEIGHT, GRID_CELL_SIZE,
+    NUM_HERBIVOROUS, NUM_CARNIVORES, NUM_FOOD, FOOD_RADIUS, WORLD_WIDTH, WORLD_HEIGHT, GRID_CELL_SIZE,
     DEFAULT_HERBIVORE_GENES, DEFAULT_CARNIVORE_GENES, GENE_MIN_MAX, CARNIVORE_GENE_MIN_MAX,
     HERBIVORE_HEALTH, CARNIVORE_HEALTH, FOOD_RESPAWN_RATE,
     BRAIN_TOPOLOGY, AUTOSAVE_INTERVAL,
@@ -126,8 +126,13 @@ def _update_food_patches(sim_state):
     w, h = sim_state["world_bounds"]
     for patch in sim_state["food_patches"]:
         patch["heading"] += random.uniform(-FOOD_PATCH_TURN, FOOD_PATCH_TURN)
-        patch["x"] = (patch["x"] + math.cos(patch["heading"]) * FOOD_PATCH_SPEED) % w
-        patch["y"] = (patch["y"] + math.sin(patch["heading"]) * FOOD_PATCH_SPEED) % h
+        x = patch["x"] + math.cos(patch["heading"]) * FOOD_PATCH_SPEED
+        y = patch["y"] + math.sin(patch["heading"]) * FOOD_PATCH_SPEED
+        if not 0 <= x <= w:  # bounce off the world edges
+            patch["heading"] = math.pi - patch["heading"]
+        if not 0 <= y <= h:
+            patch["heading"] = -patch["heading"]
+        patch["x"], patch["y"] = min(max(x, 0), w), min(max(y, 0), h)
 
 
 def _spawn_food(sim_state):
@@ -139,8 +144,10 @@ def _spawn_food(sim_state):
     patches = sim_state.get("food_patches")
     if patches and random.random() < FOOD_PATCH_SHARE:
         patch = random.choice(patches)
-        pos = ((patch["x"] + random.gauss(0, FOOD_PATCH_RADIUS)) % w,
-               (patch["y"] + random.gauss(0, FOOD_PATCH_RADIUS)) % h)
+        pos = (min(max(patch["x"] + random.gauss(0, FOOD_PATCH_RADIUS), FOOD_RADIUS),
+                   w - FOOD_RADIUS),
+               min(max(patch["y"] + random.gauss(0, FOOD_PATCH_RADIUS), FOOD_RADIUS),
+                   h - FOOD_RADIUS))
     return Food(sim_state["world_bounds"], vec2_factory=vec2_factory, pos=pos)
 
 
