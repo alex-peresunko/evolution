@@ -19,6 +19,7 @@ from evolution.genetics import mutate_genes
 from evolution.neural_network import NeuralNetwork
 from evolution.metrics import GameMetrics
 from evolution.brain_store import save_brain
+from evolution.camera import follow_target, viewport_origin
 from evolution.render import Renderer
 from evolution.islands import (clear_island_files, import_if_better, publish_hall_of_fame,
                                worker_file)
@@ -160,10 +161,17 @@ def draw_dual_chart(screen, rect, title, series, scale, generation):
 
 
 def _set_viewport_center(wx, wy, sim_state):
-    sim_state["cam_x"] = max(0.0, min(float(config.WORLD_WIDTH - config.SCREEN_WIDTH),
-                                      wx - config.SCREEN_WIDTH / 2))
-    sim_state["cam_y"] = max(0.0, min(float(config.WORLD_HEIGHT - config.SCREEN_HEIGHT),
-                                      wy - config.SCREEN_HEIGHT / 2))
+    sim_state["cam_x"], sim_state["cam_y"] = viewport_origin(
+        wx, wy, (config.WORLD_WIDTH, config.WORLD_HEIGHT),
+        (config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
+
+
+def _follow_selected(sim_state):
+    """Keep the camera on the selected creature; when it dies, switch to its species' best."""
+    c = follow_target(sim_state, sim_state["selected_creature"])
+    sim_state["selected_creature"] = c
+    if c is not None:
+        _set_viewport_center(c.pos.x, c.pos.y, sim_state)
 
 
 def draw_minimap(screen, sim_state):
@@ -207,12 +215,10 @@ def draw_elements(screen, font, sim_state):
     ]
     _draw_text_block(screen, font, stats, 10, text_y)
     selected = sim_state.get("selected_creature")
-    if selected and selected.is_alive():
+    if selected:
         info_lines = [f"{k}: {v}" for k, v in selected.get_info().items()]
         _draw_text_block(screen, font, info_lines, config.SCREEN_WIDTH - 450, 16,
                          title="Selected Creature")
-    else:
-        sim_state["selected_creature"] = None
     scale = sim_state["chart_scale"]
     chart_w, chart_h = round(config.CHART_SIZE[0] * scale), round(config.CHART_SIZE[1] * scale)
     spacing = round(5 * scale)
@@ -320,6 +326,7 @@ def handle_events(sim_state, prometheus_metrics):
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             if MINIMAP_RECT and MINIMAP_RECT.collidepoint(event.pos):
                 sim_state["minimap_dragging"] = True
+                sim_state["selected_creature"] = None  # a manual pan stops following
                 wx = (event.pos[0] - config.MINIMAP_X) / config.MINIMAP_WIDTH * config.WORLD_WIDTH
                 wy = (event.pos[1] - config.MINIMAP_Y) / config.MINIMAP_HEIGHT * config.WORLD_HEIGHT
                 _set_viewport_center(wx, wy, sim_state)
@@ -424,6 +431,7 @@ def main():
                     if (sim_state.get("background_mode") and sim_state["worker_processes"]
                             and sim_state["tick"] % config.WORKER_SYNC_INTERVAL == 0):
                         _sync_worker_brains(sim_state)
+            _follow_selected(sim_state)
             now = time.perf_counter()
             if now - tps_window_start >= 1.0:
                 sim_state["tps"] = int((sim_state["tick"] - tps_window_tick) / (now - tps_window_start))
