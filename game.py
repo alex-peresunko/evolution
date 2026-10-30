@@ -164,6 +164,48 @@ def draw_dual_chart(screen, rect, title, series, scale, generation):
         pygame.draw.lines(screen, color, False, points, max(1, round(scale)))
 
 
+def draw_gene_chart(screen, rect, species, gene_history, scale):
+    """Species mean of each gene as a ratio to its default, on one shared axis with a dashed
+    1.0 baseline: shows which traits selection pushes up or down."""
+    font = _chart_font(round(config.CHART_FONT_SIZE * scale))
+    line_h = font.get_linesize()
+    pad = round(4 * scale)
+    _draw_panel(screen, rect)
+    screen.blit(font.render(f"Gene drift - {species}s (x default)", True, config.COLOR_TEXT),
+                (rect.x + pad, rect.y + pad))
+    defaults = config.DEFAULT_CARNIVORE_GENES if species == "carnivore" else config.DEFAULT_HERBIVORE_GENES
+    series = [(gene, color, [v / defaults[gene] for v in gene_history.get(gene, ())])
+              for gene, color in config.GENE_CHART_COLORS.items()]
+    legend_font = _chart_font(round(config.CHART_FONT_SIZE * scale * 0.8))
+    legend_h = legend_font.get_linesize()
+    x, y = rect.x + pad, rect.y + pad + line_h
+    for gene, color, ratios in series:  # legend, wrapped to the panel width
+        label = legend_font.render(f"{gene} {ratios[-1]:.2f}" if ratios else gene, True, color)
+        if x + label.get_width() > rect.right - pad:
+            x, y = rect.x + pad, y + legend_h
+        screen.blit(label, (x, y))
+        x += label.get_width() + pad * 3
+    top, bottom = y + legend_h + pad, rect.bottom - pad
+    left, width = rect.x + pad, rect.width - pad * 2
+    values = [r for _, _, ratios in series for r in ratios] + [1.0]
+    lo, hi = min(values), max(values)
+    span = (hi - lo) or 1.0
+    lo, hi = lo - span * 0.05, hi + span * 0.05
+
+    def to_y(r):
+        return bottom - (r - lo) / (hi - lo) * (bottom - top)
+
+    base_y = to_y(1.0)
+    dash = round(6 * scale)
+    for dx in range(0, width, dash * 2):
+        pygame.draw.line(screen, (150, 150, 150), (left + dx, base_y),
+                         (left + min(width, dx + dash), base_y))
+    for _, color, ratios in series:
+        if len(ratios) > 1:
+            points = [(left + i / (len(ratios) - 1) * width, to_y(r)) for i, r in enumerate(ratios)]
+            pygame.draw.lines(screen, color, False, points, max(1, round(scale)))
+
+
 def _set_viewport_center(wx, wy, sim_state):
     sim_state["cam_x"], sim_state["cam_y"] = viewport_origin(
         wx, wy, (config.WORLD_WIDTH, config.WORLD_HEIGHT),
@@ -312,6 +354,7 @@ def draw_elements(screen, font, sim_state):
         f"Tick: {sim_state['tick']}",
         f"Herbivores: {len(sim_state['creatures'])}",
         f"Carnivores: {len(sim_state['carnivores'])}",
+        f"Lineages: H {sim_state['lineages']['herbivore']}  C {sim_state['lineages']['carnivore']}",
         f"Food: {len(sim_state['food_items'])}   Carcasses: {len(sim_state.get('carcasses', ()))}",
         _time_of_day(sim_state.get("light", 1.0)),
         f"Top Herbivore Score: {max([c.score for c in sim_state['creatures']] + [0]):.2f}",
@@ -340,6 +383,13 @@ def draw_elements(screen, font, sim_state):
         series = [(sim_state[f"herbivore_{metric}_history"], config.COLOR_CREATURE, "Herb"),
                   (sim_state[f"carnivore_{metric}_history"], config.COLOR_CARNIVORE, "Carn")]
         draw_dual_chart(screen, rect, title, series, scale, sim_state["generation"])
+    if sim_state["show_genes"]:
+        species = "carnivore" if selected and selected.is_carnivore else "herbivore"
+        gene_w = round(chart_w * 1.6)
+        rect = pygame.Rect(config.SCREEN_WIDTH - chart_w - gene_w - 20,
+                           config.SCREEN_HEIGHT - 10 - chart_h * 2 - spacing, gene_w,
+                           chart_h * 2 + spacing)
+        draw_gene_chart(screen, rect, species, sim_state["gene_history"][species], scale)
     if sim_state["paused"]:
         screen.blit(font.render("PAUSED", True, (255, 100, 100)),
                     (config.SCREEN_WIDTH // 2 - 60, 20))
@@ -421,6 +471,8 @@ def handle_events(sim_state, prometheus_metrics):
             if event.key == pygame.K_RETURN:
                 sim_state["fps_limited"] = not sim_state["fps_limited"]
                 print(f"FPS Limiting {'Enabled' if sim_state['fps_limited'] else 'Disabled'}")
+            if event.key == pygame.K_g:
+                sim_state["show_genes"] = not sim_state["show_genes"]
             if event.key == pygame.K_n:
                 sim_state["show_brain"] = not sim_state["show_brain"]
             if event.key == pygame.K_d:
@@ -529,6 +581,7 @@ def main():
         "chart_scale": config.CHART_SCALE_DEFAULT,
         "tps": 0,
         "show_brain": True,
+        "show_genes": True,
         "brain_history": deque(maxlen=config.BRAIN_VIEW_HISTORY),
         "brain_history_owner": None,
         "renderer": Renderer(config.WORLD_WIDTH, config.WORLD_HEIGHT, obstacles),

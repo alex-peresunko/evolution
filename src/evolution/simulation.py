@@ -1,6 +1,7 @@
 import random
 import math
 import time
+from collections import deque
 
 import numpy as np
 
@@ -52,6 +53,8 @@ def build_sim_state(world_bounds, creatures, carnivores, food_items, obstacles):
         "carnivore_longevity_history": [],
         "max_age_herbivore": 0,
         "max_age_carnivore": 0,
+        "gene_history": {"herbivore": {}, "carnivore": {}},
+        "lineages": {"herbivore": 0, "carnivore": 0},
         "generation": 1,
         "tick": 0,
         "last_autosave_tick": 0,
@@ -180,6 +183,19 @@ def restore_progress(sim_state, species, brain, genes, filename, save_dir="saved
     for k in keys:
         h = sim_state[k]
         sim_state[k] = [h[0] if h else 0] * (length - len(h)) + h
+
+
+def sample_genes(sim_state):
+    """Append each species' mean gene values to gene_history and count its live lineages."""
+    for species, key, defaults in (("herbivore", "creatures", DEFAULT_HERBIVORE_GENES),
+                                   ("carnivore", "carnivores", DEFAULT_CARNIVORE_GENES)):
+        group = sim_state[key]
+        history = sim_state.setdefault("gene_history", {}).setdefault(species, {})
+        for gene in defaults:
+            series = history.setdefault(gene, deque(maxlen=CHART_HISTORY_SAVE_MAX))
+            if group:
+                series.append(sum(c.genes[gene] for c in group) / len(group))
+        sim_state.setdefault("lineages", {})[species] = len({c.lineage for c in group})
 
 
 def _retire_creature(c, sim_state, prometheus_metrics=None, worker_id=None):
@@ -356,6 +372,7 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
         sim_state["carnivore_score_history"].append(sim_state["hall_of_fame"]["carnivore"]["score"])
         sim_state["herbivore_longevity_history"].append(sim_state["max_age_herbivore"])
         sim_state["carnivore_longevity_history"].append(sim_state["max_age_carnivore"])
+        sample_genes(sim_state)
 
     if sim_state["creatures"]:
         for c in sim_state["creatures"]:
@@ -411,6 +428,9 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
                     vec2_factory=p1._vec2, rect_factory=p1._rect,
                 )
                 child.pos = (p1.pos + best_mate.pos) / 2
+                child.lineage = p1.lineage
+                child.parent_ids = (p1.id, best_mate.id)
+                child.descent = max(p1.descent, best_mate.descent) + 1
                 child.birth_time = now
                 new_offspring.append(child)
                 p1.health *= 0.7

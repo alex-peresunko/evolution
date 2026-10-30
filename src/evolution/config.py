@@ -20,6 +20,13 @@ FOOD_RESPAWN_RATE = 2
 # --- Spatial Grid ---
 GRID_CELL_SIZE = 200
 
+# --- Gene-drift chart (G in game.py): species mean of each gene / its default ---
+GENE_CHART_COLORS = {
+    "size": (120, 200, 255), "max_speed": (255, 210, 80), "sight_distance": (160, 255, 140),
+    "sight_angle": (80, 220, 200), "max_stamina": (255, 150, 90), "attractiveness": (255, 120, 200),
+    "mutation_rate": (200, 160, 255), "lifespan": (230, 230, 230), "litter_size": (255, 90, 90),
+}
+
 # --- Score / Worker sync ---
 SCORE_SAMPLE_INTERVAL = 200
 CHART_HISTORY_SAVE_MAX = 500  # chart samples per series kept in a saved brain file
