@@ -6,6 +6,7 @@ Containers run with [Podman](https://podman.io). On macOS, start its VM once wit
 
 Start the headless simulation together with Prometheus and Grafana:
 `podman compose up --build -d`
+(or `make run headless`, which also waits for Grafana and opens it; `make stop` stops it).
 
 Then open http://localhost:3000. Grafana opens straight on the evolution dashboard, with no
 login. The other ports are:

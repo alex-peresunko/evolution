@@ -6,6 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 poetry install                                   # deps (Python >=3.12)
+make run ui                                      # game.py (ARGS="--new" passes flags)
+make run headless                                # podman compose stack, opens Grafana; make logs / make stop
+                                                 # both refuse to start while any simulation (local or container) runs
 
 poetry run python game.py                        # graphical (requires display); continues from best_brain_*.json
 poetry run python game.py --new                  # random brains; current best brains move to history
