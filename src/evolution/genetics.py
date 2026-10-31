@@ -1,9 +1,16 @@
 import random
+
 import numpy as np
 
+from .config import (
+    ADDITIVE_GENE_MUTATION,
+    GENE_MIN_MAX,
+    GENE_MUTATION_AMOUNT,
+    MUTATION_AMOUNT,
+    MUTATION_RATE,
+    SPECIATION_DISTANCE,
+)
 from .neural_network import NeuralNetwork
-from .config import (ADDITIVE_GENE_MUTATION, GENE_MIN_MAX, GENE_MUTATION_AMOUNT, MUTATION_AMOUNT,
-                     MUTATION_RATE, SPECIATION_DISTANCE)
 
 
 def combine_brains(brain1: NeuralNetwork, brain2: NeuralNetwork) -> NeuralNetwork:

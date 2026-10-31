@@ -1,12 +1,20 @@
 import json
 
 from evolution import config
-from evolution.brain_store import (read_saved_history, read_saved_score, save_brain_if_better,
-                                   update_saved_history)
+from evolution.brain_store import (
+    read_saved_history,
+    read_saved_score,
+    save_brain_if_better,
+    update_saved_history,
+)
 from evolution.entities import Creature
 from evolution.neural_network import NeuralNetwork
-from evolution.simulation import (_retire_creature, build_sim_state, restore_progress,
-                                  save_hall_of_fame)
+from evolution.simulation import (
+    _retire_creature,
+    build_sim_state,
+    restore_progress,
+    save_hall_of_fame,
+)
 
 WORLD_BOUNDS = (config.WORLD_WIDTH, config.WORLD_HEIGHT)
 

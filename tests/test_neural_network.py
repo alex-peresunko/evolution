@@ -1,8 +1,6 @@
-import os
 import tempfile
 
 import numpy as np
-import pytest
 
 from evolution.neural_network import NeuralNetwork
 

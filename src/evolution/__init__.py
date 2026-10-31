@@ -1,11 +1,11 @@
+from . import config
+from .brain_store import load_brain, save_brain
 from .entities import Creature, Food, Obstacle, Tree
-from .neural_network import NeuralNetwork
-from .spatial import SpatialHashGrid
-from .simulation import update_world, create_initial_population, build_sim_state
 from .genetics import combine_brains, combine_genes, mutate_genes
 from .metrics import GameMetrics
-from .brain_store import save_brain, load_brain
-from . import config
+from .neural_network import NeuralNetwork
+from .simulation import build_sim_state, create_initial_population, update_world
+from .spatial import SpatialHashGrid
 
 __all__ = [
     "Creature", "Food", "Obstacle", "Tree",

@@ -196,9 +196,8 @@ def render_run(seed=7, ticks=240, every=40):
     """Frames of the full game.py screen (world, minimap, HUD, brain panel, gene chart) under
     pygame's dummy video driver, at two zoom levels. Yields (label, frame bytes)."""
     os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
-    import pygame
-
     import game
+    import pygame
 
     _reset(seed)
     pygame.init()

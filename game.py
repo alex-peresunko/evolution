@@ -1,10 +1,10 @@
+import ctypes
+import ctypes.util
 import math
 import os
 import subprocess
 import sys
 import time
-import ctypes
-import ctypes.util
 from collections import deque
 from multiprocessing import cpu_count
 
@@ -12,23 +12,49 @@ import pygame
 from prometheus_client import start_http_server
 
 from evolution import config
-from evolution.entities import Creature, Food, Tree
-from evolution.simulation import (update_world, create_start_populations, build_sim_state,
-                                  generate_lakes, generate_obstacles,
-                                  food_cap, restore_progress, restore_start_progress,
-                                  save_hall_of_fame, season_name, species_history)
-from evolution.brain_history import (add_start_arguments, archive_after_start,
-                                     check_load_argument, format_listing, start_source)
-from evolution.genetics import mutate_brain, mutate_genes
-from evolution.neural_network import NeuralNetwork
-from evolution.metrics import GameMetrics
+from evolution.brain_history import (
+    add_start_arguments,
+    archive_after_start,
+    check_load_argument,
+    format_listing,
+    start_source,
+)
 from evolution.brain_store import save_brain
-from evolution.brain_view import (INPUT_LABELS, OUTPUT_LABELS, activations, edge_contributions,
-                                  labels, network_layout, strong_edges, top_drivers)
+from evolution.brain_view import (
+    INPUT_LABELS,
+    OUTPUT_LABELS,
+    activations,
+    edge_contributions,
+    labels,
+    network_layout,
+    strong_edges,
+    top_drivers,
+)
 from evolution.camera import follow_target, min_zoom, viewport_origin, zoom_at
+from evolution.entities import Creature, Food, Tree
+from evolution.genetics import mutate_brain, mutate_genes
+from evolution.islands import (
+    clear_island_files,
+    import_if_better,
+    publish_hall_of_fame,
+    worker_file,
+)
+from evolution.metrics import GameMetrics
+from evolution.neural_network import NeuralNetwork
 from evolution.render import Renderer
-from evolution.islands import (clear_island_files, import_if_better, publish_hall_of_fame,
-                               worker_file)
+from evolution.simulation import (
+    build_sim_state,
+    create_start_populations,
+    food_cap,
+    generate_lakes,
+    generate_obstacles,
+    restore_progress,
+    restore_start_progress,
+    save_hall_of_fame,
+    season_name,
+    species_history,
+    update_world,
+)
 
 # pygame-specific vector/rect factories
 _vec2 = pygame.math.Vector2

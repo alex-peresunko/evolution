@@ -1,35 +1,72 @@
-import random
 import math
+import random
 import time
 from collections import deque
 
 import numpy as np
 
+from .brain_store import read_saved_history, read_saved_score, save_brain, update_saved_history
 from .config import (
-    NUM_HERBIVOROUS, NUM_CARNIVORES, NUM_FOOD, FOOD_RADIUS, WORLD_WIDTH, WORLD_HEIGHT, GRID_CELL_SIZE,
-    DEFAULT_HERBIVORE_GENES, DEFAULT_CARNIVORE_GENES, GENE_MIN_MAX, CARNIVORE_GENE_MIN_MAX,
-    HERBIVORE_HEALTH, CARNIVORE_HEALTH, FOOD_RESPAWN_RATE,
-    BRAIN_TOPOLOGY, AUTOSAVE_INTERVAL,
-    MATE_SELECTION_RADIUS, MATE_ATTRACTION_RADIUS, MATE_SEEK_HUNGER_THRESHOLD,
-    MATE_SEEK_DANGER_THRESHOLD, MATE_SEEK_BLEND, MATE_SEEK_MIN_SPEED,
-    REPRODUCTION_HEALTH_THRESHOLD, MAX_REPRODUCTIONS, REPRODUCTION_COOLDOWN_TICKS,
-    REPRODUCTION_POP_CAP_FACTOR, RESPAWN_IMMUNITY_TICKS,
-    ELITE_REINJECT_INTERVAL, ELITE_REINJECT_COUNT, MATE_SCORE_WEIGHT,
-    HOF_SCORE_HALF_LIFE, ELITE_POOL_SIZE, REPOPULATE_RANDOM_SHARE,
-    LITTER_ENDOWMENT, LITTER_SPREAD,
-    SCORE_SAMPLE_INTERVAL, CHART_HISTORY_SAVE_MAX, NUM_MEMORY, DAY_LENGTH_TICKS,
-    SEASON_LENGTH_TICKS, SEASON_FOOD_AMPLITUDE,
-    FOOD_PATCH_COUNT, FOOD_PATCH_SHARE, FOOD_PATCH_RADIUS, FOOD_PATCH_SPEED, FOOD_PATCH_TURN,
-    NUM_LAKES, LAKE_RADIUS_RANGE, LAKE_LOBES, LAKE_SHORE_ROUGHNESS, LAKE_SHORE_HARMONICS,
-    NUM_OBSTACLES, NUM_TREES, TREE_CROWN_RADIUS_RANGE,
+    AUTOSAVE_INTERVAL,
+    BRAIN_TOPOLOGY,
+    CARNIVORE_GENE_MIN_MAX,
+    CARNIVORE_HEALTH,
+    CHART_HISTORY_SAVE_MAX,
+    DAY_LENGTH_TICKS,
+    DEFAULT_CARNIVORE_GENES,
+    DEFAULT_HERBIVORE_GENES,
+    ELITE_POOL_SIZE,
+    ELITE_REINJECT_COUNT,
+    ELITE_REINJECT_INTERVAL,
+    FOOD_PATCH_COUNT,
+    FOOD_PATCH_RADIUS,
+    FOOD_PATCH_SHARE,
+    FOOD_PATCH_SPEED,
+    FOOD_PATCH_TURN,
+    FOOD_RADIUS,
+    FOOD_RESPAWN_RATE,
+    GENE_MIN_MAX,
+    GRID_CELL_SIZE,
+    HERBIVORE_HEALTH,
+    HOF_SCORE_HALF_LIFE,
+    HUNGER_MAX,
+    LAKE_LOBES,
+    LAKE_RADIUS_RANGE,
+    LAKE_SHORE_HARMONICS,
+    LAKE_SHORE_ROUGHNESS,
+    LITTER_ENDOWMENT,
+    LITTER_SPREAD,
+    MATE_ATTRACTION_RADIUS,
+    MATE_SCORE_WEIGHT,
+    MATE_SEEK_BLEND,
+    MATE_SEEK_DANGER_THRESHOLD,
+    MATE_SEEK_HUNGER_THRESHOLD,
+    MATE_SEEK_MIN_SPEED,
+    MATE_SELECTION_RADIUS,
+    MAX_REPRODUCTIONS,
+    NUM_CARNIVORES,
+    NUM_FOOD,
+    NUM_HERBIVOROUS,
+    NUM_LAKES,
+    NUM_MEMORY,
+    NUM_OBSTACLES,
+    NUM_TREES,
+    REPOPULATE_RANDOM_SHARE,
+    REPRODUCTION_COOLDOWN_TICKS,
+    REPRODUCTION_HEALTH_THRESHOLD,
+    REPRODUCTION_POP_CAP_FACTOR,
+    RESPAWN_IMMUNITY_TICKS,
+    SCORE_SAMPLE_INTERVAL,
+    SEASON_FOOD_AMPLITUDE,
+    SEASON_LENGTH_TICKS,
+    TREE_CROWN_RADIUS_RANGE,
 )
 from .entities import Carcass, Creature, Food, Lake, Obstacle, Tree
-from .spatial import SpatialHashGrid
 from .genetics import combine_brains, combine_genes, compatible, mutate_brain, mutate_genes
 from .islands import inject_immigrants
 from .neural_network import NeuralNetwork
 from .perception import perceive_all
-from .brain_store import read_saved_history, read_saved_score, save_brain, update_saved_history
+from .spatial import SpatialHashGrid
 
 
 def generate_obstacles(world_bounds, rect_factory=None, rocks=NUM_OBSTACLES, trees=NUM_TREES,
@@ -264,10 +301,6 @@ def _apply_mate_seeking_drive(c, outputs, herb_grid, carn_grid):
     outputs[0] = outputs[0] * (1 - MATE_SEEK_BLEND) + rotation_drive * MATE_SEEK_BLEND
     outputs[1] = max(outputs[1], MATE_SEEK_MIN_SPEED)
     return outputs
-
-
-# Import HUNGER_MAX here to avoid circular; it's already in config
-from .config import HUNGER_MAX
 
 
 def species_history(sim_state, species):

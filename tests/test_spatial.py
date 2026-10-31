@@ -1,7 +1,6 @@
-import pytest
 
-from evolution.spatial import SpatialHashGrid
 from evolution.math_types import Vector2
+from evolution.spatial import SpatialHashGrid
 
 
 class _Obj:

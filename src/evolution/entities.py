@@ -1,29 +1,69 @@
-import random
 import math
-from typing import Optional
+import random
 
 import numpy as np
 
 from .config import (
-    CARNIVORE_HEALTH, HERBIVORE_HEALTH, ADULTHOOD_AGE, JUVENILE_SIZE_FACTOR,
-    CREATURE_ROTATION_SPEED, STAMINA_EFFORT_THRESHOLD, STAMINA_DEPLETION_RATE,
-    STAMINA_REGEN_RATE, STAMINA_EXHAUSTION_PENALTY, STAMINA_RECOVERY_SHARE, HUNGER_MAX, HUNGER_HEALTH_PENALTY,
-    HEALTH_LOSS_PER_TICK, HEALTH_LOSS_SPEED_FACTOR, HEALTH_LOST_ON_HIT,
-    GENE_MIN_MAX, CARNIVORE_GENE_MIN_MAX, DEFAULT_HERBIVORE_GENES, DEFAULT_CARNIVORE_GENES,
-    CARNIVORE_HEALTH_PER_FOOD, HERBIVORE_HEALTH_PER_FOOD, FOOD_RADIUS,
+    ADRENALINE_STAMINA,
+    ADULTHOOD_AGE,
+    BITE_COOLDOWN_TICKS,
+    BITE_DAMAGE,
+    BITE_HEALTH_TRANSFER,
+    BITE_SCORE,
+    BRAIN_TOPOLOGY,
+    CARCASS_EAT_RATE,
+    CARCASS_LIFETIME,
+    CARCASS_MEAT_PER_SIZE,
+    CARNIVORE_BITE_ANGLE,
+    CARNIVORE_EAT_TICKS,
+    CARNIVORE_GENE_MIN_MAX,
+    CARNIVORE_HEALTH,
+    CARNIVORE_HEALTH_PER_FOOD,
+    CARNIVORE_SWIM_STAMINA_COST,
+    CREATURE_ROTATION_SPEED,
+    DEFAULT_CARNIVORE_GENES,
+    DEFAULT_HERBIVORE_GENES,
+    FAT_BURN_PER_TICK,
+    FAT_MAX,
+    FAT_SIZE_FACTOR,
+    FAT_SPEED_PENALTY,
+    FAT_STORE_EFFICIENCY,
+    FOOD_MAX_LIFETIME,
+    FOOD_MIN_HEALTH_FACTOR,
+    FOOD_RADIUS,
+    GENE_MIN_MAX,
     HEALTH_GAIN_SIZE_PENALTY,
-    NUM_WHISKERS, BRAIN_TOPOLOGY, SIZE_SPEED_PENALTY_FACTOR, SPEED_STAMINA_EXPONENT,
-    SIZE_STAMINA_FACTOR, RESPAWN_IMMUNITY_TICKS,
-    FOOD_MAX_LIFETIME, FOOD_MIN_HEALTH_FACTOR, NUM_MEMORY, CARNIVORE_BITE_ANGLE,
-    BITE_DAMAGE, BITE_COOLDOWN_TICKS, BITE_HEALTH_TRANSFER, BITE_SCORE, ADRENALINE_STAMINA,
-    RETALIATION_DAMAGE, CARCASS_MEAT_PER_SIZE, CARCASS_LIFETIME, CARCASS_EAT_RATE,
-    SCAVENGE_SCORE_FACTOR, SIGNAL_HEALTH_COST, HERBIVORE_EAT_TICKS, CARNIVORE_EAT_TICKS,
-    FAT_MAX, FAT_STORE_EFFICIENCY, FAT_BURN_PER_TICK, FAT_SPEED_PENALTY, FAT_SIZE_FACTOR,
-    UPKEEP_WEIGHTS, KLEIBER_EXPONENT, SENESCENCE_RATE,
-    WATER_SPEED_FACTOR, HERBIVORE_SWIM_STAMINA_COST, CARNIVORE_SWIM_STAMINA_COST,
+    HEALTH_LOSS_PER_TICK,
+    HEALTH_LOSS_SPEED_FACTOR,
+    HEALTH_LOST_ON_HIT,
+    HERBIVORE_EAT_TICKS,
+    HERBIVORE_HEALTH,
+    HERBIVORE_HEALTH_PER_FOOD,
+    HERBIVORE_SWIM_STAMINA_COST,
+    HUNGER_HEALTH_PENALTY,
+    HUNGER_MAX,
+    JUVENILE_SIZE_FACTOR,
+    KLEIBER_EXPONENT,
+    NUM_MEMORY,
+    NUM_WHISKERS,
+    RETALIATION_DAMAGE,
+    SCAVENGE_SCORE_FACTOR,
+    SENESCENCE_RATE,
+    SIGNAL_HEALTH_COST,
+    SIZE_SPEED_PENALTY_FACTOR,
+    SIZE_STAMINA_FACTOR,
+    SPEED_STAMINA_EXPONENT,
+    STAMINA_DEPLETION_RATE,
+    STAMINA_EFFORT_THRESHOLD,
+    STAMINA_EXHAUSTION_PENALTY,
+    STAMINA_RECOVERY_SHARE,
+    STAMINA_REGEN_RATE,
     TREE_TRUNK_FRACTION,
+    UPKEEP_WEIGHTS,
+    WATER_SPEED_FACTOR,
 )
-from .math_types import Vector2 as _HeadlessVector2, SimpleRect as _HeadlessRect
+from .math_types import SimpleRect as _HeadlessRect
+from .math_types import Vector2 as _HeadlessVector2
 from .neural_network import NeuralNetwork
 from .perception import perceive_all
 
@@ -84,17 +124,17 @@ class Creature:
         self.health = CARNIVORE_HEALTH if is_carnivore else HERBIVORE_HEALTH
         self.max_health = self.health
         self.score, self.is_best, self.reproductions = 0, False, 0
-        self.birth_time: Optional[float] = None
-        self.last_reproduction_tick: Optional[int] = None
+        self.birth_time: float | None = None
+        self.last_reproduction_tick: int | None = None
         self.current_speed = 0.0
-        self._nearest_target_dist: Optional[float] = None
+        self._nearest_target_dist: float | None = None
         self._nearest_smell_strength: float = 0.0
         self.hunger = 0
         self.signal = 0.0                   # emitted to kin, from the brain's 3rd output
         self.memory = [0.0] * NUM_MEMORY    # fed back as inputs on the next tick
         self.effective_sight = 0.0
-        self.last_bite_tick: Optional[int] = None
-        self.last_hit_tick: Optional[int] = None
+        self.last_bite_tick: int | None = None
+        self.last_hit_tick: int | None = None
         self.respawn_immunity_ticks = 0
         self.eating_ticks = 0               # > 0 while standing still to eat
         self.meal_health = 0.0              # herbivore: health still to absorb from the meal
@@ -166,10 +206,6 @@ class Creature:
         """Extra per-tick health loss of old age, growing linearly past the lifespan gene."""
         lifespan = self.genes["lifespan"]
         return SENESCENCE_RATE * max(0.0, self.age - lifespan) / lifespan
-
-    def perceive_and_think(self, local_food, local_herbivores, local_carnivores, obstacles):
-        inputs = self.see(local_food, obstacles, local_herbivores, local_carnivores)
-        return self.think(inputs)
 
     def act(self, outputs, global_food_list, global_herbivore_list, obstacles, grid,
             food_grid=None, herb_grid=None, carcass_grid=None, tick=0, lakes=()):
@@ -369,9 +405,6 @@ class Creature:
             season=0.0):
         return perceive_all([self], food_items, herbivores or [], carnivores or [], obstacles,
                             carcasses, light, season)[0].tolist()
-
-    def think(self, inputs):
-        return self.brain.forward(inputs)
 
     def is_alive(self):
         return self.health > 0

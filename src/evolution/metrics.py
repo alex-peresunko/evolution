@@ -2,7 +2,7 @@ import time
 
 from prometheus_client import Counter, Gauge
 
-from .config import BRAIN_TOPOLOGY, DEFAULT_HERBIVORE_GENES, DEFAULT_CARNIVORE_GENES
+from .config import BRAIN_TOPOLOGY, DEFAULT_CARNIVORE_GENES, DEFAULT_HERBIVORE_GENES
 
 
 class GameMetrics:

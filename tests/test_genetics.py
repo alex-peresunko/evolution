@@ -2,9 +2,9 @@ import random
 
 import pytest
 
+from evolution import config
 from evolution.genetics import combine_brains, combine_genes, mutate_genes
 from evolution.neural_network import NeuralNetwork
-from evolution import config
 
 
 def test_combine_genes_respects_constraints():

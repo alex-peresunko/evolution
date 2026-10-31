@@ -2,10 +2,9 @@ import math
 
 import pytest
 
+from evolution import config
 from evolution.entities import Carcass, Creature, Food, Lake, Tree
 from evolution.spatial import SpatialHashGrid
-from evolution import config
-
 
 WORLD_BOUNDS = (config.WORLD_WIDTH, config.WORLD_HEIGHT)
 

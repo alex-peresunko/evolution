@@ -2,11 +2,17 @@ import math
 
 import pytest
 
-from evolution.entities import Creature, Food, Lake, Obstacle, Tree
-from evolution.simulation import (_spawn_food, build_sim_state, create_initial_population,
-                                 generate_lakes, generate_obstacles, random_shore,
-                                 update_world)
 from evolution import config
+from evolution.entities import Creature, Food, Lake, Obstacle, Tree
+from evolution.simulation import (
+    _spawn_food,
+    build_sim_state,
+    create_initial_population,
+    generate_lakes,
+    generate_obstacles,
+    random_shore,
+    update_world,
+)
 
 WORLD_BOUNDS = (config.WORLD_WIDTH, config.WORLD_HEIGHT)
 

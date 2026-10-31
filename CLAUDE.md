@@ -12,7 +12,6 @@ poetry run python game.py --new                  # random brains; current best b
 poetry run python game.py --list-brains          # list history snapshots (also game_headless.py)
 poetry run python game.py --load 2               # start from snapshot #2 (1 = newest) or a folder name
 poetry run python game_headless.py               # headless, auto-loads saved brains, Prometheus on :8000
-poetry run python game_headless_multiproc.py     # headless + ProcessPoolExecutor
 poetry run python pretrain.py                    # behavior-cloning pretrain -> history snapshot *-pretrained (--install: best_brain_*.json)
 
 poetry run pytest                                # all tests (no pygame required)
@@ -27,7 +26,7 @@ poetry run python -m cProfile -s time <script.py>
 
 ## Architecture
 
-Shared library lives in `src/evolution/`; the three `game*.py` entry scripts are thin wrappers around it. `config.py` is the single source of truth for every simulation constant.
+Shared library lives in `src/evolution/`; the `game*.py` entry scripts are thin wrappers around it. `config.py` is the single source of truth for every simulation constant.
 
 ### Simulation loop
 
@@ -58,8 +57,6 @@ World mechanics, all tuned through `config.py`:
 - **Signal and memory:** after `batch_forward`, the extra outputs are stored as `c.signal` (heard by kin within `SIGNAL_RADIUS`, with a small health cost) and `c.memory` (fed back as inputs next tick).
 
 Evolution is continuous: creatures die and are "retired" (`_retire_creature` updates the Hall of Fame and saves the brain), and eligible nearby adults reproduce (brain crossover + gene averaging + mutation, in `genetics.py`). Crossover is neuron-wise: each neuron's incoming weights and bias come from one parent. Mates are ranked by attractiveness. Two optional selection boosts are off by default (both 0), because an A/B run showed no gain: `MATE_SCORE_WEIGHT` adds score to mate ranking, and `ELITE_REINJECT_INTERVAL` periodically replaces the weakest `ELITE_REINJECT_COUNT` creatures of each species with the Hall of Fame brain and mutated copies (`islands.inject_immigrants`). The reproduction cooldown is counted in ticks (`REPRODUCTION_COOLDOWN_TICKS`), so behavior doesn't depend on simulation speed. Every retired creature competes for the `elites` pool (the `ELITE_POOL_SIZE` best per species). Hall of Fame and elite scores fade with a `HOF_SCORE_HALF_LIFE` (`_fade_records`), so an old lucky record can't block newer brains forever. After an extinction (`sim_state["extinctions"]`), the species is repopulated by `_repopulate`: young of random elite pairs (the Hall of Fame if the pool is empty), plus `REPOPULATE_RANDOM_SHARE` random brains. `sim_state["generation"]` is the deepest `Creature.generation` born (parents' max + 1); creatures loaded from a brain file take the file's generation.
-
-**`game_headless_multiproc.py` diverges:** it has its own `update_world` and a *generational* `evolve_population`, and it ships `LeanCreature`/`LeanFood` dataclasses to worker processes for IPC. Changes to `simulation.update_world` do not carry over to it automatically. It only stores signal/memory: it keeps instant kills and has no carcasses, food patches, lakes, trees, night, seasons, litters or speciation. Upkeep, senescence and the heritable mutation rate do reach it, because they live in `Creature`/`genetics`.
 
 ### Island workers (game.py)
 
@@ -136,7 +133,7 @@ Details:
 
 ### Saved brains
 
-`brain_store.save_brain`/`load_brain` write JSON to `saved_brains/` (weights as nested lists plus topology, generation, genes, score). `NeuralNetwork.load` handles topology mismatches, so old brains survive architecture changes. Main files: `best_brain_{herbivore,carnivore}.json`. These are tracked in git. Autosaves and exit saves overwrite them only with a Hall of Fame record set during this run (`"fresh"`; a faded record may score below the file). The manual **S** key in `game.py` always overwrites. `game.py` and `game_headless.py` start from them (`create_start_populations`) unless given `--new` or `--load`; **L** reloads them mid-run. Each file also stores that species' chart `history` (score and longevity, capped at `CHART_HISTORY_SAVE_MAX`). After a load, `simulation.restore_progress` restores the history and seeds the Hall of Fame with the saved score, so charts continue instead of restarting. Without a new record, exit still updates the history (`update_saved_history`). `game_headless_multiproc.py` doesn't write history.
+`brain_store.save_brain`/`load_brain` write JSON to `saved_brains/` (weights as nested lists plus topology, generation, genes, score). `NeuralNetwork.load` handles topology mismatches, so old brains survive architecture changes. Main files: `best_brain_{herbivore,carnivore}.json`. These are tracked in git. Autosaves and exit saves overwrite them only with a Hall of Fame record set during this run (`"fresh"`; a faded record may score below the file). The manual **S** key in `game.py` always overwrites. `game.py` and `game_headless.py` start from them (`create_start_populations`) unless given `--new` or `--load`; **L** reloads them mid-run. Each file also stores that species' chart `history` (score and longevity, capped at `CHART_HISTORY_SAVE_MAX`). After a load, `simulation.restore_progress` restores the history and seeds the Hall of Fame with the saved score, so charts continue instead of restarting. Without a new record, exit still updates the history (`update_saved_history`).
 
 **Brain history** (`brain_history.py`): every start of `game.py`/`game_headless.py` (not island workers) snapshots the current best files as a pair into `saved_brains/history/<YYYYmmdd-HHMMSS>[-label]/` (git-ignored), after the starting populations were read. A snapshot is skipped when the brains equal the newest one; chart history and uptime are ignored in that comparison because every exit rewrites them. `--new` and `--load` move the best files out instead of copying, so the run's own records save from scratch. Only the newest `BRAIN_HISTORY_KEEP` snapshots are kept, plus the one loaded this run.
 
@@ -147,7 +144,3 @@ Space pause · +/- simulation speed (1–32 ticks per frame) · S save brains ·
 ## Metrics
 
 Prometheus metrics are served at `http://localhost:8000` (`metrics.GameMetrics`). An importable Grafana dashboard is in `grafana_dashboard.json`.
-
-## Legacy
-
-`archive/` contains early prototypes that the simulation does not use.

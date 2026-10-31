@@ -6,15 +6,27 @@ import time
 from prometheus_client import start_http_server
 
 from evolution import config
-from evolution.entities import Creature, Food
-from evolution.simulation import (update_world, create_start_populations, build_sim_state,
-                                  generate_lakes, generate_obstacles,
-                                  restore_start_progress, autosave_hall_of_fame,
-                                  save_hall_of_fame)
-from evolution.metrics import GameMetrics
-from evolution.brain_history import (SAVE_DIR, add_start_arguments, archive_after_start,
-                                     check_load_argument, format_listing, start_source)
+from evolution.brain_history import (
+    SAVE_DIR,
+    add_start_arguments,
+    archive_after_start,
+    check_load_argument,
+    format_listing,
+    start_source,
+)
+from evolution.entities import Food
 from evolution.islands import SPECIES, import_if_better, main_file
+from evolution.metrics import GameMetrics
+from evolution.simulation import (
+    autosave_hall_of_fame,
+    build_sim_state,
+    create_start_populations,
+    generate_lakes,
+    generate_obstacles,
+    restore_start_progress,
+    save_hall_of_fame,
+    update_world,
+)
 
 
 def main(worker_id=None, new=False, load=None):
