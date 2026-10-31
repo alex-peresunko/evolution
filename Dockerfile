@@ -38,14 +38,15 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=bind,source=requirements-headless.txt,target=requirements-headless.txt \
     python -m pip install -r requirements-headless.txt
 
-# Switch to the non-privileged user to run the application.
-USER appuser
-
 # Copy the source code into the container.
 COPY . .
 
-# Install the evolution package (no-deps: headless deps already installed above)
-RUN pip install -e . --no-deps --quiet
+# Install the evolution package (no-deps: headless deps already installed above).
+# As root: appuser has no home for pip to write to. The app saves brains into saved_brains/.
+RUN pip install -e . --no-deps --quiet && chown -R appuser saved_brains
+
+# Switch to the non-privileged user to run the application.
+USER appuser
 
 # Expose the port that the application listens on.
 EXPOSE 8000
