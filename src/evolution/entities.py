@@ -110,6 +110,7 @@ class Creature:
         self.lineage = self.id              # founder's id, inherited from the first parent
         self.parent_ids = ()
         self.descent = 0                    # generations since the lineage's founder
+        self.generation = 1                 # parents' generation + 1, carried across extinctions
 
         default_genes = DEFAULT_CARNIVORE_GENES if is_carnivore else DEFAULT_HERBIVORE_GENES
         self.genes = {**default_genes, **(genes or {})}   # older saves lack the newer genes
@@ -391,6 +392,7 @@ class Creature:
             "Signal": round(self.signal, 2),
             "Memory": " ".join(f"{m:+.2f}" for m in self.memory),
             "Reproductions": self.reproductions,
+            "Generation": self.generation,
             "Lineage": f"#{self.lineage} (descent {self.descent})",
             "Is Best": self.is_best,
         }

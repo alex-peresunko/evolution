@@ -139,7 +139,7 @@ def test_winter_stops_food_respawn_above_the_cap(monkeypatch):
     from evolution.simulation import food_cap
     winter_cap = food_cap(-1)
     sim_state["food_items"] = [Food(WORLD_BOUNDS) for _ in range(math.ceil(winter_cap))]
-    monkeypatch.setattr(simulation, "_repopulate_from_hof", lambda *a, **k: [])
+    monkeypatch.setattr(simulation, "_repopulate", lambda *a, **k: [])
     update_world(sim_state)
     assert sim_state["season"] == pytest.approx(-1)
     assert len(sim_state["food_items"]) <= math.ceil(winter_cap)
@@ -253,3 +253,62 @@ def test_in_water_is_the_last_brain_input():
     sim_state["lakes"] = [Lake(500, 500, 100)]
     update_world(sim_state)
     assert wet.brain_inputs[-1] == 1.0 and dry.brain_inputs[-1] == 0.0
+
+
+def test_elite_pool_keeps_the_best_retired_brains():
+    from evolution.simulation import _retire_creature
+
+    sim_state = _make_sim(n_herbs=0, n_carns=0)
+    sim_state["autosave_enabled"] = False
+    for score in range(config.ELITE_POOL_SIZE + 5):
+        c = Creature(WORLD_BOUNDS)
+        c.score = score
+        _retire_creature(c, sim_state, worker_id=0)
+    pool = sim_state["elites"]["herbivore"]
+    assert sorted(r["score"] for r in pool) == list(range(5, config.ELITE_POOL_SIZE + 5))
+
+
+def test_records_fade_so_a_newer_brain_can_take_the_hall_of_fame(tmp_path, monkeypatch):
+    from evolution.simulation import _fade_records, _retire_creature
+
+    monkeypatch.chdir(tmp_path)
+    sim_state = _make_sim(n_herbs=0, n_carns=0)
+    old = Creature(WORLD_BOUNDS)
+    old.score = 100.0
+    _retire_creature(old, sim_state, worker_id=0)
+    for _ in range(config.HOF_SCORE_HALF_LIFE // config.SCORE_SAMPLE_INTERVAL):
+        _fade_records(sim_state)
+    assert sim_state["hall_of_fame"]["herbivore"]["score"] == pytest.approx(50.0)
+    assert sim_state["elites"]["herbivore"][0]["score"] == pytest.approx(50.0)
+    newer = Creature(WORLD_BOUNDS)
+    newer.score = 60.0
+    _retire_creature(newer, sim_state, worker_id=0)
+    assert sim_state["hall_of_fame"]["herbivore"]["score"] == 60.0
+
+
+def test_extinction_breeds_from_the_elite_pool_and_counts_separately():
+    from evolution.neural_network import NeuralNetwork
+
+    sim_state = _make_sim(n_herbs=0, n_carns=1)
+    elites = [{"score": 1.0, "brain": NeuralNetwork(config.BRAIN_TOPOLOGY),
+               "genes": dict(config.DEFAULT_HERBIVORE_GENES), "generation": g} for g in (4, 7)]
+    sim_state["elites"]["herbivore"] = elites
+    update_world(sim_state)
+    herbs = sim_state["creatures"]
+    assert sim_state["extinctions"] == 1 and sim_state["generation"] == 1
+    bred = [c for c in herbs if c.generation > 1]
+    assert len(bred) == round(config.NUM_HERBIVOROUS * (1 - config.REPOPULATE_RANDOM_SHARE))
+    assert all(c.generation in (5, 8) for c in bred)
+
+
+def test_generation_is_the_deepest_birth():
+    sim_state = _make_sim(n_herbs=2, n_carns=1)
+    a, b = sim_state["creatures"]
+    for c in (a, b):
+        c.is_adult = True
+        c.pos = c._vec2(500, 500)
+    a.generation, b.generation = 3, 9
+    update_world(sim_state)
+    children = [c for c in sim_state["creatures"] if c not in (a, b)]
+    assert children and all(c.generation == 10 for c in children)
+    assert sim_state["generation"] == 10

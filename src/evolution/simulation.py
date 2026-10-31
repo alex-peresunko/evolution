@@ -15,6 +15,7 @@ from .config import (
     REPRODUCTION_HEALTH_THRESHOLD, MAX_REPRODUCTIONS, REPRODUCTION_COOLDOWN_TICKS,
     REPRODUCTION_POP_CAP_FACTOR, RESPAWN_IMMUNITY_TICKS,
     ELITE_REINJECT_INTERVAL, ELITE_REINJECT_COUNT, MATE_SCORE_WEIGHT,
+    HOF_SCORE_HALF_LIFE, ELITE_POOL_SIZE, REPOPULATE_RANDOM_SHARE,
     LITTER_ENDOWMENT, LITTER_SPREAD,
     SCORE_SAMPLE_INTERVAL, CHART_HISTORY_SAVE_MAX, NUM_MEMORY, DAY_LENGTH_TICKS,
     SEASON_LENGTH_TICKS, SEASON_FOOD_AMPLITUDE,
@@ -28,8 +29,7 @@ from .genetics import combine_brains, combine_genes, compatible, mutate_brain, m
 from .islands import inject_immigrants
 from .neural_network import NeuralNetwork
 from .perception import perceive_all
-from .brain_store import (read_saved_history, read_saved_score, save_brain, save_brain_if_better,
-                          update_saved_history)
+from .brain_store import read_saved_history, read_saved_score, save_brain, update_saved_history
 
 
 def generate_obstacles(world_bounds, rect_factory=None, rocks=NUM_OBSTACLES, trees=NUM_TREES,
@@ -132,6 +132,7 @@ def build_sim_state(world_bounds, creatures, carnivores, food_items, obstacles, 
         "gene_history": {"herbivore": {}, "carnivore": {}},
         "lineages": {"herbivore": 0, "carnivore": 0},
         "generation": 1,
+        "extinctions": 0,
         "tick": 0,
         "last_autosave_tick": 0,
         "hof_unsaved": set(),
@@ -139,6 +140,7 @@ def build_sim_state(world_bounds, creatures, carnivores, food_items, obstacles, 
             "herbivore": {"score": -1, "genes": None, "brain": None},
             "carnivore": {"score": -1, "genes": None, "brain": None},
         },
+        "elites": {"herbivore": [], "carnivore": []},
     }
 
 
@@ -274,13 +276,17 @@ def species_history(sim_state, species):
             for metric in ("score", "longevity")}
 
 
-def restore_progress(sim_state, species, brain, genes, filename, save_dir="saved_brains"):
-    """After loading a saved brain, continue where its run left off: seed the Hall of Fame with
-    the saved score (so new chart samples don't drop to 0), and restore the chart histories."""
+def restore_progress(sim_state, species, brain, genes, filename, save_dir="saved_brains",
+                     generation=1):
+    """After loading a saved brain, continue where its run left off: seed the Hall of Fame and
+    the elite pool with the saved score (so new chart samples don't drop to 0), and restore the
+    chart histories."""
     score = read_saved_score(filename, save_dir=save_dir)
     if score is not None:
-        sim_state["hall_of_fame"][species] = {"score": score, "brain": brain.copy(),
-                                              "genes": dict(genes or {})}
+        record = {"score": score, "brain": brain.copy(), "genes": dict(genes or {}),
+                  "generation": generation}
+        sim_state["hall_of_fame"][species] = record
+        sim_state["elites"][species] = [dict(record)]
     history = read_saved_history(filename, save_dir=save_dir) or {}
     for metric in ("score", "longevity"):
         sim_state[f"{species}_{metric}_history"] = list(history.get(metric, []))
@@ -320,72 +326,92 @@ def _retire_creature(c, sim_state, prometheus_metrics=None, worker_id=None):
         sim_state[age_key] = c.age
     species = "carnivore" if c.is_carnivore else "herbivore"
     hof = sim_state["hall_of_fame"]
+    record = {"score": c.score, "brain": c.brain, "genes": c.genes, "generation": c.generation}
+    _add_elite(sim_state["elites"][species], record)
     if c.score > hof[species]["score"]:
-        hof[species] = {"score": c.score, "brain": c.brain.copy(), "genes": c.genes.copy()}
+        hof[species] = {**record, "brain": c.brain.copy(), "genes": c.genes.copy(), "fresh": True}
         sim_state.setdefault("hof_unsaved", set()).add(species)
         autosave_hall_of_fame(sim_state, prometheus_metrics, worker_id)
+
+
+def _add_elite(pool, record):
+    """Keep the ELITE_POOL_SIZE highest-scoring records in pool."""
+    if len(pool) < ELITE_POOL_SIZE:
+        pool.append(record)
+        return
+    worst = min(range(len(pool)), key=lambda i: pool[i]["score"])
+    if record["score"] > pool[worst]["score"]:
+        pool[worst] = record
+
+
+def _fade_records(sim_state):
+    """Halve the Hall of Fame and elite scores every HOF_SCORE_HALF_LIFE ticks; called once per
+    SCORE_SAMPLE_INTERVAL."""
+    factor = 0.5 ** (SCORE_SAMPLE_INTERVAL / HOF_SCORE_HALF_LIFE)
+    records = list(sim_state["hall_of_fame"].values())
+    records += [r for pool in sim_state["elites"].values() for r in pool]
+    for record in records:
+        if record["score"] > 0:
+            record["score"] *= factor
 
 
 def autosave_hall_of_fame(sim_state, prometheus_metrics=None, worker_id=None, force=False):
     """Write Hall of Fame records not saved yet, at most once per AUTOSAVE_INTERVAL ticks
     (unless force). A record set inside the interval waits for the next call instead of being
-    dropped. Worker files are per-run scratch; main files must only ever improve."""
+    dropped."""
     unsaved = sim_state.get("hof_unsaved")
     tick = sim_state["tick"]
     if not unsaved or (not force and tick - sim_state["last_autosave_tick"] < AUTOSAVE_INTERVAL):
         return
     for species in sorted(unsaved):
         hof = sim_state["hall_of_fame"][species]
-        if worker_id is not None:
-            save, filename = save_brain, f"worker_{worker_id}_{species}.json"
-        else:
-            save, filename = save_brain_if_better, f"best_brain_{species}.json"
-        written = save(hof["brain"], filename, generation=sim_state["generation"],
-                       genes=hof["genes"], score=hof["score"], metrics=prometheus_metrics,
-                       history=species_history(sim_state, species))
-        if written is not False:
-            sim_state["last_autosave_tick"] = tick
+        filename = (f"worker_{worker_id}_{species}.json" if worker_id is not None
+                    else f"best_brain_{species}.json")
+        save_brain(hof["brain"], filename, generation=sim_state["generation"],
+                   genes=hof["genes"], score=hof["score"], metrics=prometheus_metrics,
+                   history=species_history(sim_state, species))
+        sim_state["last_autosave_tick"] = tick
     unsaved.clear()
 
 
 def save_hall_of_fame(sim_state, prometheus_metrics=None):
-    """Exit save: each species' Hall of Fame into best_brain_*.json if it beats the saved score,
-    otherwise only the file's chart history is updated."""
+    """Exit save: each species' Hall of Fame into best_brain_*.json if it was set during this run
+    (records fade, so it may score below the file), otherwise only the file's chart history."""
     for species in ("herbivore", "carnivore"):
         hof = sim_state["hall_of_fame"][species]
         filename = f"best_brain_{species}.json"
         history = species_history(sim_state, species)
         if hof["brain"] is None:
             print(f"No {species} in Hall of Fame to save.")
-        elif not save_brain_if_better(hof["brain"], filename,
-                                      generation=sim_state["generation"], genes=hof["genes"],
-                                      score=hof["score"], metrics=prometheus_metrics,
-                                      history=history):
+        elif hof.get("fresh"):
+            save_brain(hof["brain"], filename, generation=sim_state["generation"],
+                       genes=hof["genes"], score=hof["score"], metrics=prometheus_metrics,
+                       history=history)
+        else:
             update_saved_history(filename, history)
-            print(f"Kept existing {filename} (saved score "
-                  f"{read_saved_score(filename):.3f} >= {hof['score']:.3f}), updated its chart history")
+            print(f"Kept existing {filename} (no new record this run), updated its chart history")
 
 
-def _repopulate_from_hof(is_carnivore, count, default_genes, sim_state,
-                         vec2_factory=None, rect_factory=None):
+def _repopulate(is_carnivore, count, default_genes, sim_state,
+                vec2_factory=None, rect_factory=None):
+    """count creatures for an extinct species: young of random pairs from the elite pool (or the
+    Hall of Fame when the pool is empty), plus REPOPULATE_RANDOM_SHARE random brains."""
     species = "carnivore" if is_carnivore else "herbivore"
     constraints = CARNIVORE_GENE_MIN_MAX if is_carnivore else GENE_MIN_MAX
     hof = sim_state["hall_of_fame"][species]
-    new_pop = []
+    pool = sim_state["elites"][species] or ([hof] if hof["brain"] and hof["genes"] else [])
     kwargs = {"vec2_factory": vec2_factory, "rect_factory": rect_factory}
-    if hof["brain"] and hof["genes"]:
-        new_pop.append(Creature(
-            sim_state["world_bounds"], brain=hof["brain"].copy(),
-            is_carnivore=is_carnivore, genes=hof["genes"].copy(), **kwargs
-        ))
-        for _ in range((count - 1) // 2):
-            b = hof["brain"].copy()
-            g = mutate_genes(hof["genes"], default_genes, gene_constraints=constraints)
-            mutate_brain(b, g)
-            new_pop.append(Creature(
-                sim_state["world_bounds"], brain=b,
-                is_carnivore=is_carnivore, genes=g, **kwargs
-            ))
+    new_pop = []
+    for _ in range(round(count * (1 - REPOPULATE_RANDOM_SHARE)) if pool else 0):
+        a, b = random.choice(pool), random.choice(pool)
+        genes = combine_genes({**default_genes, **a["genes"]}, {**default_genes, **b["genes"]},
+                              default_genes, gene_constraints=constraints)
+        brain = combine_brains(a["brain"], b["brain"])
+        mutate_brain(brain, genes)
+        child = Creature(sim_state["world_bounds"], brain=brain, is_carnivore=is_carnivore,
+                         genes=genes, **kwargs)
+        child.generation = max(a.get("generation", 1), b.get("generation", 1)) + 1
+        new_pop.append(child)
     while len(new_pop) < count:
         new_pop.append(Creature(
             sim_state["world_bounds"], is_carnivore=is_carnivore,
@@ -402,7 +428,7 @@ def _reinject_elites(sim_state):
         # Never replace a whole small population: the survivors carry the current diversity.
         if hof["brain"] is not None and len(sim_state[key]) > 2 * ELITE_REINJECT_COUNT:
             inject_immigrants(sim_state, species, hof["brain"], hof["genes"],
-                              count=ELITE_REINJECT_COUNT)
+                              count=ELITE_REINJECT_COUNT, generation=hof.get("generation", 1))
 
 
 def _mate_preference(mates, default_genes):
@@ -496,16 +522,17 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
             sp = "carnivore" if is_carn else "herbivore"
             pfx = f"[W{worker_id}] " if worker_id is not None else ""
             print(f"\n{pfx}--- {sp.capitalize()} EXTINCTION tick={sim_state['tick']} gen={sim_state['generation']} ---")
-            sim_state[key] = _repopulate_from_hof(
+            sim_state[key] = _repopulate(
                 is_carn, count, def_genes, sim_state,
                 vec2_factory=_vec2, rect_factory=_rect,
             )
-            sim_state["generation"] += 1
+            sim_state["extinctions"] += 1
 
     if ELITE_REINJECT_INTERVAL and sim_state["tick"] % ELITE_REINJECT_INTERVAL == 0:
         _reinject_elites(sim_state)
 
     if sim_state["tick"] % SCORE_SAMPLE_INTERVAL == 0:
+        _fade_records(sim_state)
         sim_state["herbivore_score_history"].append(sim_state["hall_of_fame"]["herbivore"]["score"])
         sim_state["carnivore_score_history"].append(sim_state["hall_of_fame"]["carnivore"]["score"])
         sim_state["herbivore_longevity_history"].append(sim_state["max_age_herbivore"])
@@ -532,7 +559,7 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
         (sim_state["creatures"], NUM_HERBIVOROUS, HERBIVORE_HEALTH, DEFAULT_HERBIVORE_GENES),
         (sim_state["carnivores"], NUM_CARNIVORES, CARNIVORE_HEALTH, DEFAULT_CARNIVORE_GENES),
     ]:
-        pop_cap = pop_limit * REPRODUCTION_POP_CAP_FACTOR
+        pop_cap = int(pop_limit * REPRODUCTION_POP_CAP_FACTOR)
         # Eligibility only changes for creatures that reproduce this tick, and those are
         # excluded via reproduced_ids, so it can be computed once up front.
         eligible = [
@@ -579,6 +606,8 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
                     child.lineage = p1.lineage
                     child.parent_ids = (p1.id, best_mate.id)
                     child.descent = max(p1.descent, best_mate.descent) + 1
+                    child.generation = max(p1.generation, best_mate.generation) + 1
+                    sim_state["generation"] = max(sim_state["generation"], child.generation)
                     child.birth_time = now
                     new_offspring.append(child)
                 p1.health *= 0.7
@@ -616,6 +645,8 @@ def create_initial_population(count, is_carnivore, world_bounds, brain_file=None
             mutate_brain(mutated_brain, mutated_genes)
             new_pop.append(Creature(world_bounds, brain=mutated_brain, is_carnivore=is_carnivore,
                                     genes=mutated_genes, **kwargs))
+        for c in new_pop:
+            c.generation = gen
         return new_pop, gen
     except FileNotFoundError:
         print(f"No saved brain found for {species_name}s. Creating a new random population.")
@@ -648,7 +679,7 @@ def restore_start_progress(sim_state, source):
         if sim_state[key] and read_saved_score(filename, save_dir=source) is not None:
             progenitor = sim_state[key][0]
             restore_progress(sim_state, species, progenitor.brain, progenitor.genes, filename,
-                             save_dir=source)
+                             save_dir=source, generation=progenitor.generation)
 
 
 def _fmt_genes(genes):

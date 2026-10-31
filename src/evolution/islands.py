@@ -43,7 +43,7 @@ def clear_island_files(save_dir=SAVE_DIR):
             pass
 
 
-def inject_immigrants(sim_state, species, brain, genes, count=ISLAND_IMMIGRANTS):
+def inject_immigrants(sim_state, species, brain, genes, count=ISLAND_IMMIGRANTS, generation=1):
     """Replace the lowest-scoring creatures of a species with the brain and mutated copies."""
     is_carnivore = species == "carnivore"
     key = "carnivores" if is_carnivore else "creatures"
@@ -62,6 +62,7 @@ def inject_immigrants(sim_state, species, brain, genes, count=ISLAND_IMMIGRANTS)
         c = Creature(sim_state["world_bounds"], brain=b, is_carnivore=is_carnivore, genes=g,
                      **kwargs)
         c.respawn_immunity_ticks = RESPAWN_IMMUNITY_TICKS
+        c.generation = generation
         immigrants.append(c)
     sim_state[key] = [c for c in sim_state[key] if id(c) not in replaced] + immigrants
 
@@ -88,17 +89,19 @@ def import_if_better(sim_state, species, filename, seen_mtimes, save_dir=SAVE_DI
     default = DEFAULT_CARNIVORE_GENES if species == "carnivore" else DEFAULT_HERBIVORE_GENES
     genes = {**default, **(data.get("genes") or {})}
     old_score = hof["score"]
-    sim_state["hall_of_fame"][species] = {"score": score, "brain": brain, "genes": genes}
-    inject_immigrants(sim_state, species, brain, genes)
+    generation = data.get("generation", 1)
+    sim_state["hall_of_fame"][species] = {"score": score, "brain": brain, "genes": genes,
+                                          "generation": generation, "fresh": True}
+    inject_immigrants(sim_state, species, brain, genes, generation=generation)
     return old_score, score
 
 
 def publish_hall_of_fame(sim_state, published, save_dir=SAVE_DIR):
-    """Write each species' Hall of Fame to its main_file when it improved since last published."""
+    """Write each species' Hall of Fame to its main_file when it changed since last published."""
     for species in SPECIES:
         hof = sim_state["hall_of_fame"][species]
-        if hof["brain"] is None or hof["score"] <= published.get(species, float("-inf")):
+        if hof["brain"] is None or hof["brain"] is published.get(species):
             continue
         save_brain(hof["brain"], main_file(species), generation=sim_state["generation"],
                    genes=hof["genes"], score=hof["score"], save_dir=save_dir)
-        published[species] = hof["score"]
+        published[species] = hof["brain"]

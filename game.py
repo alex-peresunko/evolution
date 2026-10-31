@@ -164,7 +164,7 @@ def _chart_font(size):
     return font
 
 
-def draw_dual_chart(screen, rect, title, series, scale, generation):
+def draw_dual_chart(screen, rect, title, series, scale, label):
     """Translucent panel with one line per (history, color, label) series, each scaled to its
     own peak (species scores differ by orders of magnitude), sized by the zoomable chart scale."""
     font = _chart_font(round(config.CHART_FONT_SIZE * scale))
@@ -172,7 +172,7 @@ def draw_dual_chart(screen, rect, title, series, scale, generation):
     pad = round(4 * scale)
     _draw_panel(screen, rect)
     screen.blit(font.render(title, True, config.COLOR_TEXT), (rect.x + pad, rect.y + pad))
-    gens = font.render(f"Gen: {generation}", True, config.COLOR_TEXT)
+    gens = font.render(label, True, config.COLOR_TEXT)
     screen.blit(gens, (rect.right - gens.get_width() - pad, rect.y + pad))
     info_y = rect.y + pad + line_h
     for i, (history, color, label) in enumerate(series):  # peaks: first left, second right
@@ -414,7 +414,7 @@ def draw_elements(screen, font, sim_state):
     text_y = config.MINIMAP_Y + config.MINIMAP_HEIGHT + 15
     limit_status = "Limited (60)" if sim_state["fps_limited"] else "Unlimited"
     stats = [
-        f"Generation: {sim_state['generation']}",
+        f"Generation: {sim_state['generation']}   Extinctions: {sim_state['extinctions']}",
         f"Tick: {sim_state['tick']}",
         f"Herbivores: {len(sim_state['creatures'])}",
         f"Carnivores: {len(sim_state['carnivores'])}",
@@ -450,7 +450,7 @@ def draw_elements(screen, font, sim_state):
         series = [(sim_state[f"herbivore_{metric}_history"], config.COLOR_CREATURE, "Herb"),
                   (sim_state[f"carnivore_{metric}_history"], config.COLOR_CARNIVORE, "Carn")]
         _draw_faded(screen, rect, config.HUD_ALPHA, draw_dual_chart, rect, title, series,
-                    scale, sim_state["generation"])
+                    scale, f"Gen {sim_state['generation']}  Ext {sim_state['extinctions']}")
     if sim_state["show_genes"]:
         species = "carnivore" if selected and selected.is_carnivore else "herbivore"
         gene_w = round(chart_w * 1.6)
@@ -500,8 +500,11 @@ def handle_events(sim_state, prometheus_metrics):
                         mutate_brain(mb, mg)
                         new_herbivores.append(Creature(sim_state["world_bounds"], brain=mb, genes=mg,
                                                        vec2_factory=_vec2, rect_factory=_rect))
+                    for c in new_herbivores:
+                        c.generation = gen
                     sim_state["creatures"] = new_herbivores
-                    restore_progress(sim_state, "herbivore", brain, genes, "best_brain_herbivore.json")
+                    restore_progress(sim_state, "herbivore", brain, genes, "best_brain_herbivore.json",
+                                     generation=gen)
                     print(f"Loaded new herbivore population from generation {gen}.")
                 except FileNotFoundError:
                     print("No herbivore brain file found to load.")
@@ -519,10 +522,12 @@ def handle_events(sim_state, prometheus_metrics):
                         new_carnivores.append(Creature(sim_state["world_bounds"], brain=mb,
                                                        is_carnivore=True, genes=mg,
                                                        vec2_factory=_vec2, rect_factory=_rect))
+                    for c in new_carnivores:
+                        c.generation = gen_c
                     sim_state["carnivores"] = new_carnivores
                     sim_state["generation"] = max(sim_state["generation"], gen_c)
                     restore_progress(sim_state, "carnivore", brain_c, genes_c,
-                                     "best_brain_carnivore.json")
+                                     "best_brain_carnivore.json", generation=gen_c)
                     print("Loaded new carnivore population.")
                 except FileNotFoundError:
                     print("No carnivore brain file found to load.")

@@ -1,10 +1,10 @@
 import math
 
 # --- Display / World ---
-SCREEN_WIDTH = 1920
+SCREEN_WIDTH = 1400
 SCREEN_HEIGHT = 900
-WORLD_WIDTH = 1920
-WORLD_HEIGHT = 900
+WORLD_WIDTH = 3000
+WORLD_HEIGHT = 2000
 MINIMAP_WIDTH = 200
 MINIMAP_HEIGHT = int(WORLD_HEIGHT / WORLD_WIDTH * MINIMAP_WIDTH)
 MINIMAP_X, MINIMAP_Y = 10, 10
@@ -12,9 +12,9 @@ ZOOM_MAX = 4.0               # mouse wheel zoom in game.py; the minimum fits the
 ZOOM_STEP = 1.15             # zoom factor per wheel notch
 
 # --- Population ---
-NUM_HERBIVOROUS = 20
+NUM_HERBIVOROUS = 120
 NUM_CARNIVORES = 30
-NUM_FOOD = 50
+NUM_FOOD = 400
 NUM_OBSTACLES = 5
 NUM_TREES = 14
 TREE_CROWN_RADIUS_RANGE = (34, 60)  # px; dinosaurs are ~25-45 px long
@@ -80,14 +80,14 @@ FOOD_MIN_HEALTH_FACTOR = 0.2
 # --- Creature ---
 HERBIVORE_HEALTH = 5000
 CARNIVORE_HEALTH = 5000
-HERBIVORE_HEALTH_PER_FOOD = 500
+HERBIVORE_HEALTH_PER_FOOD = 600
 CARNIVORE_HEALTH_PER_FOOD = 1200
-CREATURE_ROTATION_SPEED = 0.8
+CREATURE_ROTATION_SPEED = 0.25
 HEALTH_LOST_ON_HIT = 50
 CARNIVORE_BITE_ANGLE = math.radians(60)
 HUNGER_MAX = 400
 HUNGER_HEALTH_PENALTY = 5
-REPRODUCTION_HEALTH_THRESHOLD = 0.6
+REPRODUCTION_HEALTH_THRESHOLD = 0.5
 MAX_REPRODUCTIONS = 50
 HEALTH_LOSS_PER_TICK = 1
 HEALTH_LOSS_SPEED_FACTOR = 0.1
@@ -102,9 +102,9 @@ UPKEEP_WEIGHTS = {
 }
 KLEIBER_EXPONENT = 0.75
 REPRODUCTION_COOLDOWN_TICKS = 180   # 3 s at 60 TPS
-REPRODUCTION_POP_CAP_FACTOR = 10
-MATE_SELECTION_RADIUS = 50
-MATE_ATTRACTION_RADIUS = 300
+REPRODUCTION_POP_CAP_FACTOR = 2.5
+MATE_SELECTION_RADIUS = 60
+MATE_ATTRACTION_RADIUS = 500
 MATE_SEEK_HUNGER_THRESHOLD = 0.5
 MATE_SEEK_DANGER_THRESHOLD = 0.35
 MATE_SEEK_BLEND = 0.75
@@ -221,6 +221,9 @@ ELITE_REINJECT_INTERVAL = 0
 ELITE_REINJECT_COUNT = 2
 # Mate choice: attractiveness / default plus this weight times score / best candidate's score.
 MATE_SCORE_WEIGHT = 0.0
+HOF_SCORE_HALF_LIFE = 10000      # ticks; Hall of Fame and elite scores fade so newer brains win
+ELITE_POOL_SIZE = 10             # best recently retired brains per species, bred after extinction
+REPOPULATE_RANDOM_SHARE = 0.2    # share of an extinct species respawned with random brains
 AUTOSAVE_INTERVAL = 100
 BRAIN_HISTORY_KEEP = 10           # snapshots of earlier best brains kept in saved_brains/history
 RESPAWN_IMMUNITY_TICKS = 500
@@ -240,7 +243,7 @@ CHART_FONT_SIZE = 15         # at chart scale 1.0
 CHART_SIZE = (150, 75)       # at chart scale 1.0
 CHART_SCALE_DEFAULT = 2.0    # [ / ] in game.py zoom the charts
 CHART_SCALE_MIN, CHART_SCALE_MAX, CHART_SCALE_STEP = 1.0, 3.0, 0.25
-HUD_ALPHA = 40               # opacity of every HUD panel and chart (background, text, lines),
+HUD_ALPHA = 60               # opacity of every HUD panel and chart (background, text, lines),
                              # 0 (clear) .. 255 (solid)
 HUD_FONT_SIZE = 18
 

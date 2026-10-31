@@ -5,7 +5,8 @@ from evolution.brain_store import (read_saved_history, read_saved_score, save_br
                                    update_saved_history)
 from evolution.entities import Creature
 from evolution.neural_network import NeuralNetwork
-from evolution.simulation import _retire_creature, build_sim_state, restore_progress
+from evolution.simulation import (_retire_creature, build_sim_state, restore_progress,
+                                  save_hall_of_fame)
 
 WORLD_BOUNDS = (config.WORLD_WIDTH, config.WORLD_HEIGHT)
 
@@ -41,7 +42,7 @@ def test_writes_over_unscored_or_corrupt_file(tmp_path):
     assert _save(tmp_path, 0.5) is True
 
 
-def test_retire_creature_keeps_better_saved_brain(tmp_path, monkeypatch):
+def test_new_record_overwrites_saved_brain_with_a_higher_faded_score(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     (tmp_path / "saved_brains").mkdir()
     NeuralNetwork(config.BRAIN_TOPOLOGY).save("best_brain_herbivore.json", score=100.0)
@@ -53,8 +54,19 @@ def test_retire_creature_keeps_better_saved_brain(tmp_path, monkeypatch):
     _retire_creature(c, sim_state)
 
     assert sim_state["hall_of_fame"]["herbivore"]["score"] == 5.0
+    assert read_saved_score("best_brain_herbivore.json") == 5.0
+
+
+def test_exit_save_keeps_the_file_without_a_new_record(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "saved_brains").mkdir()
+    brain = NeuralNetwork(config.BRAIN_TOPOLOGY)
+    brain.save("best_brain_herbivore.json", score=100.0)
+    sim_state = build_sim_state(WORLD_BOUNDS, [], [], [], [])
+    restore_progress(sim_state, "herbivore", brain, {}, "best_brain_herbivore.json")
+    sim_state["hall_of_fame"]["herbivore"]["score"] = 40.0  # faded
+    save_hall_of_fame(sim_state)
     assert read_saved_score("best_brain_herbivore.json") == 100.0
-    assert sim_state["last_autosave_tick"] == 0
 
 
 def test_old_topology_brain_loads_into_current_topology(tmp_path):

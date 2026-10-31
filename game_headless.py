@@ -70,7 +70,8 @@ def main(worker_id=None, new=False, load=None):
                 hof_c = sim_state["hall_of_fame"]["carnivore"]["score"]
                 pfx = f"[W{worker_id}] " if worker_id is not None else ""
                 sys.stdout.write(
-                    f"\r{pfx}Gen {sim_state['generation']} tick={sim_state['tick']:7d}"
+                    f"\r{pfx}Gen {sim_state['generation']} Ext {sim_state['extinctions']}"
+                    f" tick={sim_state['tick']:7d}"
                     f" | TPS:{tps:4d}"
                     f" | H:{len(sim_state['creatures']):3d} C:{len(sim_state['carnivores']):3d}"
                     f" | HoF H:{hof_h:.3f} C:{hof_c:.3f}"
