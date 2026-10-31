@@ -91,7 +91,8 @@ def import_if_better(sim_state, species, filename, seen_mtimes, save_dir=SAVE_DI
     old_score = hof["score"]
     generation = data.get("generation", 1)
     sim_state["hall_of_fame"][species] = {"score": score, "brain": brain, "genes": genes,
-                                          "generation": generation, "fresh": True}
+                                          "generation": generation, "fresh": True,
+                                          "source": f"imported from {filename}"}
     inject_immigrants(sim_state, species, brain, genes, generation=generation)
     return old_score, score
 

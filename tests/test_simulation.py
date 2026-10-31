@@ -312,3 +312,19 @@ def test_generation_is_the_deepest_birth():
     children = [c for c in sim_state["creatures"] if c not in (a, b)]
     assert children and all(c.generation == 10 for c in children)
     assert sim_state["generation"] == 10
+
+
+def test_hall_of_fame_save_logs_score_change_and_creature(tmp_path, monkeypatch, capsys):
+    from evolution.simulation import _retire_creature
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "saved_brains").mkdir()
+    sim_state = _make_sim(n_herbs=0, n_carns=0)
+    for score in (2.0, 5.5):
+        sim_state["tick"] += config.AUTOSAVE_INTERVAL
+        c = Creature(WORLD_BOUNDS)
+        c.score, c.age = score, 1234
+        _retire_creature(c, sim_state)
+    out = capsys.readouterr().out
+    assert "[HoF save] Herbivore best brain saved to best_brain_herbivore.json: 2.000 (new)" in out
+    assert f"2.000 -> 5.500 (+3.500); gen 1, creature #{c.id}, age 1234, lineage #{c.lineage}" in out
