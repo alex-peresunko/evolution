@@ -22,7 +22,7 @@ poetry run ruff check .                          # lint (E, F, I, UP; line-lengt
 poetry run python -m cProfile -s time <script.py>
 ```
 
-**Containers (Podman, not Docker):** `podman compose up --build` runs `game_headless.py` with `requirements-headless.txt` (no pygame) and exposes metrics on port 8000. See `README.Podman.md`.
+**Containers (Podman, not Docker):** `podman compose up --build` runs `game_headless.py` with `requirements-headless.txt` (no pygame) and exposes metrics on port 8000. It mounts `./saved_brains`, so it starts from and autosaves into the host's `best_brain_*.json`. See `README.Podman.md`.
 
 ## Architecture
 

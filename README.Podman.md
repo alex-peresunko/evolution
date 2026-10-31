@@ -11,8 +11,12 @@ Prometheus metrics are then served at http://localhost:8000 (import
 `grafana_dashboard.json` into Grafana). `podman compose down` stops it; on SIGTERM the
 simulation saves its Hall of Fame before exiting.
 
-The container works on the brains baked into the image at build time, and what it saves
-stays inside the container.
+`saved_brains/` is mounted into the container, so the simulation starts from your
+`best_brain_*.json` and overwrites them with new Hall of Fame brains as it runs (at most once
+per `AUTOSAVE_INTERVAL` ticks, and on stop). Like a local run, it saves a brain that beats the
+*faded* score of the previous one, so a file's score can go down. Each start snapshots the
+previous pair into `saved_brains/history/`. Don't run `game.py` on the same folder at the
+same time: both write the best brain files.
 
 ### Deploying to the cloud
 

@@ -51,5 +51,6 @@ USER appuser
 # Expose the port that the application listens on.
 EXPOSE 8000
 
-# Run the headless simulation (no display required in container).
-CMD python game_headless.py
+# Run the headless simulation (no display required in container). Exec form, so python is
+# PID 1 and gets SIGTERM on stop: it saves the Hall of Fame before exiting.
+CMD ["python", "game_headless.py"]
