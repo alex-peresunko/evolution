@@ -1,4 +1,6 @@
 """Writing Hall of Fame brains to disk while a simulation runs, and when it exits."""
+import time
+
 from ..config import AUTOSAVE_INTERVAL
 from ..sim.events import SimulationListener
 from ..sim.records import SavedScore
@@ -23,6 +25,8 @@ class HallOfFameAutosaver(SimulationListener):
         self.save_dir = save_dir
         self.unsaved = set()
         self.last_save_tick = 0
+        self.saves = dict.fromkeys(ALL_SPECIES, 0)
+        self.last_save_time = {}          # species -> epoch seconds
 
     def filename(self, species):
         if self.worker_id is not None:
@@ -50,6 +54,8 @@ class HallOfFameAutosaver(SimulationListener):
                        history=sim.stats[species].saved_history(), save_dir=self.save_dir)
             self._log_save(sim, species, filename)
             self.last_save_tick = sim.tick
+            self.saves[species] += 1
+            self.last_save_time[species] = time.time()
         self.unsaved.clear()
 
     def _uptime(self):

@@ -37,6 +37,7 @@ class GrazingDiet:
                 continue
             if c.pos.distance_to(food.pos) < (c.size + FOOD_RADIUS):
                 food.consumed = True
+                world.tally.food_eaten += 1
                 gain = c.size_adjusted_gain(food.health_value())
                 if c.species.eat_ticks > 0:
                     c.meal_health, c.eating_ticks = gain, c.species.eat_ticks
@@ -62,7 +63,9 @@ class PredatorDiet:
             tick = world.tick
             bit = ((c.last_bite_tick is None or tick - c.last_bite_tick >= BITE_COOLDOWN_TICKS)
                    and self._bite(c, world.index.of(self.prey).query(c.pos, _reach(c)), tick))
-            if not bit:
+            if bit:
+                world.tally.bites += 1
+            else:
                 self._scavenge(c, world.index.carcasses.query(c.pos, _reach(c)))
 
     @staticmethod

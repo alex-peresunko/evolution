@@ -88,19 +88,22 @@ python game.py
 
 ## Metrics
 
-The simulation exposes Prometheus metrics on port 8000. Metrics include:
-- Population counts
-- Generation numbers
-- Best scores
-- Genetic traits
-- Neural network topology
-- Performance metrics
+`make run headless` starts the headless simulation with Prometheus and a ready Grafana
+dashboard (http://localhost:3000; see `README.Podman.md`). Its rows, each panel described
+under its (i):
+- **Overview:** uptime, generation, speed, populations, extinctions, last brain save
+- **Evolution progress:** best / mean / median scores, Hall of Fame vs saved brain, lifespan,
+  generations per hour
+- **Life and death:** deaths by cause (bitten, starved, old age, ...), births vs deaths,
+  extinctions
+- **Diversity:** live lineages, genetic diversity against the speciation distance
+- **Predators and prey:** populations with food, season and daylight, hunt success, bites,
+  carcass and food fate
+- **Genes:** population-mean gene drift; the best creature's genes (collapsed)
+- **Lifestyle:** health, stamina and fat; swimming, eating and winded shares; signalling
+- **Run health:** ticks per second, brain saves, CPU, memory, brain topology
 
-Access metrics at: http://localhost:8000
-
-To run the headless simulation with Prometheus and a ready Grafana dashboard
-(http://localhost:3000) in one command, use `podman compose up --build -d`
-(see `README.Podman.md`).
+The raw metrics are at http://localhost:8000.
 
 ## Headless Mode
 

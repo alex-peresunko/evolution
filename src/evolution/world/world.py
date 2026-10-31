@@ -13,6 +13,7 @@ from .food import Food
 from .geometry import HEADLESS
 from .perception import perceive_all
 from .spatial import SpatialIndex
+from .tally import WorldTally
 
 
 class World:
@@ -33,6 +34,7 @@ class World:
         self.light = 1.0
         self.season = 0.0
         self.index = SpatialIndex(world_bounds, ALL_SPECIES, GRID_CELL_SIZE)
+        self.tally = WorldTally()
 
     @property
     def herbivores(self):

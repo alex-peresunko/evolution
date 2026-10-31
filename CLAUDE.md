@@ -216,7 +216,9 @@ Space pause · +/- simulation speed (1–32 ticks per frame) · S save brains ·
 
 ## Metrics
 
-Prometheus metrics are served at `http://localhost:8000` (`app/metrics.GameMetrics`). The Grafana dashboard is `grafana_dashboard.json`. `podman compose up` also starts Prometheus (`:9090`, config in `monitoring/prometheus.yml`) and Grafana (`:3000`, no login, the dashboard as the home page, provisioned from `monitoring/grafana/`). These couple to the dashboard in two ways:
+Prometheus metrics are served at `http://localhost:8000` by `app/metrics.GameMetrics`, a collector that computes them from the watched `Simulation` when Prometheus scrapes, so the loop pays nothing per tick. Event counts come from `world.tally` (`WorldTally`: bites, food and carcass fates), `SpeciesStats` (births, deaths by `Creature.death_cause`, extinctions) and the autosaver (brain saves).
+
+`grafana_dashboard.json` is generated: edit `monitoring/dashboard.py` (panels, layout, descriptions) and run `poetry run python monitoring/dashboard.py`. Its queries use the metric and label names from `GameMetrics`. `podman compose up` also starts Prometheus (`:9090`, config in `monitoring/prometheus.yml`) and Grafana (`:3000`, no login, the dashboard as the home page, provisioned from `monitoring/grafana/`). These couple to the dashboard in two ways:
 - its panels reference the data source uid `fev2gbax7os8we`;
 - its queries filter on `job="evolution"`.
 

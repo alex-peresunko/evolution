@@ -3,6 +3,7 @@ from collections import deque
 
 from ..config import CHART_HISTORY_SAVE_MAX
 from ..species import ALL_SPECIES
+from ..world.creature import DEATH_CAUSES
 
 
 class SpeciesStats:
@@ -12,9 +13,16 @@ class SpeciesStats:
         self.max_age = 0
         self.gene_history = {}      # gene -> deque of species means, created at the first sample
         self.lineages = 0
+        # Running counts since start, for the metrics; never saved.
+        self.births = 0
+        self.extinctions = 0
+        self.deaths = dict.fromkeys(DEATH_CAUSES, 0)
+        self.death_age_total = 0
 
-    def note_death(self, c):
+    def note_death(self, c, cause):
         self.max_age = max(self.max_age, c.age)
+        self.deaths[cause] += 1
+        self.death_age_total += c.age
 
     def sample(self, best_score):
         self.score_history.append(best_score)

@@ -78,7 +78,6 @@ class GameApp:
                     draw_frame(self.screen, self.font, sim, view, self.renderer,
                                self.clock.get_fps())
                 self.clock.tick(60 if view.fps_limited else 0)
-                self.metrics.update(sim, self.clock.get_time() / 1000.0)
         finally:  # also on Ctrl+C or a crash, so workers are never left running
             self.workers.stop()
             print("Saving Hall of Fame on exit...")

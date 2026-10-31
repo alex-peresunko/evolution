@@ -58,18 +58,33 @@ class Simulation:
 
     def _update_food(self):
         world = self.world
+        tally = world.tally
+        kept = []
         for food in world.food:
             food.update()
-        world.food[:] = [f for f in world.food if not f.is_rotten() and not f.consumed]
+            if food.consumed:
+                continue
+            if food.is_rotten():
+                tally.food_rotted += 1
+                continue
+            kept.append(food)
+        world.food[:] = kept
         world.drift_food_patches()
         if random.random() < FOOD_RESPAWN_RATE and len(world.food) < food_cap(world.season):
             world.food.append(world.spawn_food())
 
     def _update_carcasses(self):
-        carcasses = self.world.carcasses
+        carcasses, tally = self.world.carcasses, self.world.tally
+        kept = []
         for carcass in carcasses:
             carcass.update()
-        carcasses[:] = [cc for cc in carcasses if not cc.is_gone()]
+            if not carcass.is_gone():
+                kept.append(carcass)
+            elif carcass.meat <= 0:
+                tally.carcasses_eaten += 1
+            else:
+                tally.carcasses_rotted += 1
+        carcasses[:] = kept
 
     def _think_and_act(self):
         world = self.world
@@ -103,7 +118,7 @@ class Simulation:
 
     def retire(self, c):
         """Enter a dead creature into the statistics and the Hall of Fame."""
-        self.stats[c.species].note_death(c)
+        self.stats[c.species].note_death(c, c.death_cause(self.tick))
         if self.hall_of_fame[c.species].retire(c):
             self._notify("record_set", c.species)
 
@@ -115,6 +130,7 @@ class Simulation:
                 world.populations[species] = repopulate(
                     species, self.hall_of_fame[species], world.bounds, geometry=world.geometry)
                 self.extinctions += 1
+                self.stats[species].extinctions += 1
 
     def _reinject_elites(self):
         for species in ALL_SPECIES:
@@ -136,6 +152,7 @@ class Simulation:
         offspring = breed(self.world)
         for c in offspring:
             self.generation = max(self.generation, c.generation)
+            self.stats[c.species].births += 1
         for species in ALL_SPECIES:
             self.world.population(species).extend(c for c in offspring if c.species is species)
 

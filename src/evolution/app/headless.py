@@ -35,6 +35,8 @@ class HeadlessRunner:
         self.autosaver = HallOfFameAutosaver(worker_id, uptime)
         self.sim = start_simulation(source, listeners=[self.autosaver,
                                                        ExtinctionReporter(worker_id)])
+        if metrics is not None:
+            metrics.watch(self.sim, self.autosaver)
         if worker_id is None:
             archive_previous_best(source, new)
         self.exchange = IslandExchange(self.sim) if worker_id is not None else None
@@ -44,17 +46,14 @@ class HeadlessRunner:
         signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
         parent_pid = os.getppid()
         sim = self.sim
-        last_time = last_report = time.time()
+        last_report = time.time()
         ticks_this_second = 0
         print(f"Headless simulation starting at Generation {sim.generation}... "
               "Press Ctrl+C to stop.")
         try:
             while True:
                 now = time.time()
-                dt, last_time = now - last_time, now
                 sim.step()
-                if self.metrics is not None:
-                    self.metrics.update(sim, dt)
                 if self.exchange is not None and sim.tick % WORKER_SYNC_INTERVAL == 0:
                     if os.getppid() != parent_pid:
                         print(f"\n{self.prefix}game.py is gone, exiting.")
