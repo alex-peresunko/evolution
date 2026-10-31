@@ -35,3 +35,4 @@ LICENSE
 # Local run output; only the tracked best brains belong in the image.
 saved_brains/history
 saved_brains/worker_*
+monitoring

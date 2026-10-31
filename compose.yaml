@@ -18,6 +18,36 @@ services:
     volumes:
       - ./saved_brains:/app/saved_brains
 
+  prometheus:
+    image: docker.io/prom/prometheus:v3.5.0
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports:
+      - 9090:9090
+    depends_on:
+      - server
+
+  grafana:
+    image: docker.io/grafana/grafana:12.1.0
+    environment:
+      # Local-only: no login, and the evolution dashboard is the home page.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/evolution.json
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana_dashboard.json:/var/lib/grafana/dashboards/evolution.json:ro
+    ports:
+      - 3000:3000
+    depends_on:
+      - prometheus
+
+volumes:
+  prometheus-data:
+
 # The commented out section below is an example of how to define a PostgreSQL
 # database that your application can use. `depends_on` tells Docker Compose to
 # start the database before your application. The `db-data` volume persists the

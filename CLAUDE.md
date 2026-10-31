@@ -22,7 +22,7 @@ poetry run ruff check .                          # lint (E, F, I, UP; line-lengt
 poetry run python -m cProfile -s time <script.py>
 ```
 
-**Containers (Podman, not Docker):** `podman compose up --build` runs `game_headless.py` with `requirements-headless.txt` (no pygame) and exposes metrics on port 8000. It mounts `./saved_brains`, so it starts from and autosaves into the host's `best_brain_*.json`. See `README.Podman.md`.
+**Containers (Podman, not Docker):** `podman compose up --build -d` runs `game_headless.py` plus Prometheus and Grafana (dashboard at http://localhost:3000). The simulation runs with `requirements-headless.txt` (no pygame) and exposes metrics on port 8000. It mounts `./saved_brains`, so it starts from and autosaves into the host's `best_brain_*.json`. See `README.Podman.md`.
 
 ## Architecture
 
@@ -213,4 +213,8 @@ Space pause · +/- simulation speed (1–32 ticks per frame) · S save brains ·
 
 ## Metrics
 
-Prometheus metrics are served at `http://localhost:8000` (`app/metrics.GameMetrics`). An importable Grafana dashboard is in `grafana_dashboard.json`.
+Prometheus metrics are served at `http://localhost:8000` (`app/metrics.GameMetrics`). The Grafana dashboard is `grafana_dashboard.json`. `podman compose up` also starts Prometheus (`:9090`, config in `monitoring/prometheus.yml`) and Grafana (`:3000`, no login, the dashboard as the home page, provisioned from `monitoring/grafana/`). These couple to the dashboard in two ways:
+- its panels reference the data source uid `fev2gbax7os8we`;
+- its queries filter on `job="evolution"`.
+
+Renaming either breaks the panels.

@@ -98,6 +98,10 @@ The simulation exposes Prometheus metrics on port 8000. Metrics include:
 
 Access metrics at: http://localhost:8000
 
+To run the headless simulation with Prometheus and a ready Grafana dashboard
+(http://localhost:3000) in one command, use `podman compose up --build -d`
+(see `README.Podman.md`).
+
 ## Headless Mode
 
 For running without graphics (faster evolution):

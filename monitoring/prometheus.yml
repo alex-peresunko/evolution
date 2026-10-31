@@ -1,0 +1,7 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: evolution        # grafana_dashboard.json queries filter on job="evolution"
+    static_configs:
+      - targets: ["server:8000"]

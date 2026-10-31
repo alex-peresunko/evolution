@@ -4,12 +4,21 @@ Containers run with [Podman](https://podman.io). On macOS, start its VM once wit
 `podman machine init && podman machine start`; `podman compose` also needs
 `podman-compose` (`brew install podman-compose`).
 
-Start the headless simulation with:
-`podman compose up --build`
+Start the headless simulation together with Prometheus and Grafana:
+`podman compose up --build -d`
 
-Prometheus metrics are then served at http://localhost:8000 (import
-`grafana_dashboard.json` into Grafana). `podman compose down` stops it; on SIGTERM the
-simulation saves its Hall of Fame before exiting.
+Then open http://localhost:3000. Grafana opens straight on the evolution dashboard, with no
+login. The other ports are:
+- http://localhost:9090: Prometheus, which scrapes the simulation every 5 s and keeps its
+  data in the `prometheus-data` volume between runs;
+- http://localhost:8000: the raw metrics.
+
+`podman compose logs -f server` follows the simulation's console. `podman compose down` stops
+everything; on SIGTERM the simulation saves its Hall of Fame before exiting. Add `-v` to
+`down` to also delete the stored Prometheus history.
+
+The monitoring config lives in `monitoring/`: the Prometheus scrape job, and Grafana's
+provisioned data source and dashboard. The dashboard itself is `grafana_dashboard.json`.
 
 `saved_brains/` is mounted into the container, so the simulation starts from your
 `best_brain_*.json` and overwrites them with new Hall of Fame brains as it runs (at most once
