@@ -127,6 +127,13 @@ STAMINA_DEPLETION_RATE = 2.5
 STAMINA_REGEN_RATE = 1.0
 STAMINA_EXHAUSTION_PENALTY = 0.2
 
+# --- Lakes (swimmable: slow and tiring) ---
+NUM_LAKES = 4
+LAKE_RADIUS_RANGE = (80, 200)
+WATER_SPEED_FACTOR = 0.35
+HERBIVORE_SWIM_STAMINA_COST = 3.0   # per tick in water, replaces regen
+CARNIVORE_SWIM_STAMINA_COST = 8.0
+
 # --- Chases & fights ---
 BITE_DAMAGE = 1800              # vs. 5000 health: ~3 bites kill a healthy adult
 BITE_COOLDOWN_TICKS = 25
@@ -187,6 +194,7 @@ BRAIN_INPUTS = (
     + NUM_WHISKERS  # target whiskers (food / prey along each ray)
     + 1             # season
     + 2             # carcass smell angle/strength
+    + 1             # in water
 )
 BRAIN_OUTPUTS = 3 + NUM_MEMORY  # rotation, speed, signal, memory
 BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]

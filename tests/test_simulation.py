@@ -2,8 +2,9 @@ import math
 
 import pytest
 
-from evolution.entities import Creature, Food, Obstacle
-from evolution.simulation import build_sim_state, create_initial_population, update_world
+from evolution.entities import Creature, Food, Lake, Obstacle
+from evolution.simulation import (_spawn_food, build_sim_state, create_initial_population,
+                                 generate_lakes, update_world)
 from evolution import config
 
 WORLD_BOUNDS = (config.WORLD_WIDTH, config.WORLD_HEIGHT)
@@ -148,7 +149,7 @@ def test_season_is_a_brain_input():
     sim_state["tick"] = config.SEASON_LENGTH_TICKS // 8
     update_world(sim_state)
     for c in sim_state["creatures"] + sim_state["carnivores"]:
-        assert c.brain_inputs[-3] == pytest.approx(sim_state["season"])
+        assert c.brain_inputs[-4] == pytest.approx(sim_state["season"])
 
 
 def test_elite_reinjection_replaces_the_weakest_with_hall_of_fame():
@@ -193,3 +194,32 @@ def test_food_patches_bounce_off_world_edges():
     patch = sim_state["food_patches"][0]
     assert patch["x"] <= WORLD_BOUNDS[0]
     assert math.cos(patch["heading"]) < 0
+
+
+def test_lakes_stay_inside_walls_and_off_obstacles():
+    obstacles = [Obstacle(1000, 600, 150, 150)]
+    lakes = generate_lakes(WORLD_BOUNDS, obstacles, count=8)
+    assert len(lakes) == 8
+    for lake in lakes:
+        assert config.LAKE_RADIUS_RANGE[0] <= lake.radius <= config.LAKE_RADIUS_RANGE[1]
+        assert lake.radius <= lake.x <= WORLD_BOUNDS[0] - lake.radius
+        assert lake.radius <= lake.y <= WORLD_BOUNDS[1] - lake.radius
+        assert not lake.contains(1075, 675)
+
+
+def test_food_does_not_spawn_in_lakes():
+    sim_state = _make_sim()
+    sim_state["food_patches"] = []
+    sim_state["lakes"] = [Lake(WORLD_BOUNDS[0] / 2, WORLD_BOUNDS[1] / 2, WORLD_BOUNDS[1] / 3)]
+    for _ in range(200):
+        food = _spawn_food(sim_state)
+        assert not sim_state["lakes"][0].contains(food.pos.x, food.pos.y)
+
+
+def test_in_water_is_the_last_brain_input():
+    sim_state = _make_sim(n_herbs=2, n_carns=0)
+    wet, dry = sim_state["creatures"]
+    wet.pos, dry.pos = wet._vec2(500, 500), dry._vec2(1500, 500)
+    sim_state["lakes"] = [Lake(500, 500, 100)]
+    update_world(sim_state)
+    assert wet.brain_inputs[-1] == 1.0 and dry.brain_inputs[-1] == 0.0

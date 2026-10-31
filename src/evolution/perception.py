@@ -174,13 +174,13 @@ def _target_whiskers(xy, angle, length, whisker_angles, targets_xy, occlusion):
 
 
 def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carcasses=(),
-                 light=1.0, season=0.0):
+                 light=1.0, season=0.0, lakes=()):
     """Brain inputs for `creatures` (any mix of species) as an (N, N_INPUTS) array.
 
     Carnivores look at and smell `herbivores` and `carcasses`; herbivores look at
     `food_items`, look at and smell `carnivores`. Both sense their own species (kin and
     signals). `light` (0 = midnight, 1 = noon) shrinks the vision cones, not whiskers or smell.
-    `season` (-1 = midwinter, 1 = midsummer) is passed through as the last input.
+    `season` (-1 = midwinter, 1 = midsummer) is passed through as an input.
     """
     n = len(creatures)
     out = np.zeros((n, N_INPUTS))
@@ -266,6 +266,9 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
     out[:, tw:tw + NUM_WHISKERS] = np.where(np.isfinite(target_whisker_dist),
                                             1.0 - target_whisker_dist / eye[:, None], 0.0)
     out[:, tw + NUM_WHISKERS] = season
+    for lake in lakes:
+        wet = (xy[:, 0] - lake.x) ** 2 + (xy[:, 1] - lake.y) ** 2 < lake.radius ** 2
+        out[wet, tw + NUM_WHISKERS + 3] = 1.0
 
     col += 6
     out[:, col] = s[:, 3] / s[:, 4]

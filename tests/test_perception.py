@@ -6,7 +6,7 @@ import pytest
 
 from evolution import config
 from evolution.brain_view import INPUT_LABELS
-from evolution.entities import Carcass, Creature, Food, Obstacle
+from evolution.entities import Carcass, Creature, Food, Lake, Obstacle
 from evolution.perception import perceive_all
 
 WORLD_BOUNDS = (config.WORLD_WIDTH, config.WORLD_HEIGHT)
@@ -24,7 +24,7 @@ def _reference_edge_distance(pos, angle, world_bounds):
 
 
 def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasses=(), light=1.0,
-                   season=0.0):
+                   season=0.0, lakes=()):
     """The original per-creature, pure-Python Creature.see(), plus scalar versions of the
     later inputs (kin, signal, carcass, light, memory); perceive_all must match it."""
     eye = self.sight_distance * (config.NIGHT_SIGHT_FACTOR + (1 - config.NIGHT_SIGHT_FACTOR) * light)
@@ -162,6 +162,7 @@ def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasse
             cc_smell_angle = rel_angle(closest) / math.pi
             cc_smell_strength = 1.0 - dist / config.SMELL_DISTANCE
     inputs += [cc_smell_angle, cc_smell_strength]
+    inputs.append(1.0 if any(lake.contains(self.pos.x, self.pos.y) for lake in lakes) else 0.0)
     return inputs, whiskers, target_whiskers, nearest_target_dist, nearest_smell_strength
 
 
@@ -198,12 +199,14 @@ def test_perceive_all_matches_reference(seed, n_herb, n_carn, n_food, light):
     carcasses = [Carcass(_random_creature(rnd, rnd.random() < 0.5, obstacles)) for _ in range(seed * 4)]
     everyone = herbs + carns
 
+    lakes = [Lake(rnd.uniform(0, WORLD_BOUNDS[0]), rnd.uniform(0, WORLD_BOUNDS[1]),
+                  rnd.uniform(100, 300)) for _ in range(seed)]
     season = light - 0.5
-    got = perceive_all(everyone, food, herbs, carns, obstacles, carcasses, light, season)
+    got = perceive_all(everyone, food, herbs, carns, obstacles, carcasses, light, season, lakes)
     assert got.shape == (len(everyone), config.BRAIN_TOPOLOGY[0])
     for row, c in zip(got, everyone):
         inputs, whiskers, target_whiskers, target_dist, smell = _reference_see(c, food, obstacles, herbs, carns,
-                                                              carcasses, light, season)
+                                                              carcasses, light, season, lakes)
         np.testing.assert_allclose(row, inputs, atol=1e-9)
         np.testing.assert_allclose(c.whiskers, whiskers, atol=1e-9)
         assert [d is None for d in c.target_whiskers] == [d is None for d in target_whiskers]

@@ -236,7 +236,36 @@ def _draw_rock(bg, rect, rng, rnd):
     bg.blit(rock, (x, y))
 
 
-def _build_background(w, h, obstacles):
+LAKE_SHORE_WIDTH = 9
+LAKE_MUD = (58, 52, 38)
+LAKE_SHALLOW = (54, 104, 108)
+LAKE_DEEP = (18, 46, 74)
+
+
+def _paint_lakes(col, lakes, ripple):
+    """Blend muddy shores and depth-shaded water into the (w, h, 3) background colours."""
+    w, h = col.shape[:2]
+    edge = np.full((w, h), np.inf, np.float32)   # signed distance to the nearest shoreline
+    depth = np.zeros((w, h), np.float32)
+    for lake in lakes:
+        m = lake.radius + LAKE_SHORE_WIDTH + 2
+        x0, x1 = max(0, int(lake.x - m)), min(w, int(lake.x + m) + 1)
+        y0, y1 = max(0, int(lake.y - m)), min(h, int(lake.y + m) + 1)
+        dx = np.arange(x0, x1, dtype=np.float32)[:, None] + 0.5 - lake.x
+        dy = np.arange(y0, y1, dtype=np.float32)[None, :] + 0.5 - lake.y
+        d = np.sqrt(dx ** 2 + dy ** 2) - lake.radius
+        edge[x0:x1, y0:y1] = np.minimum(edge[x0:x1, y0:y1], d)
+        depth[x0:x1, y0:y1] = np.maximum(depth[x0:x1, y0:y1], np.clip(-d / lake.radius, 0, 1))
+    mud = np.clip((LAKE_SHORE_WIDTH - edge) / 4, 0, 1)[..., None]
+    col[:] = col * (1 - mud) + np.array(LAKE_MUD, np.float32) * mud * (0.85 + 0.3 * ripple[..., None])
+    t = (depth ** 0.6)[..., None]
+    water = (np.array(LAKE_SHALLOW, np.float32) * (1 - t) + np.array(LAKE_DEEP, np.float32) * t)
+    water *= 0.92 + 0.16 * ripple[..., None]
+    wet = np.clip(0.5 - edge, 0, 1)[..., None]
+    col[:] = col * (1 - wet) + water * wet
+
+
+def _build_background(w, h, obstacles, lakes=()):
     rng = np.random.default_rng(7)
     rnd = random.Random(7)
 
@@ -253,10 +282,18 @@ def _build_background(w, h, obstacles):
     ys = (np.arange(h, dtype=np.float32) / h - 0.5) * 2
     d = np.sqrt(xs[:, None] ** 2 + ys[None, :] ** 2) / math.sqrt(2)
     col *= (1 - 0.5 * d ** 2.2)[..., None]
+    if lakes:
+        _paint_lakes(col, lakes, blotch(30))
     bg = pygame.surfarray.make_surface(np.clip(col, 0, 255).astype(np.uint8))
+
+    def dry(x, y, margin=LAKE_SHORE_WIDTH):
+        return not any((x - lake.x) ** 2 + (y - lake.y) ** 2 < (lake.radius + margin) ** 2
+                       for lake in lakes)
 
     for _ in range(w * h // 700):
         bx, by = rnd.uniform(0, w), rnd.uniform(0, h)
+        if not dry(bx, by):
+            continue
         g = _mix((26, 48, 32), (70, 104, 60), rnd.random() ** 1.5)
         for _ in range(rnd.randint(2, 4)):
             a = -math.pi / 2 + rnd.uniform(-0.7, 0.7)
@@ -265,11 +302,15 @@ def _build_background(w, h, obstacles):
     for _ in range(w * h // 9000):
         px, py = rnd.uniform(0, w), rnd.uniform(0, h)
         r = rnd.uniform(1.5, 3.5)
+        if not dry(px, py, 0):
+            continue
         stone = _mix((58, 58, 54), (98, 94, 86), rnd.random())
         pygame.draw.ellipse(bg, (18, 24, 20), (px - r + 1, py - r * 0.7 + 1, r * 2, r * 1.4))
         pygame.draw.ellipse(bg, stone, (px - r, py - r * 0.7, r * 2, r * 1.4))
     for _ in range(w * h // 45000):
         px, py = rnd.uniform(0, w), rnd.uniform(0, h)
+        if not dry(px, py):
+            continue
         petal = rnd.choice(((214, 206, 150), (196, 180, 220), (220, 220, 220)))
         for k in range(5):
             a = k * 2 * math.pi / 5
@@ -286,8 +327,8 @@ def _build_background(w, h, obstacles):
 # Renderer
 # =============================================================================
 class Renderer:
-    def __init__(self, world_w, world_h, obstacles):
-        self.background = _build_background(world_w, world_h, obstacles)
+    def __init__(self, world_w, world_h, obstacles, lakes=()):
+        self.background = _build_background(world_w, world_h, obstacles, lakes)
         self.minimap_bg = pygame.transform.smoothscale(
             self.background, (config.MINIMAP_WIDTH, config.MINIMAP_HEIGHT))
         self.frame = 0

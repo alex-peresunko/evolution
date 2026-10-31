@@ -35,6 +35,7 @@ Shared library lives in `src/evolution/`; the three `game*.py` entry scripts are
 
 World mechanics, all tuned through `config.py`:
 - **Walls:** the world edges are walls, not a wrap. Crossing one costs `HEALTH_LOST_ON_HIT` and pushes the creature back, like an obstacle. Obstacle whiskers see the edges, and food patches bounce off them.
+- **Lakes:** `generate_lakes` places `NUM_LAKES` circular `Lake`s (radius from `LAKE_RADIUS_RANGE`) inside the walls and clear of obstacles, into `sim_state["lakes"]`. Creatures swim through them: speed is multiplied by `WATER_SPEED_FACTOR`, and instead of regenerating, stamina drains by `HERBIVORE_SWIM_STAMINA_COST` / `CARNIVORE_SWIM_STAMINA_COST` per tick (`c.in_water`). Respawned food avoids lakes. The renderer bakes lakes into the background.
 - **Chases:** carnivores bite instead of killing on contact. A bite needs contact, the prey within `CARNIVORE_BITE_ANGLE` of the carnivore's heading, and `BITE_COOLDOWN_TICKS` since the last bite (`Creature._try_bite`). Bitten prey gets an adrenaline stamina boost. Herbivores bigger than the carnivore deal retaliation damage. Death is simply `health <= 0`.
 - **Carcasses:** every dead creature leaves a `Carcass` in `sim_state["carcasses"]` (with its own grid). Carnivores scavenge it (`_scavenge`) until it's eaten or rots.
 - **Meals:** eating makes a creature stand still for `HERBIVORE_EAT_TICKS` / `CARNIVORE_EAT_TICKS` (`eating_ticks`; brain outputs are ignored meanwhile). Herbivores absorb a food item's health gradually (`_digest`); carnivores keep eating from `meal_carcass` until the meal ends, the carcass is gone, or health is full. A bite interrupts a herbivore's meal and forfeits the rest. Setting a duration to 0 restores instant eating.
@@ -57,7 +58,7 @@ World mechanics, all tuned through `config.py`:
 
 Evolution is continuous: creatures die and are "retired" (`_retire_creature` updates the Hall of Fame and saves the brain), and eligible nearby adults reproduce (brain crossover + gene averaging + mutation, in `genetics.py`). Crossover is neuron-wise: each neuron's incoming weights and bias come from one parent. Mates are ranked by attractiveness. Two optional selection boosts are off by default (both 0), because an A/B run showed no gain: `MATE_SCORE_WEIGHT` adds score to mate ranking, and `ELITE_REINJECT_INTERVAL` periodically replaces the weakest `ELITE_REINJECT_COUNT` creatures of each species with the Hall of Fame brain and mutated copies (`islands.inject_immigrants`). The reproduction cooldown is counted in ticks (`REPRODUCTION_COOLDOWN_TICKS`), so behavior doesn't depend on simulation speed. After an extinction, the species is repopulated from the Hall of Fame.
 
-**`game_headless_multiproc.py` diverges:** it has its own `update_world` and a *generational* `evolve_population`, and it ships `LeanCreature`/`LeanFood` dataclasses to worker processes for IPC. Changes to `simulation.update_world` do not carry over to it automatically. It only stores signal/memory: it keeps instant kills and has no carcasses, food patches, night, seasons, litters or speciation. Upkeep, senescence and the heritable mutation rate do reach it, because they live in `Creature`/`genetics`.
+**`game_headless_multiproc.py` diverges:** it has its own `update_world` and a *generational* `evolve_population`, and it ships `LeanCreature`/`LeanFood` dataclasses to worker processes for IPC. Changes to `simulation.update_world` do not carry over to it automatically. It only stores signal/memory: it keeps instant kills and has no carcasses, food patches, lakes, night, seasons, litters or speciation. Upkeep, senescence and the heritable mutation rate do reach it, because they live in `Creature`/`genetics`.
 
 ### Island workers (game.py)
 
@@ -88,7 +89,7 @@ Zoom (`sim_state["zoom"]`, mouse wheel): `draw_world` scales positions and sprit
 
 ### Neural network
 
-Topology is `config.BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]` = `[34, 16, 8, 5]`, tanh on all layers. Changing the inputs in `perception.perceive_all` means updating the `BRAIN_INPUTS` formula too. Append new inputs/outputs at the end: `NeuralNetwork.load` copies the overlapping top-left block, so saved brains keep their existing wiring. Inputs, in order:
+Topology is `config.BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]` = `[35, 16, 8, 5]`, tanh on all layers. Changing the inputs in `perception.perceive_all` means updating the `BRAIN_INPUTS` formula too. Append new inputs/outputs at the end: `NeuralNetwork.load` copies the overlapping top-left block, so saved brains keep their existing wiring. Inputs, in order:
 
 ```
 whisker[0..2]                obstacle proximity (1 = touching)
@@ -109,6 +110,7 @@ target_whisker[0..2]               food (herbivore) / prey or carcass (carnivore
 season                             -1 = midwinter, 1 = midsummer
 carcass_smell_angle, carcass_smell_strength   carnivore only: nearest carcass within
                                    SMELL_DISTANCE, omnidirectional, else 0
+in_water                           1 = standing in a lake
 ```
 
 Outputs: `[rotation_delta, speed, signal, memory...]`. `_apply_mate_seeking_drive` may override them for adults.

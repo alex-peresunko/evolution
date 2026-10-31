@@ -13,7 +13,7 @@ INPUT_LABELS = (
        "carcass_ang", "carcass_dist", "light"]
     + [f"mem{i}_in" for i in range(NUM_MEMORY)]
     + [f"food_w{i}" for i in range(NUM_WHISKERS)]
-    + ["season", "carcass_smell_ang", "carcass_smell_str"]
+    + ["season", "carcass_smell_ang", "carcass_smell_str", "in_water"]
 )
 OUTPUT_LABELS = ["turn", "speed", "signal"] + [f"mem{i}" for i in range(NUM_MEMORY)]
 NODE_RADIUS_MIN, NODE_RADIUS_MAX = 2, 6

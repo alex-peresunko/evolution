@@ -20,6 +20,7 @@ from .config import (
     SCAVENGE_SCORE_FACTOR, SIGNAL_HEALTH_COST, HERBIVORE_EAT_TICKS, CARNIVORE_EAT_TICKS,
     FAT_MAX, FAT_STORE_EFFICIENCY, FAT_BURN_PER_TICK, FAT_SPEED_PENALTY, FAT_SIZE_FACTOR,
     UPKEEP_WEIGHTS, KLEIBER_EXPONENT, SENESCENCE_RATE,
+    WATER_SPEED_FACTOR, HERBIVORE_SWIM_STAMINA_COST, CARNIVORE_SWIM_STAMINA_COST,
 )
 from .math_types import Vector2 as _HeadlessVector2, SimpleRect as _HeadlessRect
 from .neural_network import NeuralNetwork
@@ -30,6 +31,14 @@ class Obstacle:
     def __init__(self, x, y, width, height, *, rect_factory=None):
         _rect = rect_factory or _HeadlessRect
         self.rect = _rect(x, y, width, height)
+
+
+class Lake:
+    def __init__(self, x, y, radius):
+        self.x, self.y, self.radius = x, y, radius
+
+    def contains(self, x, y):
+        return (x - self.x) ** 2 + (y - self.y) ** 2 < self.radius ** 2
 
 
 class Creature:
@@ -68,6 +77,7 @@ class Creature:
         self.brain_inputs = None            # last tick's brain input/output rows (brain panel)
         self.brain_outputs = None
         self.mate_override = False          # last tick's outputs were steered toward a mate
+        self.in_water = False
         self.age = 0
         self.is_adult = False
         self.lineage = self.id              # founder's id, inherited from the first parent
@@ -134,8 +144,9 @@ class Creature:
         return self.think(inputs)
 
     def act(self, outputs, global_food_list, global_herbivore_list, obstacles, grid,
-            food_grid=None, herb_grid=None, carcass_grid=None, tick=0):
+            food_grid=None, herb_grid=None, carcass_grid=None, tick=0, lakes=()):
         self.age += 1
+        self.in_water = any(lake.contains(self.pos.x, self.pos.y) for lake in lakes)
         if self.respawn_immunity_ticks > 0:
             self.respawn_immunity_ticks -= 1
         if not self.is_adult and self.age >= ADULTHOOD_AGE:
@@ -157,10 +168,14 @@ class Creature:
             is_exhausted = self.stamina <= 0
             speed_penalty = STAMINA_EXHAUSTION_PENALTY if is_exhausted else 1.0
             weight_penalty = 1 / (1 + fat_ratio * FAT_SPEED_PENALTY)
+            water_penalty = WATER_SPEED_FACTOR if self.in_water else 1.0
             new_speed = (max(0, outputs[1]) * self.max_speed * speed_multiplier * speed_penalty
-                         * weight_penalty)
+                         * weight_penalty * water_penalty)
 
-        if self.max_speed > 0 and new_speed / self.max_speed > STAMINA_DEPLETION_SPEED_THRESHOLD:
+        if self.in_water:
+            self.stamina -= (CARNIVORE_SWIM_STAMINA_COST if self.is_carnivore
+                             else HERBIVORE_SWIM_STAMINA_COST)
+        elif self.max_speed > 0 and new_speed / self.max_speed > STAMINA_DEPLETION_SPEED_THRESHOLD:
             speed_ratio = new_speed / self.max_speed
             depletion_amount = (speed_ratio ** SPEED_STAMINA_EXPONENT) * STAMINA_DEPLETION_RATE
             self.stamina -= depletion_amount
@@ -338,6 +353,7 @@ class Creature:
             "Status": status,
             "Health": int(self.health),
             "Stamina": f"{int(self.stamina)}/{int(self.max_stamina)}",
+            "Swimming": self.in_water,
             "Score": round(self.score, 2),
             "Eating": self.eating_ticks,
             "Fat": f"{int(self.fat)}/{FAT_MAX}",

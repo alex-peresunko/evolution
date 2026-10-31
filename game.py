@@ -15,6 +15,7 @@ from prometheus_client import start_http_server
 from evolution import config
 from evolution.entities import Creature, Food, Obstacle
 from evolution.simulation import (update_world, create_start_populations, build_sim_state,
+                                  generate_lakes,
                                   food_cap, restore_progress, restore_start_progress,
                                   save_hall_of_fame, season_name, species_history)
 from evolution.brain_history import (add_start_arguments, archive_after_start,
@@ -625,7 +626,8 @@ def main(new=False, load=None):
         for _ in range(config.NUM_OBSTACLES)
     ]
 
-    sim_state = build_sim_state(world_bounds, herbivores, carnivores, food_items, obstacles)
+    sim_state = build_sim_state(world_bounds, herbivores, carnivores, food_items, obstacles,
+                                generate_lakes(world_bounds, obstacles))
     sim_state.update({
         "generation": generation,
         "paused": False,
@@ -646,7 +648,8 @@ def main(new=False, load=None):
         "show_genes": True,
         "brain_history": deque(maxlen=config.BRAIN_VIEW_HISTORY),
         "brain_history_owner": None,
-        "renderer": Renderer(config.WORLD_WIDTH, config.WORLD_HEIGHT, obstacles),
+        "renderer": Renderer(config.WORLD_WIDTH, config.WORLD_HEIGHT, obstacles,
+                             sim_state["lakes"]),
     })
 
     restore_start_progress(sim_state, source)

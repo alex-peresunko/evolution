@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from evolution.entities import Carcass, Creature, Food
+from evolution.entities import Carcass, Creature, Food, Lake
 from evolution.spatial import SpatialHashGrid
 from evolution import config
 
@@ -254,3 +254,22 @@ def test_world_edge_is_a_wall_not_a_wrap():
         assert c.size <= c.pos.x <= bounds[0] - c.size
     assert c.health < health - config.HEALTH_LOST_ON_HIT
     assert math.isclose(c.pos.y, 400)
+
+
+@pytest.mark.parametrize("is_carnivore", [False, True])
+def test_swimming_is_slow_and_drains_stamina(is_carnivore):
+    lake = Lake(500, 400, 100)
+    dry, wet = _adult_at(is_carnivore, 200, 400), _adult_at(is_carnivore, 500, 400)
+    dry.stamina = wet.stamina = 500
+    dry.act([0.0, 0.5], [], [], [], _empty_grid(), lakes=[lake])
+    wet.act([0.0, 0.5], [], [], [], _empty_grid(), lakes=[lake])
+    assert wet.in_water and not dry.in_water
+    assert wet.current_speed == pytest.approx(dry.current_speed * config.WATER_SPEED_FACTOR)
+    cost = (config.CARNIVORE_SWIM_STAMINA_COST if is_carnivore
+            else config.HERBIVORE_SWIM_STAMINA_COST)
+    assert wet.stamina == pytest.approx(500 - cost)
+    assert dry.stamina > 500
+
+
+def test_carnivores_tire_faster_in_water_than_herbivores():
+    assert config.CARNIVORE_SWIM_STAMINA_COST > config.HERBIVORE_SWIM_STAMINA_COST

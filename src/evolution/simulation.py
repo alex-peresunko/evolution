@@ -19,8 +19,9 @@ from .config import (
     SCORE_SAMPLE_INTERVAL, CHART_HISTORY_SAVE_MAX, NUM_MEMORY, DAY_LENGTH_TICKS,
     SEASON_LENGTH_TICKS, SEASON_FOOD_AMPLITUDE,
     FOOD_PATCH_COUNT, FOOD_PATCH_SHARE, FOOD_PATCH_RADIUS, FOOD_PATCH_SPEED, FOOD_PATCH_TURN,
+    NUM_LAKES, LAKE_RADIUS_RANGE,
 )
-from .entities import Carcass, Creature, Food, Obstacle
+from .entities import Carcass, Creature, Food, Lake, Obstacle
 from .spatial import SpatialHashGrid
 from .genetics import combine_brains, combine_genes, compatible, mutate_brain, mutate_genes
 from .islands import inject_immigrants
@@ -30,7 +31,27 @@ from .brain_store import (read_saved_history, read_saved_score, save_brain, save
                           update_saved_history)
 
 
-def build_sim_state(world_bounds, creatures, carnivores, food_items, obstacles):
+def generate_lakes(world_bounds, obstacles=(), count=NUM_LAKES, attempts=50):
+    """Up to `count` random lakes inside the walls that don't touch an obstacle."""
+    w, h = world_bounds
+    lakes = []
+    for _ in range(count * attempts):
+        if len(lakes) == count:
+            break
+        r = min(random.uniform(*LAKE_RADIUS_RANGE), w / 2, h / 2)
+        x, y = random.uniform(r, w - r), random.uniform(r, h - r)
+        if not any(_circle_hits_rect(x, y, r, obs.rect) for obs in obstacles):
+            lakes.append(Lake(x, y, r))
+    return lakes
+
+
+def _circle_hits_rect(x, y, r, rect):
+    nx = min(max(x, rect.left), rect.right)
+    ny = min(max(y, rect.top), rect.bottom)
+    return (x - nx) ** 2 + (y - ny) ** 2 < r ** 2
+
+
+def build_sim_state(world_bounds, creatures, carnivores, food_items, obstacles, lakes=()):
     w, h = world_bounds
     return {
         "running": True,
@@ -52,6 +73,7 @@ def build_sim_state(world_bounds, creatures, carnivores, food_items, obstacles):
         "carnivores": carnivores,
         "food_items": food_items,
         "obstacles": obstacles,
+        "lakes": list(lakes),
         "herbivore_score_history": [],
         "carnivore_score_history": [],
         "herbivore_longevity_history": [],
@@ -135,8 +157,18 @@ def _update_food_patches(sim_state):
         patch["x"], patch["y"] = min(max(x, 0), w), min(max(y, 0), h)
 
 
-def _spawn_food(sim_state):
-    """New food goes near a random patch (FOOD_PATCH_SHARE of the time) or anywhere."""
+def _spawn_food(sim_state, attempts=10):
+    """New food goes near a random patch (FOOD_PATCH_SHARE of the time) or anywhere, on dry
+    land unless `attempts` placements all land in a lake."""
+    lakes = sim_state.get("lakes", ())
+    for _ in range(attempts):
+        food = _place_food(sim_state)
+        if not any(lake.contains(food.pos.x, food.pos.y) for lake in lakes):
+            break
+    return food
+
+
+def _place_food(sim_state):
     w, h = sim_state["world_bounds"]
     # Inherit vec2 factory from existing food if present, else use default
     vec2_factory = sim_state["food_items"][0]._vec2 if sim_state["food_items"] else None
@@ -350,6 +382,7 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
     carcasses[:] = [cc for cc in carcasses if not cc.is_gone()]
 
     all_creatures = sim_state["creatures"] + sim_state["carnivores"]
+    lakes = sim_state.get("lakes", ())
     food_grid = sim_state["food_grid"]
     herb_grid = sim_state["herb_grid"]
     carn_grid = sim_state["carn_grid"]
@@ -370,7 +403,7 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
 
     all_inputs = perceive_all(all_creatures, sim_state["food_items"], sim_state["creatures"],
                               sim_state["carnivores"], sim_state["obstacles"], carcasses, light,
-                              season_value)
+                              season_value, lakes)
     all_outputs = batch_forward(all_creatures, all_inputs)
     if len(all_outputs):
         signals = np.maximum(0.0, all_outputs[:, 2]).tolist()
@@ -383,7 +416,8 @@ def update_world(sim_state, prometheus_metrics=None, worker_id=None):
         outputs = _apply_mate_seeking_drive(c, list(raw), herb_grid, carn_grid)
         c.mate_override = outputs[0] != raw[0] or outputs[1] != raw[1]
         c.act(outputs, sim_state["food_items"], sim_state["creatures"], sim_state["obstacles"], grid,
-              food_grid=food_grid, herb_grid=herb_grid, carcass_grid=carcass_grid, tick=tick)
+              food_grid=food_grid, herb_grid=herb_grid, carcass_grid=carcass_grid, tick=tick,
+              lakes=lakes)
 
     alive_herbs, alive_carns = [], []
     for group, alive in ((sim_state["creatures"], alive_herbs),

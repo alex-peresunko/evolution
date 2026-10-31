@@ -9,6 +9,7 @@ from prometheus_client import start_http_server
 from evolution import config
 from evolution.entities import Creature, Food, Obstacle
 from evolution.simulation import (update_world, create_start_populations, build_sim_state,
+                                  generate_lakes,
                                   restore_start_progress, autosave_hall_of_fame,
                                   save_hall_of_fame)
 from evolution.metrics import GameMetrics
@@ -33,7 +34,8 @@ def main(worker_id=None, new=False, load=None):
         for _ in range(config.NUM_OBSTACLES)
     ]
 
-    sim_state = build_sim_state(world_bounds, herbivores, carnivores, food_items, obstacles)
+    sim_state = build_sim_state(world_bounds, herbivores, carnivores, food_items, obstacles,
+                                generate_lakes(world_bounds, obstacles))
     sim_state["generation"] = generation
     restore_start_progress(sim_state, source)
     if worker_id is None:

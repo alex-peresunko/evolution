@@ -15,7 +15,8 @@ from evolution.brain_store import save_brain
 from evolution.entities import Food, Obstacle
 from evolution.imitation import loss, teacher_actions, train_brain
 from evolution.neural_network import NeuralNetwork
-from evolution.simulation import build_sim_state, create_initial_population, update_world
+from evolution.simulation import (build_sim_state, create_initial_population, generate_lakes,
+                                 update_world)
 
 SPECIES = ("herbivore", "carnivore")
 
@@ -31,7 +32,8 @@ def build_world():
                  random.randint(50, 150), random.randint(50, 150))
         for _ in range(config.NUM_OBSTACLES)
     ]
-    sim_state = build_sim_state(world_bounds, herbivores, carnivores, food, obstacles)
+    sim_state = build_sim_state(world_bounds, herbivores, carnivores, food, obstacles,
+                                generate_lakes(world_bounds, obstacles))
     sim_state["last_autosave_tick"] = float("inf")  # never write best_brain_*.json from here
     return sim_state
 
