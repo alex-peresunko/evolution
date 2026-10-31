@@ -34,11 +34,27 @@ class Obstacle:
 
 
 class Lake:
-    def __init__(self, x, y, radius):
+    """Shore radius at angle t is radius * (1 + sum of a * cos(k * t + phase) over
+    `harmonics` (k, a, phase)); no harmonics is a circle."""
+
+    def __init__(self, x, y, radius, harmonics=()):
         self.x, self.y, self.radius = x, y, radius
+        self.harmonics = tuple(harmonics)
+        self.max_radius = radius * (1 + sum(abs(a) for _, a, _ in self.harmonics))
+
+    def shore(self, theta, cos=math.cos):
+        """Shore radius at `theta`; pass cos=np.cos for an array of angles."""
+        return self.radius * (1 + sum(a * cos(k * theta + p) for k, a, p in self.harmonics))
 
     def contains(self, x, y):
-        return (x - self.x) ** 2 + (y - self.y) ** 2 < self.radius ** 2
+        dx, dy = x - self.x, y - self.y
+        d2 = dx * dx + dy * dy
+        return d2 < self.max_radius ** 2 and d2 < self.shore(math.atan2(dy, dx)) ** 2
+
+    def shore_gap(self, xs, ys):
+        """Distance past the shore along the ray from the centre (< 0 = in water), for arrays."""
+        dx, dy = xs - self.x, ys - self.y
+        return np.hypot(dx, dy) - self.shore(np.arctan2(dy, dx), np.cos)
 
 
 class Creature:

@@ -267,7 +267,7 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
                                             1.0 - target_whisker_dist / eye[:, None], 0.0)
     out[:, tw + NUM_WHISKERS] = season
     for lake in lakes:
-        wet = (xy[:, 0] - lake.x) ** 2 + (xy[:, 1] - lake.y) ** 2 < lake.radius ** 2
+        wet = lake.shore_gap(xy[:, 0], xy[:, 1]) < 0
         out[wet, tw + NUM_WHISKERS + 3] = 1.0
 
     col += 6

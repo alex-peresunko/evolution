@@ -19,7 +19,7 @@ from .config import (
     SCORE_SAMPLE_INTERVAL, CHART_HISTORY_SAVE_MAX, NUM_MEMORY, DAY_LENGTH_TICKS,
     SEASON_LENGTH_TICKS, SEASON_FOOD_AMPLITUDE,
     FOOD_PATCH_COUNT, FOOD_PATCH_SHARE, FOOD_PATCH_RADIUS, FOOD_PATCH_SPEED, FOOD_PATCH_TURN,
-    NUM_LAKES, LAKE_RADIUS_RANGE,
+    NUM_LAKES, LAKE_RADIUS_RANGE, LAKE_LOBES, LAKE_SHORE_ROUGHNESS, LAKE_SHORE_HARMONICS,
 )
 from .entities import Carcass, Creature, Food, Lake, Obstacle
 from .spatial import SpatialHashGrid
@@ -32,17 +32,41 @@ from .brain_store import (read_saved_history, read_saved_score, save_brain, save
 
 
 def generate_lakes(world_bounds, obstacles=(), count=NUM_LAKES, attempts=50):
-    """Up to `count` random lakes inside the walls that don't touch an obstacle."""
+    """Up to `count` random lakes inside the walls that don't touch an obstacle. Each lake is
+    1..LAKE_LOBES overlapping `Lake` blobs, all returned in one flat list."""
     w, h = world_bounds
-    lakes = []
+    blobs, placed = [], 0
     for _ in range(count * attempts):
-        if len(lakes) == count:
+        if placed == count:
             break
-        r = min(random.uniform(*LAKE_RADIUS_RANGE), w / 2, h / 2)
-        x, y = random.uniform(r, w - r), random.uniform(r, h - r)
-        if not any(_circle_hits_rect(x, y, r, obs.rect) for obs in obstacles):
-            lakes.append(Lake(x, y, r))
-    return lakes
+        lake = _random_lake(random.uniform(0, w), random.uniform(0, h))
+        if all(b.max_radius <= b.x <= w - b.max_radius and b.max_radius <= b.y <= h - b.max_radius
+               and not any(_circle_hits_rect(b.x, b.y, b.max_radius, obs.rect)
+                           for obs in obstacles)
+               for b in lake):
+            blobs += lake
+            placed += 1
+    return blobs
+
+
+def _random_lake(x, y):
+    r = random.uniform(*LAKE_RADIUS_RANGE)
+    blobs = [Lake(x, y, r, random_shore())]
+    for _ in range(random.randint(*LAKE_LOBES) - 1):
+        parent = random.choice(blobs)
+        a = random.uniform(0, 2 * math.pi)
+        off = parent.radius * random.uniform(0.6, 1.0)
+        blobs.append(Lake(parent.x + math.cos(a) * off, parent.y + math.sin(a) * off,
+                          r * random.uniform(0.4, 0.8), random_shore()))
+    return blobs
+
+
+def random_shore(roughness=LAKE_SHORE_ROUGHNESS, harmonics=LAKE_SHORE_HARMONICS):
+    """Lake harmonics with amplitudes falling off with frequency and summing to `roughness`."""
+    ks = range(2, harmonics + 2)
+    amps = [random.uniform(0.3, 1.0) / k ** 1.4 for k in ks]
+    scale = roughness / sum(amps)
+    return [(k, a * scale, random.uniform(0, 2 * math.pi)) for k, a in zip(ks, amps)]
 
 
 def _circle_hits_rect(x, y, r, rect):

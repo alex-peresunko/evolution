@@ -129,7 +129,10 @@ STAMINA_EXHAUSTION_PENALTY = 0.2
 
 # --- Lakes (swimmable: slow and tiring) ---
 NUM_LAKES = 4
-LAKE_RADIUS_RANGE = (80, 200)
+LAKE_RADIUS_RANGE = (80, 200)          # mean shore radius
+LAKE_LOBES = (1, 4)                    # overlapping blobs merged into one lake
+LAKE_SHORE_ROUGHNESS = 0.45            # blob shore radius varies within (1 +- this) * mean
+LAKE_SHORE_HARMONICS = 10              # bays and headlands per blob, coarse to fine
 WATER_SPEED_FACTOR = 0.35
 HERBIVORE_SWIM_STAMINA_COST = 3.0   # per tick in water, replaces regen
 CARNIVORE_SWIM_STAMINA_COST = 8.0

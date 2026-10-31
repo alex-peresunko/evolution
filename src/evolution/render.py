@@ -242,23 +242,31 @@ LAKE_SHALLOW = (54, 104, 108)
 LAKE_DEEP = (18, 46, 74)
 
 
+def _blur_array(a, factor):
+    """Soft blur of a [0, 1] (w, h) array by smoothscaling down `factor` times and back."""
+    w, h = a.shape
+    surf = pygame.surfarray.make_surface(np.dstack([(a * 255).astype(np.uint8)] * 3))
+    small = pygame.transform.smoothscale(surf, (max(1, w // factor), max(1, h // factor)))
+    return pygame.surfarray.array_red(pygame.transform.smoothscale(small, (w, h))).astype(np.float32) / 255
+
+
 def _paint_lakes(col, lakes, ripple):
     """Blend muddy shores and depth-shaded water into the (w, h, 3) background colours."""
     w, h = col.shape[:2]
-    edge = np.full((w, h), np.inf, np.float32)   # signed distance to the nearest shoreline
-    depth = np.zeros((w, h), np.float32)
+    edge = np.full((w, h), np.inf, np.float32)   # gap to the nearest shoreline, < 0 = water
     for lake in lakes:
-        m = lake.radius + LAKE_SHORE_WIDTH + 2
+        m = lake.max_radius + LAKE_SHORE_WIDTH + 2
         x0, x1 = max(0, int(lake.x - m)), min(w, int(lake.x + m) + 1)
         y0, y1 = max(0, int(lake.y - m)), min(h, int(lake.y + m) + 1)
-        dx = np.arange(x0, x1, dtype=np.float32)[:, None] + 0.5 - lake.x
-        dy = np.arange(y0, y1, dtype=np.float32)[None, :] + 0.5 - lake.y
-        d = np.sqrt(dx ** 2 + dy ** 2) - lake.radius
+        d = lake.shore_gap(np.arange(x0, x1, dtype=np.float32)[:, None] + 0.5,
+                           np.arange(y0, y1, dtype=np.float32)[None, :] + 0.5)
         edge[x0:x1, y0:y1] = np.minimum(edge[x0:x1, y0:y1], d)
-        depth[x0:x1, y0:y1] = np.maximum(depth[x0:x1, y0:y1], np.clip(-d / lake.radius, 0, 1))
+    water_mask = (edge < 0).astype(np.float32)
+    blurred = sum(_blur_array(water_mask, f) for f in (8, 16, 32, 64)) / 4
+    depth = np.clip((blurred - 0.5) * 1.6, 0, 1) * water_mask
     mud = np.clip((LAKE_SHORE_WIDTH - edge) / 4, 0, 1)[..., None]
     col[:] = col * (1 - mud) + np.array(LAKE_MUD, np.float32) * mud * (0.85 + 0.3 * ripple[..., None])
-    t = (depth ** 0.6)[..., None]
+    t = (depth ** 0.8)[..., None]
     water = (np.array(LAKE_SHALLOW, np.float32) * (1 - t) + np.array(LAKE_DEEP, np.float32) * t)
     water *= 0.92 + 0.16 * ripple[..., None]
     wet = np.clip(0.5 - edge, 0, 1)[..., None]
@@ -287,8 +295,7 @@ def _build_background(w, h, obstacles, lakes=()):
     bg = pygame.surfarray.make_surface(np.clip(col, 0, 255).astype(np.uint8))
 
     def dry(x, y, margin=LAKE_SHORE_WIDTH):
-        return not any((x - lake.x) ** 2 + (y - lake.y) ** 2 < (lake.radius + margin) ** 2
-                       for lake in lakes)
+        return not any(lake.shore_gap(x, y) < margin for lake in lakes)
 
     for _ in range(w * h // 700):
         bx, by = rnd.uniform(0, w), rnd.uniform(0, h)

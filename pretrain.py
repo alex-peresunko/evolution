@@ -15,8 +15,12 @@ from evolution.brain_store import save_brain
 from evolution.entities import Food, Obstacle
 from evolution.imitation import loss, teacher_actions, train_brain
 from evolution.neural_network import NeuralNetwork
-from evolution.simulation import (build_sim_state, create_initial_population, generate_lakes,
-                                 update_world)
+from evolution.simulation import (
+    build_sim_state,
+    create_initial_population,
+    generate_lakes,
+    update_world,
+)
 
 SPECIES = ("herbivore", "carnivore")
 

@@ -4,7 +4,7 @@ import pytest
 
 from evolution.entities import Creature, Food, Lake, Obstacle
 from evolution.simulation import (_spawn_food, build_sim_state, create_initial_population,
-                                 generate_lakes, update_world)
+                                 generate_lakes, random_shore, update_world)
 from evolution import config
 
 WORLD_BOUNDS = (config.WORLD_WIDTH, config.WORLD_HEIGHT)
@@ -198,13 +198,23 @@ def test_food_patches_bounce_off_world_edges():
 
 def test_lakes_stay_inside_walls_and_off_obstacles():
     obstacles = [Obstacle(1000, 600, 150, 150)]
-    lakes = generate_lakes(WORLD_BOUNDS, obstacles, count=8)
-    assert len(lakes) == 8
-    for lake in lakes:
-        assert config.LAKE_RADIUS_RANGE[0] <= lake.radius <= config.LAKE_RADIUS_RANGE[1]
-        assert lake.radius <= lake.x <= WORLD_BOUNDS[0] - lake.radius
-        assert lake.radius <= lake.y <= WORLD_BOUNDS[1] - lake.radius
-        assert not lake.contains(1075, 675)
+    blobs = generate_lakes(WORLD_BOUNDS, obstacles, count=8)
+    assert len(blobs) >= 8
+    for blob in blobs:
+        assert blob.radius <= config.LAKE_RADIUS_RANGE[1]
+        assert blob.max_radius <= blob.x <= WORLD_BOUNDS[0] - blob.max_radius
+        assert blob.max_radius <= blob.y <= WORLD_BOUNDS[1] - blob.max_radius
+        assert not blob.contains(1075, 675)
+
+
+def test_lake_shore_is_irregular():
+    lake = Lake(500, 500, 100, random_shore())
+    radii = [lake.shore(t * math.pi / 18) for t in range(36)]
+    assert max(radii) - min(radii) > 10
+    for t, r in zip(range(36), radii):
+        a = t * math.pi / 18
+        assert lake.contains(500 + math.cos(a) * (r - 1), 500 + math.sin(a) * (r - 1))
+        assert not lake.contains(500 + math.cos(a) * (r + 1), 500 + math.sin(a) * (r + 1))
 
 
 def test_food_does_not_spawn_in_lakes():
