@@ -287,7 +287,7 @@ def restore_progress(sim_state, species, brain, genes, filename, save_dir="saved
                   "generation": generation}
         sim_state["hall_of_fame"][species] = record
         sim_state["elites"][species] = [dict(record)]
-        sim_state.setdefault("hof_saved_scores", {})[species] = score
+        sim_state.setdefault("hof_saved_scores", {})[species] = {"raw": score, "faded": score}
     history = read_saved_history(filename, save_dir=save_dir) or {}
     for metric in ("score", "longevity"):
         sim_state[f"{species}_{metric}_history"] = list(history.get(metric, []))
@@ -355,6 +355,9 @@ def _fade_records(sim_state):
     for record in records:
         if record["score"] > 0:
             record["score"] *= factor
+    for saved in sim_state.get("hof_saved_scores", {}).values():
+        if saved["faded"] > 0:
+            saved["faded"] *= factor
 
 
 def autosave_hall_of_fame(sim_state, prometheus_metrics=None, worker_id=None, force=False):
@@ -381,15 +384,20 @@ def _log_hof_save(sim_state, species, filename, worker_id=None):
     hof = sim_state["hall_of_fame"][species]
     saved = sim_state.setdefault("hof_saved_scores", {})
     previous, score = saved.get(species), hof["score"]
-    change = (f"{score:.3f} (new)" if previous is None
-              else f"{previous:.3f} -> {score:.3f} ({score - previous:+.3f})")
+    if previous is None:
+        change = f"{score:.3f} (new)"
+    else:
+        old = f"{previous['raw']:.3f}"
+        if f"{previous['faded']:.3f}" != old:
+            old += f" (faded to {previous['faded']:.3f})"
+        change = f"{old} -> {score:.3f} ({score - previous['faded']:+.3f})"
     details = [f"gen {hof.get('generation', 1)}"]
     if hof.get("source"):
         details.append(hof["source"])
     pfx = f"[W{worker_id}] " if worker_id is not None else ""
     print(f"{pfx}[HoF save] {species.capitalize()} best brain saved to {filename}: {change}; "
           f"{', '.join(details)}; tick {sim_state['tick']}")
-    saved[species] = score
+    saved[species] = {"raw": score, "faded": score}
 
 
 def save_hall_of_fame(sim_state, prometheus_metrics=None):

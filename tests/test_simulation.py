@@ -328,3 +328,20 @@ def test_hall_of_fame_save_logs_score_change_and_creature(tmp_path, monkeypatch,
     out = capsys.readouterr().out
     assert "[HoF save] Herbivore best brain saved to best_brain_herbivore.json: 2.000 (new)" in out
     assert f"2.000 -> 5.500 (+3.500); gen 1, creature #{c.id}, age 1234, lineage #{c.lineage}" in out
+
+
+def test_hall_of_fame_save_log_shows_the_faded_previous_score(tmp_path, monkeypatch, capsys):
+    from evolution import simulation
+    from evolution.simulation import _fade_records, _retire_creature
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "saved_brains").mkdir()
+    monkeypatch.setattr(simulation, "HOF_SCORE_HALF_LIFE", config.SCORE_SAMPLE_INTERVAL)
+    sim_state = _make_sim(n_herbs=0, n_carns=0)
+    for score in (8.0, 5.0):
+        sim_state["tick"] += config.AUTOSAVE_INTERVAL
+        c = Creature(WORLD_BOUNDS)
+        c.score = score
+        _retire_creature(c, sim_state)
+        _fade_records(sim_state)
+    assert "8.000 (faded to 4.000) -> 5.000 (+1.000)" in capsys.readouterr().out
