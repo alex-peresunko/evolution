@@ -75,14 +75,60 @@ def _nearest(dist, mask):
     return idx, np.isfinite(masked[np.arange(len(idx)), idx])
 
 
-def _vision(rel, sight, half_angle):
-    """Nearest target inside the sight cone: (index, found, (angle, distance)) with angle
-    and distance normalized by the cone, (0, 1) when there is none."""
+def _crowns(obstacles):
+    """(T, 3) x, y, radius of the tree crowns among `obstacles`."""
+    return np.array([(o.x, o.y, o.crown_radius) for o in obstacles if hasattr(o, "crown_radius")],
+                    dtype=np.float64).reshape(-1, 3)
+
+
+def _crown_hides(ox, oy, sx, sy, crowns):
+    """Per pair (observer at ox, oy, target at ox + sx, oy + sy): whether a tree crown hides the
+    target. A crown hides what is under or behind it, except from an observer under that same
+    crown."""
+    cx, cy, r2 = crowns[:, 0], crowns[:, 1], crowns[:, 2] ** 2
+    ox, oy, sx, sy = ox[:, None], oy[:, None], sx[:, None], sy[:, None]
+    tx, ty = ox + sx, oy + sy
+    with np.errstate(divide="ignore", invalid="ignore"):
+        t = np.nan_to_num(np.clip(((cx - ox) * sx + (cy - oy) * sy) / (sx * sx + sy * sy), 0, 1))
+    crosses = (ox + t * sx - cx) ** 2 + (oy + t * sy - cy) ** 2 < r2
+    shared = ((ox - cx) ** 2 + (oy - cy) ** 2 < r2) & ((tx - cx) ** 2 + (ty - cy) ** 2 < r2)
+    return (crosses & ~shared).any(axis=1)
+
+
+def _crown_occlusion(xy, angle, whisker_angles, crowns):
+    """(N, W) distance along each whisker ray to where crowns hide what lies beyond: the
+    entry of a crown ahead, or the exit of a crown the observer stands under; inf when none."""
+    n, w = whisker_angles.shape
+    if len(crowns) == 0:
+        return np.full((n, w), np.inf)
+    a = (angle[:, None] + whisker_angles)[..., None]
+    dx = crowns[None, None, :, 0] - xy[:, None, None, 0]
+    dy = crowns[None, None, :, 1] - xy[:, None, None, 1]
+    r2 = crowns[None, None, :, 2] ** 2
+    along = dx * np.cos(a) + dy * np.sin(a)
+    d2 = dx * dx + dy * dy
+    half = np.sqrt(np.maximum(r2 - (d2 - along * along), 0.0))
+    hit = d2 - along * along < r2
+    occ = np.where(d2 < r2, along + half,
+                   np.where(hit & (along - half > 0), along - half, np.inf))
+    return occ.min(axis=-1)
+
+
+def _vision(rel, sight, half_angle, xy=None, crowns=()):
+    """Nearest target inside the sight cone and not hidden by a crown (observers at `xy`):
+    (index, found, (angle, distance)) with angle and distance normalized by the cone, (0, 1)
+    when there is none."""
     n = rel.dist.shape[0]
     if rel.dist.shape[1] == 0:
         return np.zeros(n, dtype=np.int64), np.zeros(n, dtype=bool), (np.zeros(n), np.ones(n))
     visible = (rel.not_self & (rel.dist > 0) & (rel.dist <= sight[:, None])
                & rel.in_cone(half_angle))
+    if len(crowns):
+        rows, cols = np.nonzero(visible)
+        if len(rows):
+            hidden = _crown_hides(xy[rows, 0], xy[rows, 1], rel.dx[rows, cols],
+                                  rel.dy[rows, cols], crowns)
+            visible[rows[hidden], cols[hidden]] = False
     idx, found = _nearest(rel.dist, visible)
     angle = np.where(found, rel.angle_to(idx) / half_angle, 0.0)
     d = np.where(found, rel.dist[np.arange(n), idx] / sight, 1.0)
@@ -180,6 +226,8 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
     Carnivores look at and smell `herbivores` and `carcasses`; herbivores look at
     `food_items`, look at and smell `carnivores`. Both sense their own species (kin and
     signals). `light` (0 = midnight, 1 = noon) shrinks the vision cones, not whiskers or smell.
+    Tree crowns among `obstacles` block sight (cones and target whiskers), not obstacle
+    whiskers, smell or the kin/signal senses.
     `season` (-1 = midwinter, 1 = midsummer) is passed through as an input.
     """
     n = len(creatures)
@@ -202,6 +250,7 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
 
     whisker_dist = _whiskers(xy, angle, sight, whisker_angles, obstacles,
                              creatures[0].world_bounds)
+    crowns = _crowns(obstacles)
     out[:, :NUM_WHISKERS] = 1.0 - whisker_dist / sight[:, None]
     col = NUM_WHISKERS
 
@@ -217,7 +266,7 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
     ci = np.flatnonzero(carn)
     if len(ci):
         to_prey = _Relative(xy[ci], angle[ci], ids[ci], herbivores)
-        idx, found, (t_angle, t_dist) = _vision(to_prey, eye[ci], half_angle[ci])
+        idx, found, (t_angle, t_dist) = _vision(to_prey, eye[ci], half_angle[ci], xy[ci], crowns)
         out[ci, col], out[ci, col + 1] = t_angle, t_dist
         target_dist[ci], target_found[ci] = t_dist, found
         sm_angle, sm_strength = _smell(to_prey)
@@ -234,8 +283,8 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
         observer = (xy[hi], angle[hi], ids[hi])
         to_preds = _Relative(*observer, carnivores)
         _, food_found, (food_angle, food_dist) = _vision(_Relative(*observer, food_items),
-                                                         eye[hi], half_angle[hi])
-        _, _, (pred_angle, pred_dist) = _vision(to_preds, eye[hi], half_angle[hi])
+                                                         eye[hi], half_angle[hi], xy[hi], crowns)
+        _, _, (pred_angle, pred_dist) = _vision(to_preds, eye[hi], half_angle[hi], xy[hi], crowns)
         out[hi, col] = np.clip(food_angle - pred_angle * (1 - pred_dist) ** 2, -1, 1)
         out[hi, col + 1] = food_dist
         target_dist[hi], target_found[hi] = food_dist, food_found
@@ -250,9 +299,10 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
             for j, values in enumerate(social_cols):
                 out[gi, social + j] = values
     tw = social + 8 + NUM_MEMORY
+    crown_occ = _crown_occlusion(xy, angle, whisker_angles, crowns)
     if len(ci) and carcasses:
         _, _, (cc_angle, cc_dist) = _vision(_Relative(xy[ci], angle[ci], ids[ci], carcasses),
-                                            eye[ci], half_angle[ci])
+                                            eye[ci], half_angle[ci], xy[ci], crowns)
         out[ci, social + 5], out[ci, social + 6] = cc_angle, cc_dist
         cc_smell = _smell(_Relative(xy[ci], angle[ci], ids[ci], carcasses))
         out[ci, tw + NUM_WHISKERS + 1], out[ci, tw + NUM_WHISKERS + 2] = cc_smell
@@ -262,7 +312,7 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
         if len(gi):
             target_whisker_dist[gi] = _target_whiskers(xy[gi], angle[gi], eye[gi],
                                                        whisker_angles[gi], _xy(targets),
-                                                       whisker_dist[gi])
+                                                       np.minimum(whisker_dist[gi], crown_occ[gi]))
     out[:, tw:tw + NUM_WHISKERS] = np.where(np.isfinite(target_whisker_dist),
                                             1.0 - target_whisker_dist / eye[:, None], 0.0)
     out[:, tw + NUM_WHISKERS] = season

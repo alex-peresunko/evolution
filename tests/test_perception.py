@@ -6,7 +6,7 @@ import pytest
 
 from evolution import config
 from evolution.brain_view import INPUT_LABELS
-from evolution.entities import Carcass, Creature, Food, Lake, Obstacle
+from evolution.entities import Carcass, Creature, Food, Lake, Obstacle, Tree
 from evolution.perception import perceive_all
 
 WORLD_BOUNDS = (config.WORLD_WIDTH, config.WORLD_HEIGHT)
@@ -21,6 +21,35 @@ def _reference_edge_distance(pos, angle, world_bounds):
         elif u < 0:
             dists.append(-p / u)
     return max(0.0, min(dists))
+
+
+def _reference_crown_hides(p, q, trees):
+    for t in trees:
+        sx, sy = q.x - p.x, q.y - p.y
+        len2 = sx * sx + sy * sy
+        k = min(1.0, max(0.0, ((t.x - p.x) * sx + (t.y - p.y) * sy) / len2)) if len2 else 0.0
+        r2 = t.crown_radius ** 2
+        crosses = (p.x + k * sx - t.x) ** 2 + (p.y + k * sy - t.y) ** 2 < r2
+        shared = ((p.x - t.x) ** 2 + (p.y - t.y) ** 2 < r2
+                  and (q.x - t.x) ** 2 + (q.y - t.y) ** 2 < r2)
+        if crosses and not shared:
+            return True
+    return False
+
+
+def _reference_crown_occlusion(p, ux, uy, trees):
+    best = math.inf
+    for t in trees:
+        dx, dy = t.x - p.x, t.y - p.y
+        along, d2, r2 = dx * ux + dy * uy, dx * dx + dy * dy, t.crown_radius ** 2
+        if d2 - along * along >= r2 and d2 >= r2:
+            continue
+        half = math.sqrt(max(r2 - (d2 - along * along), 0.0))
+        if d2 < r2:
+            best = min(best, along + half)
+        elif along - half > 0:
+            best = min(best, along - half)
+    return best
 
 
 def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasses=(), light=1.0,
@@ -43,8 +72,10 @@ def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasse
         whiskers.append(closest_dist)
         inputs.append(1.0 - closest_dist / self.sight_distance)
 
+    trees = [o for o in obstacles if isinstance(o, Tree)]
+
     def in_sight(target):
-        if target.id == self.id:
+        if target.id == self.id or _reference_crown_hides(self.pos, target.pos, trees):
             return False
         vec = target.pos - self.pos
         if 0 < vec.length() <= eye:
@@ -143,6 +174,7 @@ def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasse
     target_whiskers = []
     for whisker_angle, obstacle_dist in zip(self.whisker_angles, whiskers):
         ux, uy = math.cos(self.angle + whisker_angle), math.sin(self.angle + whisker_angle)
+        obstacle_dist = min(obstacle_dist, _reference_crown_occlusion(self.pos, ux, uy, trees))
         best = None
         for t in targets:
             dx, dy = t.pos.x - self.pos.x, t.pos.y - self.pos.y
@@ -193,6 +225,8 @@ def test_perceive_all_matches_reference(seed, n_herb, n_carn, n_food, light):
     random.seed(seed)
     obstacles = [Obstacle(rnd.randint(100, 1700), rnd.randint(100, 700),
                           rnd.randint(50, 150), rnd.randint(50, 150)) for _ in range(5)]
+    obstacles += [Tree(rnd.uniform(60, WORLD_BOUNDS[0] - 60), rnd.uniform(60, WORLD_BOUNDS[1] - 60),
+                       rnd.uniform(*config.TREE_CROWN_RADIUS_RANGE)) for _ in range(12)]
     herbs = [_random_creature(rnd, False, obstacles) for _ in range(n_herb)]
     carns = [_random_creature(rnd, True, obstacles) for _ in range(n_carn)]
     food = [Food(WORLD_BOUNDS) for _ in range(n_food)]
@@ -254,3 +288,53 @@ def test_whiskers_see_the_world_edge():
     c.see([], [])
     centre = config.NUM_WHISKERS // 2
     assert c.whiskers[centre] == pytest.approx(40)
+
+
+def _facing(is_carnivore, x, y, angle=0.0):
+    c = Creature(WORLD_BOUNDS, is_carnivore=is_carnivore)
+    c.pos, c.angle = c._vec2(x, y), angle
+    return c
+
+
+def _sees_prey(carn, herb, obstacles):
+    perceive_all([carn], [], [herb], [carn], obstacles)
+    return carn._nearest_target_dist is not None
+
+
+def test_crown_hides_prey_behind_and_under_it():
+    tree = Tree(700, 400, 50)
+    carn = _facing(True, 500, 400)
+    assert _sees_prey(carn, _facing(False, 900, 400), [])
+    assert not _sees_prey(carn, _facing(False, 900, 400), [tree])
+    assert not _sees_prey(carn, _facing(False, 710, 400), [tree])
+    assert _sees_prey(carn, _facing(False, 900, 600), [tree])
+
+
+def test_creatures_under_the_same_crown_see_each_other_but_not_out():
+    tree = Tree(700, 400, 60)
+    carn = _facing(True, 660, 400)
+    assert _sees_prey(carn, _facing(False, 720, 400), [tree])
+    assert not _sees_prey(carn, _facing(False, 900, 400), [tree])
+
+
+def test_herbivore_cannot_see_food_or_predator_behind_a_crown():
+    tree = Tree(570, 400, 30)
+    herb = _facing(False, 500, 400)
+    food = Food(WORLD_BOUNDS)
+    food.pos = food._vec2(500 + herb.sight_distance * 0.9, 400)
+    pred = _facing(True, 500 + herb.sight_distance * 0.8, 400)
+    perceive_all([herb], [food], [herb], [pred], [tree])
+    assert herb._nearest_target_dist is None
+    perceive_all([herb], [food], [herb], [pred], [])
+    assert herb._nearest_target_dist is not None
+
+
+def test_crown_occludes_target_whiskers_but_not_obstacle_whiskers():
+    tree = Tree(700, 400, 50)
+    carn = _facing(True, 500, 400)
+    carn.whisker_angles = [0.0] * config.NUM_WHISKERS
+    prey = _facing(False, 900, 400)
+    perceive_all([carn], [], [prey], [carn], [tree])
+    assert all(d is None for d in carn.target_whiskers)
+    trunk_left = tree.rect.left - 500
+    assert all(math.isclose(d, min(trunk_left, carn.sight_distance)) for d in carn.whiskers)

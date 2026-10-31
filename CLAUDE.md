@@ -35,7 +35,7 @@ Shared library lives in `src/evolution/`; the three `game*.py` entry scripts are
 
 World mechanics, all tuned through `config.py`:
 - **Walls:** the world edges are walls, not a wrap. Crossing one costs `HEALTH_LOST_ON_HIT` and pushes the creature back, like an obstacle. Obstacle whiskers see the edges, and food patches bounce off them.
-- **Trees:** `generate_obstacles` places `NUM_OBSTACLES` rocks and up to `NUM_TREES` `Tree`s (crowns inside the walls, off rocks, spaced apart). A `Tree` is an `Obstacle` whose `rect` is only the trunk (`TREE_TRUNK_FRACTION` of `TREE_CROWN_RADIUS_RANGE`), so collision and whiskers treat it like a small rock. The renderer bakes the shadow and trunk into the background and draws the crown over creatures (`TREE_CROWN_ALPHA`), with creatures under it redrawn faintly on top.
+- **Trees:** `generate_obstacles` places `NUM_OBSTACLES` rocks and up to `NUM_TREES` `Tree`s (crowns inside the walls, off rocks, spaced apart). A `Tree` is an `Obstacle` whose `rect` is only the trunk (`TREE_TRUNK_FRACTION` of `TREE_CROWN_RADIUS_RANGE`), so collision and whiskers treat it like a small rock. The crown blocks sight but not movement: `perceive_all` hides vision-cone targets and target-whisker hits behind or under a crown, unless observer and target are under the same crown. Smell, kin, signals and obstacle whiskers ignore crowns. The renderer bakes the shadow and trunk into the background and draws the crown over creatures (`TREE_CROWN_ALPHA`), with creatures under it redrawn faintly on top.
 - **Lakes:** `generate_lakes` places `NUM_LAKES` lakes inside the walls and clear of obstacles. Each lake is 1..`LAKE_LOBES` overlapping `Lake` blobs, and `sim_state["lakes"]` holds the flat list of blobs. A blob's shore radius is its mean radius (`LAKE_RADIUS_RANGE`) plus random angular harmonics (`random_shore`, `LAKE_SHORE_ROUGHNESS`, `LAKE_SHORE_HARMONICS`). Creatures swim through them: speed is multiplied by `WATER_SPEED_FACTOR`, and instead of regenerating, stamina drains by `HERBIVORE_SWIM_STAMINA_COST` / `CARNIVORE_SWIM_STAMINA_COST` per tick (`c.in_water`). Respawned food avoids lakes. The renderer bakes lakes into the background.
 - **Chases:** carnivores bite instead of killing on contact. A bite needs contact, the prey within `CARNIVORE_BITE_ANGLE` of the carnivore's heading, and `BITE_COOLDOWN_TICKS` since the last bite (`Creature._try_bite`). Bitten prey gets an adrenaline stamina boost. Herbivores bigger than the carnivore deal retaliation damage. Death is simply `health <= 0`.
 - **Carcasses:** every dead creature leaves a `Carcass` in `sim_state["carcasses"]` (with its own grid). Carnivores scavenge it (`_scavenge`) until it's eaten or rots.
@@ -107,7 +107,8 @@ light                              0 = midnight, 1 = noon
 memory[0..NUM_MEMORY-1]            own memory outputs from the previous tick
 target_whisker[0..2]               food (herbivore) / prey or carcass (carnivore) within
                                    WHISKER_TARGET_WIDTH of each whisker ray, up to the night-
-                                   shrunk sight, occluded by obstacles (1 = touching, 0 = none)
+                                   shrunk sight, occluded by obstacles and tree crowns
+                                   (1 = touching, 0 = none)
 season                             -1 = midwinter, 1 = midsummer
 carcass_smell_angle, carcass_smell_strength   carnivore only: nearest carcass within
                                    SMELL_DISTANCE, omnidirectional, else 0
