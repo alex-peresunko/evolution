@@ -307,3 +307,14 @@ def test_cruising_below_the_effort_threshold_regenerates_stamina():
     c.stamina = 500
     c.act([0.0, config.STAMINA_EFFORT_THRESHOLD - 0.05], [], [], [], _empty_grid())
     assert c.stamina == pytest.approx(500 + config.STAMINA_REGEN_RATE)
+
+
+def test_winded_creature_recovers_while_trying_to_run():
+    c = _adult_at(False, 500, 400)
+    c.stamina = 0
+    for _ in range(3):
+        c.act([0.0, 1.0], [], [], [], _empty_grid())
+    assert c.winded and c.stamina == pytest.approx(3 * config.STAMINA_REGEN_RATE)
+    c.stamina = config.STAMINA_RECOVERY_SHARE * c.max_stamina
+    c.act([0.0, 1.0], [], [], [], _empty_grid())
+    assert not c.winded and c.stamina < config.STAMINA_RECOVERY_SHARE * c.max_stamina

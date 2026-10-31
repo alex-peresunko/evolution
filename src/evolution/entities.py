@@ -7,7 +7,7 @@ import numpy as np
 from .config import (
     CARNIVORE_HEALTH, HERBIVORE_HEALTH, ADULTHOOD_AGE, JUVENILE_SIZE_FACTOR,
     CREATURE_ROTATION_SPEED, STAMINA_EFFORT_THRESHOLD, STAMINA_DEPLETION_RATE,
-    STAMINA_REGEN_RATE, STAMINA_EXHAUSTION_PENALTY, HUNGER_MAX, HUNGER_HEALTH_PENALTY,
+    STAMINA_REGEN_RATE, STAMINA_EXHAUSTION_PENALTY, STAMINA_RECOVERY_SHARE, HUNGER_MAX, HUNGER_HEALTH_PENALTY,
     HEALTH_LOSS_PER_TICK, HEALTH_LOSS_SPEED_FACTOR, HEALTH_LOST_ON_HIT,
     GENE_MIN_MAX, CARNIVORE_GENE_MIN_MAX, DEFAULT_HERBIVORE_GENES, DEFAULT_CARNIVORE_GENES,
     CARNIVORE_HEALTH_PER_FOOD, HERBIVORE_HEALTH_PER_FOOD, FOOD_RADIUS,
@@ -104,6 +104,7 @@ class Creature:
         self.brain_outputs = None
         self.mate_override = False          # last tick's outputs were steered toward a mate
         self.in_water = False
+        self.winded = False                 # out of stamina: slow, recovering whatever it asks
         self.age = 0
         self.is_adult = False
         self.lineage = self.id              # founder's id, inherited from the first parent
@@ -186,6 +187,10 @@ class Creature:
         self.size = self.genetic_size * growth_factor * (1 + fat_ratio * FAT_SIZE_FACTOR)
         self.max_speed = self.effective_max_speed * growth_factor
 
+        if self.stamina <= 0:
+            self.winded = True
+        elif self.winded and self.stamina >= STAMINA_RECOVERY_SHARE * self.max_stamina:
+            self.winded = False
         effort = 0.0
         if self.eating_ticks > 0:
             new_speed = 0.0
@@ -193,8 +198,7 @@ class Creature:
             effort = max(0.0, outputs[1])
             self.angle = (self.angle + outputs[0] * CREATURE_ROTATION_SPEED) % (2 * math.pi)
             speed_multiplier = max(0.1, self.health / self.max_health)
-            is_exhausted = self.stamina <= 0
-            speed_penalty = STAMINA_EXHAUSTION_PENALTY if is_exhausted else 1.0
+            speed_penalty = STAMINA_EXHAUSTION_PENALTY if self.winded else 1.0
             weight_penalty = 1 / (1 + fat_ratio * FAT_SPEED_PENALTY)
             water_penalty = WATER_SPEED_FACTOR if self.in_water else 1.0
             new_speed = (effort * self.max_speed * speed_multiplier * speed_penalty
@@ -203,7 +207,7 @@ class Creature:
         if self.in_water:
             self.stamina -= (CARNIVORE_SWIM_STAMINA_COST if self.is_carnivore
                              else HERBIVORE_SWIM_STAMINA_COST)
-        elif effort > STAMINA_EFFORT_THRESHOLD:
+        elif effort > STAMINA_EFFORT_THRESHOLD and not self.winded:
             self.stamina -= (effort ** SPEED_STAMINA_EXPONENT) * STAMINA_DEPLETION_RATE
         else:
             self.stamina += STAMINA_REGEN_RATE
@@ -378,7 +382,7 @@ class Creature:
             "Type": "Carnivore" if self.is_carnivore else "Herbivore",
             "Status": status,
             "Health": int(self.health),
-            "Stamina": f"{int(self.stamina)}/{int(self.max_stamina)}",
+            "Stamina": f"{int(self.stamina)}/{int(self.max_stamina)}" + (" winded" if self.winded else ""),
             "Swimming": self.in_water,
             "Score": round(self.score, 2),
             "Eating": self.eating_ticks,

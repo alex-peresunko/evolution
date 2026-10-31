@@ -127,9 +127,10 @@ JUVENILE_SIZE_FACTOR = 0.2
 
 # --- Stamina ---
 STAMINA_EFFORT_THRESHOLD = 0.6  # brain speed output above which running costs stamina
-STAMINA_DEPLETION_RATE = 5.0    # per tick at full effort
+STAMINA_DEPLETION_RATE = 3.0    # per tick at full effort
 STAMINA_REGEN_RATE = 1.0
 STAMINA_EXHAUSTION_PENALTY = 0.2
+STAMINA_RECOVERY_SHARE = 0.2    # a winded creature runs again at this share of max stamina
 
 # --- Lakes (swimmable: slow and tiring) ---
 NUM_LAKES = 4
