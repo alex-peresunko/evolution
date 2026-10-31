@@ -2,14 +2,13 @@ import os
 import signal
 import sys
 import time
-import random
 
 from prometheus_client import start_http_server
 
 from evolution import config
-from evolution.entities import Creature, Food, Obstacle
+from evolution.entities import Creature, Food
 from evolution.simulation import (update_world, create_start_populations, build_sim_state,
-                                  generate_lakes,
+                                  generate_lakes, generate_obstacles,
                                   restore_start_progress, autosave_hall_of_fame,
                                   save_hall_of_fame)
 from evolution.metrics import GameMetrics
@@ -24,15 +23,7 @@ def main(worker_id=None, new=False, load=None):
     source = SAVE_DIR if worker_id is not None else start_source(new, load)
     herbivores, carnivores, generation = create_start_populations(world_bounds, source)
     food_items = [Food(world_bounds) for _ in range(config.NUM_FOOD)]
-    obstacles = [
-        Obstacle(
-            random.randint(100, config.WORLD_WIDTH - 100),
-            random.randint(100, config.WORLD_HEIGHT - 100),
-            random.randint(50, 150),
-            random.randint(50, 150),
-        )
-        for _ in range(config.NUM_OBSTACLES)
-    ]
+    obstacles = generate_obstacles(world_bounds)
 
     sim_state = build_sim_state(world_bounds, herbivores, carnivores, food_items, obstacles,
                                 generate_lakes(world_bounds, obstacles))

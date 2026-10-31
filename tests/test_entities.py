@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from evolution.entities import Carcass, Creature, Food, Lake
+from evolution.entities import Carcass, Creature, Food, Lake, Tree
 from evolution.spatial import SpatialHashGrid
 from evolution import config
 
@@ -273,3 +273,22 @@ def test_swimming_is_slow_and_drains_stamina(is_carnivore):
 
 def test_carnivores_tire_faster_in_water_than_herbivores():
     assert config.CARNIVORE_SWIM_STAMINA_COST > config.HERBIVORE_SWIM_STAMINA_COST
+
+
+def test_tree_trunk_is_a_centred_square():
+    tree = Tree(500, 400, 50)
+    side = 50 * config.TREE_TRUNK_FRACTION
+    assert math.isclose(tree.rect.w, side) and math.isclose(tree.rect.h, side)
+    assert math.isclose(tree.rect.x + side / 2, 500) and math.isclose(tree.rect.y + side / 2, 400)
+
+
+def test_only_the_tree_trunk_blocks():
+    tree = Tree(500, 400, 50)
+    trunk = _adult_at(False, 500, 400, size=8)
+    crown = _adult_at(False, 500, 360, size=8)
+    for c in (trunk, crown):
+        health = c.health
+        c.act([0.0, 0.0], [], [], [tree], _empty_grid())
+        c.lost = health - c.health
+    assert trunk.lost >= config.HEALTH_LOST_ON_HIT
+    assert crown.lost < config.HEALTH_LOST_ON_HIT

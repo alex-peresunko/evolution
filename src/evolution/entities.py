@@ -21,6 +21,7 @@ from .config import (
     FAT_MAX, FAT_STORE_EFFICIENCY, FAT_BURN_PER_TICK, FAT_SPEED_PENALTY, FAT_SIZE_FACTOR,
     UPKEEP_WEIGHTS, KLEIBER_EXPONENT, SENESCENCE_RATE,
     WATER_SPEED_FACTOR, HERBIVORE_SWIM_STAMINA_COST, CARNIVORE_SWIM_STAMINA_COST,
+    TREE_TRUNK_FRACTION,
 )
 from .math_types import Vector2 as _HeadlessVector2, SimpleRect as _HeadlessRect
 from .neural_network import NeuralNetwork
@@ -31,6 +32,15 @@ class Obstacle:
     def __init__(self, x, y, width, height, *, rect_factory=None):
         _rect = rect_factory or _HeadlessRect
         self.rect = _rect(x, y, width, height)
+
+
+class Tree(Obstacle):
+    """Only the trunk (`rect`, centred on x, y) is solid; the crown is drawn over creatures."""
+
+    def __init__(self, x, y, crown_radius, *, rect_factory=None):
+        side = crown_radius * TREE_TRUNK_FRACTION
+        super().__init__(x - side / 2, y - side / 2, side, side, rect_factory=rect_factory)
+        self.x, self.y, self.crown_radius = x, y, crown_radius
 
 
 class Lake:

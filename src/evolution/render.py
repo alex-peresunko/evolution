@@ -16,6 +16,7 @@ import pygame
 import pygame.gfxdraw
 
 from . import config
+from .entities import Tree
 
 SS = 4  # supersampling factor for sprite art
 FOOD_DRAW_RADIUS = 8
@@ -26,6 +27,7 @@ WALK_FRAMES = 4
 PULSE_LEVELS = 4
 CARCASS_LEVELS = 4
 HIT_FLASH_TICKS = 8
+CROWN_GHOST_ALPHA = 120  # creatures under a crown show through it this strongly
 BG_CACHE_MARGIN = 0.25  # share of the view cached around it on each side when zoomed
 NIGHT_COLOR = (8, 12, 42)
 
@@ -281,6 +283,84 @@ def _draw_rock(bg, rect, rng, rnd):
     bg.blit(rock, (x, y))
 
 
+def _draw_tree_ground(bg, tree, rnd):
+    """Crown shadow, roots and trunk under a tree; the crown itself is drawn over creatures."""
+    r = tree.crown_radius
+    pad = int(r * 0.4) + 8
+    w = int(r * 2) + pad * 2
+    shadow = pygame.Surface((w, w), pygame.SRCALPHA)
+    pygame.draw.circle(shadow, (0, 0, 0, 120), (w / 2, w / 2), r * 0.95)
+    bg.blit(_blur(shadow, 6), (tree.x - w / 2 + r * 0.22, tree.y - w / 2 + r * 0.28))
+
+    t = tree.rect.w / 2
+    bark, dark = (92, 66, 42), (44, 30, 20)
+    for _ in range(rnd.randint(4, 6)):
+        a = rnd.uniform(0, 2 * math.pi)
+        ln = t * rnd.uniform(1.6, 2.4)
+        end = (tree.x + math.cos(a) * ln, tree.y + math.sin(a) * ln)
+        pygame.draw.line(bg, dark, (tree.x, tree.y), end, max(2, int(t * 0.55)))
+        pygame.draw.line(bg, bark, (tree.x - 0.5, tree.y - 0.5), end, max(1, int(t * 0.3)))
+    big = pygame.Surface((int(t * 2 + 4) * SS,) * 2, pygame.SRCALPHA)
+    c = big.get_width() / 2
+    _shaded_ellipse(big, dark, (132, 98, 64), c, c, t * SS, t * SS, steps=6,
+                    hx=-0.3 * t * SS, hy=-0.35 * t * SS)
+    for k in range(3):
+        pygame.draw.circle(big, _mix(bark, dark, 0.5), (c, c), t * SS * (0.25 + 0.2 * k), width=SS)
+    small = pygame.transform.smoothscale(big, (big.get_width() // SS,) * 2)
+    bg.blit(small, (tree.x - small.get_width() / 2, tree.y - small.get_height() / 2))
+
+
+def _build_crown(r, seed):
+    """Leafy crown of radius `r` px, lit as a height field of overlapping leaf clumps with
+    leaf-scale noise; returns (sprite, half width)."""
+    rnd = random.Random(seed)
+    rng = np.random.default_rng(seed)
+    w = math.ceil(r * 2.3) + 4
+    c = w / 2
+    clumps = [(rnd.uniform(-0.08, 0.08), rnd.uniform(-0.08, 0.08), 0.5)]
+    n = rnd.randint(7, 10)
+    off = rnd.uniform(0, 2 * math.pi)
+    for i in range(n):
+        a = off + i * 2 * math.pi / n + rnd.uniform(-0.25, 0.25)
+        d = rnd.uniform(0.52, 0.66)
+        clumps.append((math.cos(a) * d, math.sin(a) * d, rnd.uniform(0.32, 0.44)))
+    for i in range(4):
+        a = off + i * math.pi / 2 + 0.7
+        clumps.append((math.cos(a) * 0.3, math.sin(a) * 0.3, rnd.uniform(0.34, 0.42)))
+
+    px = (np.arange(w, dtype=np.float32) + 0.5 - c)[:, None] / r
+    py = (np.arange(w, dtype=np.float32) + 0.5 - c)[None, :] / r
+    height = np.full((w, w), -1.0, np.float32)
+    for x, y, cr in clumps:
+        dome = cr * cr - (px - x) ** 2 - (py - y) ** 2
+        lift = 0.35 * (1 - math.hypot(x, y))
+        height = np.maximum(height, np.sqrt(np.maximum(dome, 0)) + lift - (dome <= 0) * 2)
+    edge = height + 1.0                     # > 0 inside the crown
+    leaves = _value_noise(rng, w, w, max(2, int(r * 0.09)))
+    twigs = _value_noise(rng, w, w, max(2, int(r * 0.035)))
+    bump = height + 0.05 * leaves + 0.022 * twigs
+    gx, gy = np.gradient(bump * r * 0.9)
+    nz = 1 / np.sqrt(gx ** 2 + gy ** 2 + 1)
+    light = np.array([-0.5, -0.6, 0.62], np.float32)
+    light /= np.linalg.norm(light)
+    lam = np.clip((-gx * light[0] - gy * light[1] + light[2]) * nz, 0, 1)
+    occl = np.clip(height / 0.55, 0, 1) ** 0.6
+
+    tone = rnd.uniform(-1, 1)
+    dark = np.array(_mix((16, 48, 24), (40, 56, 16), 0.5 + 0.35 * tone), np.float32)
+    lit = np.array(_mix((96, 164, 66), (156, 176, 60), 0.4 + 0.35 * tone), np.float32)
+    t = np.clip(lam * (0.55 + 0.45 * occl) * (0.8 + 0.4 * leaves), 0, 1)[..., None] ** 1.2
+    col = dark * (1 - t) + lit * t
+    sparkle = np.clip((twigs - 0.78) * 6, 0, 1) * np.clip((lam - 0.6) * 3, 0, 1)
+    col += sparkle[..., None] * np.array([60, 60, 30], np.float32)
+
+    crown = pygame.Surface((w, w), pygame.SRCALPHA)
+    pygame.surfarray.pixels3d(crown)[:] = np.clip(col, 0, 255).astype(np.uint8)
+    alpha = np.clip(edge * r * 0.6, 0, 1) * config.TREE_CROWN_ALPHA
+    pygame.surfarray.pixels_alpha(crown)[:] = alpha.astype(np.uint8)
+    return crown.convert_alpha(), c
+
+
 LAKE_SHORE_WIDTH = 9
 LAKE_MUD = (58, 52, 38)
 LAKE_SHALLOW = (54, 104, 108)
@@ -371,7 +451,10 @@ def _build_background(w, h, obstacles, lakes=()):
         pygame.draw.circle(bg, (230, 190, 70), (px, py), 1)
 
     for obs in obstacles:
-        _draw_rock(bg, obs.rect, rng, rnd)
+        if isinstance(obs, Tree):
+            _draw_tree_ground(bg, obs, rnd)
+        else:
+            _draw_rock(bg, obs.rect, rng, rnd)
     return bg.convert()
 
 
@@ -393,6 +476,8 @@ class Renderer:
         self._night = None
         self._bg_cache = None  # (zoom, world rect, scaled background of that rect)
         self._food = {}  # draw radius -> [variant][level] sprites
+        self.trees = [o for o in obstacles if isinstance(o, Tree)]
+        self._crowns = {}  # (tree index, on-screen radius) -> (sprite, half width)
 
     # --- sprite caches -----------------------------------------------------
     def _creature_sprite(self, carn, sb, hl, frame, cb, ai):
@@ -670,6 +755,12 @@ class Renderer:
                                     int((c.size * 1.3 + 4 + t * 16) * z),
                                     (*color, int(220 * (1 - t) * c.signal)))
 
+        self._draw_crowns(screen, cam_x, cam_y, z)
+        for (c, _, _), (spr, pos) in zip(visible, sprites):
+            if self._under_crown(c):
+                spr.set_alpha(CROWN_GHOST_ALPHA)
+                screen.blit(spr, pos)
+                spr.set_alpha(255)
         self._draw_night(screen, sim_state.get("light", 1.0), food_blits, fo, z)
 
         for c, x, y in visible:
@@ -681,6 +772,31 @@ class Renderer:
         if self.frame % 600 == 0:
             alive = {c.id for c in sim_state["creatures"]} | {c.id for c in sim_state["carnivores"]}
             self._phase = {k: v for k, v in self._phase.items() if k in alive}
+
+    def _under_crown(self, c):
+        x, y = c.pos.x, c.pos.y
+        for t in self.trees:
+            dx, dy, r = x - t.x, y - t.y, t.crown_radius + c.size
+            if dx * dx + dy * dy < r * r:
+                return True
+        return False
+
+    def _draw_crowns(self, screen, cam_x, cam_y, z):
+        if len(self._crowns) > 4 * len(self.trees):
+            self._crowns.clear()
+        sw, sh = screen.get_size()
+        blits = []
+        for i, t in enumerate(self.trees):
+            x, y = (t.x - cam_x) * z, (t.y - cam_y) * z
+            r = max(2, round(t.crown_radius * z))
+            m = r * 1.2
+            if -m <= x <= sw + m and -m <= y <= sh + m:
+                entry = self._crowns.get((i, r))
+                if entry is None:
+                    entry = self._crowns[(i, r)] = _build_crown(r, i)
+                spr, half = entry
+                blits.append((spr, (x - half, y - half)))
+        screen.blits(blits, doreturn=False)
 
     def _draw_night(self, screen, light, food_blits, fo, z):
         """Darken the world, then let food glow faintly through the dark."""

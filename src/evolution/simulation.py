@@ -20,8 +20,9 @@ from .config import (
     SEASON_LENGTH_TICKS, SEASON_FOOD_AMPLITUDE,
     FOOD_PATCH_COUNT, FOOD_PATCH_SHARE, FOOD_PATCH_RADIUS, FOOD_PATCH_SPEED, FOOD_PATCH_TURN,
     NUM_LAKES, LAKE_RADIUS_RANGE, LAKE_LOBES, LAKE_SHORE_ROUGHNESS, LAKE_SHORE_HARMONICS,
+    NUM_OBSTACLES, NUM_TREES, TREE_CROWN_RADIUS_RANGE,
 )
-from .entities import Carcass, Creature, Food, Lake, Obstacle
+from .entities import Carcass, Creature, Food, Lake, Obstacle, Tree
 from .spatial import SpatialHashGrid
 from .genetics import combine_brains, combine_genes, compatible, mutate_brain, mutate_genes
 from .islands import inject_immigrants
@@ -29,6 +30,30 @@ from .neural_network import NeuralNetwork
 from .perception import perceive_all
 from .brain_store import (read_saved_history, read_saved_score, save_brain, save_brain_if_better,
                           update_saved_history)
+
+
+def generate_obstacles(world_bounds, rect_factory=None, rocks=NUM_OBSTACLES, trees=NUM_TREES,
+                       attempts=50):
+    """`rocks` rocks, then up to `trees` trees whose crowns stay inside the walls, off the
+    rocks, and no closer to another tree than 0.8 x the sum of their crown radii."""
+    w, h = world_bounds
+    obstacles = [
+        Obstacle(random.randint(100, w - 100), random.randint(100, h - 100),
+                 random.randint(50, 150), random.randint(50, 150), rect_factory=rect_factory)
+        for _ in range(rocks)
+    ]
+    placed = []
+    for _ in range(trees * attempts):
+        if len(placed) == trees:
+            break
+        r = random.uniform(*TREE_CROWN_RADIUS_RANGE)
+        x, y = random.uniform(r, w - r), random.uniform(r, h - r)
+        if any(_circle_hits_rect(x, y, r, o.rect) for o in obstacles):
+            continue
+        if any(math.hypot(x - t.x, y - t.y) < 0.8 * (r + t.crown_radius) for t in placed):
+            continue
+        placed.append(Tree(x, y, r, rect_factory=rect_factory))
+    return obstacles + placed
 
 
 def generate_lakes(world_bounds, obstacles=(), count=NUM_LAKES, attempts=50):

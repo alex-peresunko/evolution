@@ -2,9 +2,10 @@ import math
 
 import pytest
 
-from evolution.entities import Creature, Food, Lake, Obstacle
+from evolution.entities import Creature, Food, Lake, Obstacle, Tree
 from evolution.simulation import (_spawn_food, build_sim_state, create_initial_population,
-                                 generate_lakes, random_shore, update_world)
+                                 generate_lakes, generate_obstacles, random_shore,
+                                 update_world)
 from evolution import config
 
 WORLD_BOUNDS = (config.WORLD_WIDTH, config.WORLD_HEIGHT)
@@ -205,6 +206,25 @@ def test_lakes_stay_inside_walls_and_off_obstacles():
         assert blob.max_radius <= blob.x <= WORLD_BOUNDS[0] - blob.max_radius
         assert blob.max_radius <= blob.y <= WORLD_BOUNDS[1] - blob.max_radius
         assert not blob.contains(1075, 675)
+
+
+def test_trees_stay_inside_walls_off_rocks_and_apart():
+    obstacles = generate_obstacles(WORLD_BOUNDS, rocks=4, trees=20)
+    rocks = [o for o in obstacles if not isinstance(o, Tree)]
+    trees = [o for o in obstacles if isinstance(o, Tree)]
+    assert len(rocks) == 4 and 0 < len(trees) <= 20
+    lo, hi = config.TREE_CROWN_RADIUS_RANGE
+    for t in trees:
+        r = t.crown_radius
+        assert lo <= r <= hi
+        assert r <= t.x <= WORLD_BOUNDS[0] - r and r <= t.y <= WORLD_BOUNDS[1] - r
+        for rock in rocks:
+            nx = min(max(t.x, rock.rect.left), rock.rect.right)
+            ny = min(max(t.y, rock.rect.top), rock.rect.bottom)
+            assert math.hypot(t.x - nx, t.y - ny) >= r
+    for i, a in enumerate(trees):
+        for b in trees[i + 1:]:
+            assert math.hypot(a.x - b.x, a.y - b.y) >= 0.8 * (a.crown_radius + b.crown_radius)
 
 
 def test_lake_shore_is_irregular():

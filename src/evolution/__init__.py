@@ -1,4 +1,4 @@
-from .entities import Creature, Food, Obstacle
+from .entities import Creature, Food, Obstacle, Tree
 from .neural_network import NeuralNetwork
 from .spatial import SpatialHashGrid
 from .simulation import update_world, create_initial_population, build_sim_state
@@ -8,7 +8,7 @@ from .brain_store import save_brain, load_brain
 from . import config
 
 __all__ = [
-    "Creature", "Food", "Obstacle",
+    "Creature", "Food", "Obstacle", "Tree",
     "NeuralNetwork",
     "SpatialHashGrid",
     "update_world", "create_initial_population", "build_sim_state",

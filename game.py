@@ -1,4 +1,3 @@
-import random
 import math
 import os
 import subprocess
@@ -13,9 +12,9 @@ import pygame
 from prometheus_client import start_http_server
 
 from evolution import config
-from evolution.entities import Creature, Food, Obstacle
+from evolution.entities import Creature, Food, Tree
 from evolution.simulation import (update_world, create_start_populations, build_sim_state,
-                                  generate_lakes,
+                                  generate_lakes, generate_obstacles,
                                   food_cap, restore_progress, restore_start_progress,
                                   save_hall_of_fame, season_name, species_history)
 from evolution.brain_history import (add_start_arguments, archive_after_start,
@@ -389,6 +388,10 @@ def draw_minimap(screen, sim_state):
     sx = config.MINIMAP_WIDTH / config.WORLD_WIDTH
     sy = config.MINIMAP_HEIGHT / config.WORLD_HEIGHT
     for obs in sim_state["obstacles"]:
+        if isinstance(obs, Tree):
+            pygame.draw.circle(mmap, config.COLOR_TREE, (int(obs.x * sx), int(obs.y * sy)),
+                               max(2, int(obs.crown_radius * sx)))
+            continue
         mr = pygame.Rect(int(obs.rect.x * sx), int(obs.rect.y * sy),
                          max(2, int(obs.rect.width * sx)), max(2, int(obs.rect.height * sy)))
         pygame.draw.rect(mmap, config.COLOR_OBSTACLE, mr)
@@ -615,16 +618,7 @@ def main(new=False, load=None):
     herbivores, carnivores, generation = create_start_populations(
         world_bounds, source, vec2_factory=_vec2, rect_factory=_rect)
     food_items = [Food(world_bounds, vec2_factory=_vec2) for _ in range(config.NUM_FOOD)]
-    obstacles = [
-        Obstacle(
-            random.randint(100, config.WORLD_WIDTH - 100),
-            random.randint(100, config.WORLD_HEIGHT - 100),
-            random.randint(50, 150),
-            random.randint(50, 150),
-            rect_factory=_rect,
-        )
-        for _ in range(config.NUM_OBSTACLES)
-    ]
+    obstacles = generate_obstacles(world_bounds, rect_factory=_rect)
 
     sim_state = build_sim_state(world_bounds, herbivores, carnivores, food_items, obstacles,
                                 generate_lakes(world_bounds, obstacles))
