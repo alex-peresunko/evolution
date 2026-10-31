@@ -1,0 +1,1337 @@
+{
+ "evolution": [
+  [
+   "terrain",
+   {
+    "lakes": "a999faf9f99a900bb731",
+    "obstacles": "f40b50ff1948e4678dc6"
+   }
+  ],
+  [
+   "tick 50",
+   {
+    "brains": "d7e94b1d350ed75e50b1",
+    "carcasses": "4f53cda18c2baa0c0354",
+    "carnivores": "9dbc293008c8e5e84de1",
+    "clock": "ffb6c49cb57e034410e5",
+    "counters": "c5008517cb554e2cc60a",
+    "elites": "5b4158fbcdab2b141418",
+    "food": "8ad889caa914c73643a0",
+    "gene_history": "e67c6491466052bd7425",
+    "hall_of_fame": "e40b274a802d08fd79bc",
+    "herbivores": "3f9d2e851e975cab2748",
+    "histories": "ed9efe132cfa64b161be",
+    "lineages": "ee5fd08f44b0bfecdb22",
+    "log": "613000b3680376797253",
+    "patches": "fba0fd52a41358686805",
+    "saved_scores": "44136fa355b3678a1146"
+   }
+  ],
+  [
+   "tick 100",
+   {
+    "brains": "d7e94b1d350ed75e50b1",
+    "carcasses": "4f53cda18c2baa0c0354",
+    "carnivores": "c4e45dd895bbaeb23738",
+    "clock": "7f14c1d49a0c1951fd2b",
+    "counters": "c5008517cb554e2cc60a",
+    "elites": "5b4158fbcdab2b141418",
+    "food": "a54d947a2b1c7cec23e7",
+    "gene_history": "e67c6491466052bd7425",
+    "hall_of_fame": "e40b274a802d08fd79bc",
+    "herbivores": "24781d639398273e8672",
+    "histories": "ed9efe132cfa64b161be",
+    "lineages": "ee5fd08f44b0bfecdb22",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "d59fc5c0e72e80d49c7b",
+    "saved_scores": "44136fa355b3678a1146"
+   }
+  ],
+  [
+   "tick 150",
+   {
+    "brains": "d7e94b1d350ed75e50b1",
+    "carcasses": "4f53cda18c2baa0c0354",
+    "carnivores": "0524df8e3cb459f9d79c",
+    "clock": "fadc926b132a2d675add",
+    "counters": "c5008517cb554e2cc60a",
+    "elites": "5b4158fbcdab2b141418",
+    "food": "cf44a18589cc5dd450bc",
+    "gene_history": "e67c6491466052bd7425",
+    "hall_of_fame": "e40b274a802d08fd79bc",
+    "herbivores": "cec631aeae85ce68ecf7",
+    "histories": "ed9efe132cfa64b161be",
+    "lineages": "ee5fd08f44b0bfecdb22",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "06271b72e1118a7500b4",
+    "saved_scores": "44136fa355b3678a1146"
+   }
+  ],
+  [
+   "tick 200",
+   {
+    "brains": "cb379bb45ba420189afd",
+    "carcasses": "4f53cda18c2baa0c0354",
+    "carnivores": "d8606bf98b289a8a2739",
+    "clock": "a002e1fd8c99000e652e",
+    "counters": "bca2bf5b7d1b8bba762c",
+    "elites": "5b4158fbcdab2b141418",
+    "food": "f7c8acf5df7fccfe1c53",
+    "gene_history": "ae80ed4143aabb5795c8",
+    "hall_of_fame": "e40b274a802d08fd79bc",
+    "herbivores": "3ec803cbcf293c16ab9b",
+    "histories": "1a0e5d01757a4a427822",
+    "lineages": "3d7809888b44eba658b9",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "111452f63207beaecbb0",
+    "saved_scores": "44136fa355b3678a1146"
+   }
+  ],
+  [
+   "tick 250",
+   {
+    "brains": "92b784fa7bd203fe5454",
+    "carcasses": "dbc57aab726c35dc55b1",
+    "carnivores": "f2e329d78c040262d9bc",
+    "clock": "ad1f50c1ad4ef32f486a",
+    "counters": "31134324a77d6e3bc4f5",
+    "elites": "4960690001410911bad3",
+    "food": "768f6d0d978af637a763",
+    "gene_history": "ae80ed4143aabb5795c8",
+    "hall_of_fame": "c869f5cb90e484b76be8",
+    "herbivores": "785c357775614ed8afcd",
+    "histories": "1a0e5d01757a4a427822",
+    "lineages": "3d7809888b44eba658b9",
+    "log": "6168929f392017578356",
+    "patches": "145babbad36422143151",
+    "saved_scores": "881847abbe876cea9b2a"
+   }
+  ],
+  [
+   "tick 300",
+   {
+    "brains": "4556bf40251f2bba07f2",
+    "carcasses": "21304282245aa7c781e2",
+    "carnivores": "3cbbd48be90b8225cbff",
+    "clock": "8ac8b4c01835d84464eb",
+    "counters": "31134324a77d6e3bc4f5",
+    "elites": "4960690001410911bad3",
+    "food": "5235331d137e6ec4918e",
+    "gene_history": "ae80ed4143aabb5795c8",
+    "hall_of_fame": "c869f5cb90e484b76be8",
+    "herbivores": "6e1920cb5f394ca02328",
+    "histories": "1a0e5d01757a4a427822",
+    "lineages": "3d7809888b44eba658b9",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "0eed40beddf026759b0f",
+    "saved_scores": "881847abbe876cea9b2a"
+   }
+  ],
+  [
+   "tick 350",
+   {
+    "brains": "9851552777fc7fd0f5e2",
+    "carcasses": "2f1135557d1441e009ff",
+    "carnivores": "7cd1b48f939e4e178a57",
+    "clock": "801600efbe0ac2d79f1e",
+    "counters": "cc6c4bf05193bffb849b",
+    "elites": "81313931d23a7db1f580",
+    "food": "78623467d33167f3241c",
+    "gene_history": "ae80ed4143aabb5795c8",
+    "hall_of_fame": "01c2b9c09999ed21778e",
+    "herbivores": "904b73b94743107e79d1",
+    "histories": "1a0e5d01757a4a427822",
+    "lineages": "3d7809888b44eba658b9",
+    "log": "0f1a294f76074c6b18ab",
+    "patches": "2dc3274a45571a448153",
+    "saved_scores": "745815f1987c7a939d39"
+   }
+  ],
+  [
+   "tick 400",
+   {
+    "brains": "6c80b1f94cf3451b3021",
+    "carcasses": "d0aa631ed70b3bc69468",
+    "carnivores": "8f7b13c463983b5d0dc1",
+    "clock": "96c804be16fadabd6296",
+    "counters": "3f73e7619a634cd16044",
+    "elites": "676026d564e9509af906",
+    "food": "47cd979ee49095bd06c4",
+    "gene_history": "ec0eaac3bb03b06d5c7e",
+    "hall_of_fame": "3ffed5ec08b6401a92f7",
+    "herbivores": "a9233a451b0d79632f55",
+    "histories": "4e62ed19fb20ad16fe21",
+    "lineages": "734e980c14aadbf76626",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "7a2ba50082184e509f4e",
+    "saved_scores": "631436495f1801ae8664"
+   }
+  ],
+  [
+   "tick 450",
+   {
+    "brains": "46e4ddd1502be03d1c2a",
+    "carcasses": "74a0aff4559b37202332",
+    "carnivores": "05f2fff74ee224b28112",
+    "clock": "fe8bbecff6dccb893a0c",
+    "counters": "317545e56ee0c3e0f74b",
+    "elites": "4f426077c256e0c292fc",
+    "food": "219c97fb33e11d648a56",
+    "gene_history": "ec0eaac3bb03b06d5c7e",
+    "hall_of_fame": "3ffed5ec08b6401a92f7",
+    "herbivores": "f2dfaf875a4da1c68b2c",
+    "histories": "4e62ed19fb20ad16fe21",
+    "lineages": "734e980c14aadbf76626",
+    "log": "236e014f6585c8e679f5",
+    "patches": "46c879d5f645fdc05680",
+    "saved_scores": "2297e15dd9fe31ee9276"
+   }
+  ],
+  [
+   "tick 500",
+   {
+    "brains": "a600eef0d2a7b8ab25b4",
+    "carcasses": "8784703b687f348e9649",
+    "carnivores": "f400c2c82fd8ba2a8cf1",
+    "clock": "3515926432397de6813f",
+    "counters": "64ef4fc22694b6e44d3c",
+    "elites": "2e58034a7c965eaee68c",
+    "food": "73c570fc173404b8d9be",
+    "gene_history": "ec0eaac3bb03b06d5c7e",
+    "hall_of_fame": "3e560b35e1006e9700e0",
+    "herbivores": "2c5b21ca395452190700",
+    "histories": "4e62ed19fb20ad16fe21",
+    "lineages": "734e980c14aadbf76626",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "b1b0c572b31c7e8b2d03",
+    "saved_scores": "2297e15dd9fe31ee9276"
+   }
+  ],
+  [
+   "tick 550",
+   {
+    "brains": "5215622abd43fac5322d",
+    "carcasses": "14fe74a1ae055020c721",
+    "carnivores": "34200c54df36e7c1c9dc",
+    "clock": "462ef4f9f52c48a2a146",
+    "counters": "057fd213b0b9909398c0",
+    "elites": "2132c02b60351217067a",
+    "food": "4e77db86017f170c5ab8",
+    "gene_history": "ec0eaac3bb03b06d5c7e",
+    "hall_of_fame": "41bd4af22ee530f7c932",
+    "herbivores": "8e760422d91de6371e5b",
+    "histories": "4e62ed19fb20ad16fe21",
+    "lineages": "734e980c14aadbf76626",
+    "log": "e9ed03ac13aed2af567c",
+    "patches": "f04e1cc0849ee331ce32",
+    "saved_scores": "8b868db0352dba61f3d1"
+   }
+  ],
+  [
+   "tick 600",
+   {
+    "brains": "7fe494e6b399347a7d1a",
+    "carcasses": "6f3f4399734f3056c778",
+    "carnivores": "91d1ec15ca7b052bd124",
+    "clock": "d9a793da92363b03e3b2",
+    "counters": "20b619fd557610a079ee",
+    "elites": "748587ed3b726d301787",
+    "food": "e99f19e44c78a1f24799",
+    "gene_history": "64625626c5267a0f92fb",
+    "hall_of_fame": "59b1294978facb6570b8",
+    "herbivores": "05864593b55eecbaf137",
+    "histories": "9c9d55b215c3c99744e5",
+    "lineages": "8abc90b71567a2ab4559",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "9eb7466c58a2e3d75202",
+    "saved_scores": "5037ce1944ddbbba00d1"
+   }
+  ],
+  [
+   "tick 650",
+   {
+    "brains": "8f152f97077106bd94b3",
+    "carcasses": "b4e1f42d4e9f65fce639",
+    "carnivores": "43424e88371c07d06d22",
+    "clock": "bc9baf56770f080971a4",
+    "counters": "598d44013af5838aae17",
+    "elites": "961f32abd36647e2ef33",
+    "food": "40b78c503c6a3cd0a9a4",
+    "gene_history": "64625626c5267a0f92fb",
+    "hall_of_fame": "59b1294978facb6570b8",
+    "herbivores": "bf42b5725d6ed6811dca",
+    "histories": "9c9d55b215c3c99744e5",
+    "lineages": "8abc90b71567a2ab4559",
+    "log": "e0bc614f8009b4becb59",
+    "patches": "eeca3512b6377f9fa3dc",
+    "saved_scores": "93f12b33bc3850f9bc9b"
+   }
+  ],
+  [
+   "tick 700",
+   {
+    "brains": "51a5544341e9f376090a",
+    "carcasses": "0d4752fa792daeba0a54",
+    "carnivores": "4ef5a72f0d9fd7e72710",
+    "clock": "2f8476a3f97d969ebf62",
+    "counters": "0cb37b9579aa6119c82a",
+    "elites": "93e509be78323ccf9f3a",
+    "food": "1aacf40caf271ba5d5eb",
+    "gene_history": "64625626c5267a0f92fb",
+    "hall_of_fame": "2ca7d56993c5926a61bb",
+    "herbivores": "3839a6e22f3f6edbd51e",
+    "histories": "9c9d55b215c3c99744e5",
+    "lineages": "8abc90b71567a2ab4559",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "e379bb91a5b28738b15a",
+    "saved_scores": "93f12b33bc3850f9bc9b"
+   }
+  ],
+  [
+   "tick 750",
+   {
+    "brains": "0ae1e7c2efc771e7dc31",
+    "carcasses": "2147a01f1edb673e3b36",
+    "carnivores": "f1739df186681aa3bb87",
+    "clock": "828151d09f21e68ff7f5",
+    "counters": "65d62b51467a7b9adfdb",
+    "elites": "7545a787a808dc0de352",
+    "food": "89c5892b3f7d2301b610",
+    "gene_history": "64625626c5267a0f92fb",
+    "hall_of_fame": "2ca7d56993c5926a61bb",
+    "herbivores": "e41dda6229f1f1836a84",
+    "histories": "9c9d55b215c3c99744e5",
+    "lineages": "8abc90b71567a2ab4559",
+    "log": "b51046a80af06a8a8c30",
+    "patches": "42ba272b4120f26a43b6",
+    "saved_scores": "a69ffd8cee19402d3fce"
+   }
+  ],
+  [
+   "tick 800",
+   {
+    "brains": "5f9715d73748168635b2",
+    "carcasses": "a19b8b47022b73cd8c4f",
+    "carnivores": "80a916aa90ec53f86c36",
+    "clock": "91ab50196aa0454d34c1",
+    "counters": "61f8f0ea76c70e91de11",
+    "elites": "c9fe537f042d2b40907f",
+    "food": "071f9c428f46555736ed",
+    "gene_history": "f611d2b5307c1bc414e9",
+    "hall_of_fame": "ff7277ebbae15171c9aa",
+    "herbivores": "3fc228425dd37e5a7157",
+    "histories": "4c3cdf9f42a178ed0dd6",
+    "lineages": "ece09aa665f64e94739b",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "bfa375be0c43169bba93",
+    "saved_scores": "31b4b6e9ee05a29d127e"
+   }
+  ],
+  [
+   "tick 850",
+   {
+    "brains": "db6350ede851150c76c4",
+    "carcasses": "37873ac267636411d85a",
+    "carnivores": "86b477ffea57945f83cc",
+    "clock": "e9952a7aadff8144d162",
+    "counters": "6899326b6f1786481267",
+    "elites": "2668ef7e505f4864dba0",
+    "food": "fcf74d67214112449f57",
+    "gene_history": "f611d2b5307c1bc414e9",
+    "hall_of_fame": "ff7277ebbae15171c9aa",
+    "herbivores": "1b5b2a4208f0bf6c4113",
+    "histories": "4c3cdf9f42a178ed0dd6",
+    "lineages": "ece09aa665f64e94739b",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "86ee5e0e103968ff0057",
+    "saved_scores": "31b4b6e9ee05a29d127e"
+   }
+  ],
+  [
+   "tick 900",
+   {
+    "brains": "f736b134be35e92f0d14",
+    "carcasses": "016bc5390397b8a27a15",
+    "carnivores": "64feed4671ef8ece0462",
+    "clock": "d9c008918751ccd7b1d4",
+    "counters": "8332cc07e368e4dd99d4",
+    "elites": "e7895d467b9897be6757",
+    "food": "0c3b523d2fc07930a7ad",
+    "gene_history": "f611d2b5307c1bc414e9",
+    "hall_of_fame": "95bb672c3dfcbce260e2",
+    "herbivores": "cf3b64fcecd5a08780fb",
+    "histories": "4c3cdf9f42a178ed0dd6",
+    "lineages": "ece09aa665f64e94739b",
+    "log": "8fcdbf89dfbbc181239b",
+    "patches": "f455145857674aab820a",
+    "saved_scores": "f186c3e618c376c7bce5"
+   }
+  ],
+  [
+   "tick 950",
+   {
+    "brains": "d3ef9df3d47b4945dd39",
+    "carcasses": "5583eaa372a0706dd108",
+    "carnivores": "77249838e4775a71f3b6",
+    "clock": "39ac884bfd4e7c670467",
+    "counters": "86c98a580152df15cab8",
+    "elites": "a50435c2f416b9fd6432",
+    "food": "b777d21dc4b0a25c6e39",
+    "gene_history": "f611d2b5307c1bc414e9",
+    "hall_of_fame": "95bb672c3dfcbce260e2",
+    "herbivores": "879eed2e507f63d3fcc7",
+    "histories": "4c3cdf9f42a178ed0dd6",
+    "lineages": "ece09aa665f64e94739b",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "a273a01c470725ee6653",
+    "saved_scores": "f186c3e618c376c7bce5"
+   }
+  ],
+  [
+   "tick 1000",
+   {
+    "brains": "6e512f9df7dfe27b445b",
+    "carcasses": "3519071b2089a6c08372",
+    "carnivores": "3bf7b897f868d6ee1f15",
+    "clock": "7228efc2420277d988ed",
+    "counters": "5468e59b16e8781d256e",
+    "elites": "97d437689beafa072cb0",
+    "food": "c6301a0ea41cbb643c9e",
+    "gene_history": "2b22e7bdc89f7af7a7dd",
+    "hall_of_fame": "a3627585a2916e8bd712",
+    "herbivores": "685c959b9c211ce155cf",
+    "histories": "8a6d462fc80293bb175e",
+    "lineages": "fdd87a085f5814c302f3",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "4051d9f13f26c1523571",
+    "saved_scores": "3efb1516e9e325da2a15"
+   }
+  ],
+  [
+   "tick 1050",
+   {
+    "brains": "420fc407b00097e0c6bf",
+    "carcasses": "b6840a9cd6051dbcc070",
+    "carnivores": "54f1675435d088041d5c",
+    "clock": "efc58ce86f8b922937b5",
+    "counters": "da49444dc9ead1981546",
+    "elites": "8ad1a227eadc94fb2dc5",
+    "food": "ab1fc2058722943a1d41",
+    "gene_history": "2b22e7bdc89f7af7a7dd",
+    "hall_of_fame": "f881735491ee37bd4783",
+    "herbivores": "4bb122a1128e1077eda7",
+    "histories": "8a6d462fc80293bb175e",
+    "lineages": "fdd87a085f5814c302f3",
+    "log": "cb29af536b35d38192c0",
+    "patches": "3f7045d2a5407b88a330",
+    "saved_scores": "0eee3bf5c3f9e8e0c48e"
+   }
+  ],
+  [
+   "tick 1100",
+   {
+    "brains": "7c96f6b0225829c185a7",
+    "carcasses": "b952f414441b981f1a8b",
+    "carnivores": "666cd9b0a58e8ed54af2",
+    "clock": "1120dc3140cdbfa0a22b",
+    "counters": "c6ec237ff2dab2016929",
+    "elites": "368f59cf11820778d27a",
+    "food": "79b3d08a537180b58dfc",
+    "gene_history": "2b22e7bdc89f7af7a7dd",
+    "hall_of_fame": "f881735491ee37bd4783",
+    "herbivores": "fb8179fb8a75e0b84779",
+    "histories": "8a6d462fc80293bb175e",
+    "lineages": "fdd87a085f5814c302f3",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "79051bc3c18159851c90",
+    "saved_scores": "0eee3bf5c3f9e8e0c48e"
+   }
+  ],
+  [
+   "tick 1150",
+   {
+    "brains": "92b41c85590bf942e9ca",
+    "carcasses": "6f643f91eb6ea7d4d53f",
+    "carnivores": "784a10b419c09c37c83e",
+    "clock": "3d7a54041c3ccf2544fe",
+    "counters": "14a2df1d77268580bd50",
+    "elites": "20ae432471c8f444db86",
+    "food": "c60a677461982bcd4ca2",
+    "gene_history": "2b22e7bdc89f7af7a7dd",
+    "hall_of_fame": "fdd29228552f6987b828",
+    "herbivores": "bf2029801b68d4da155b",
+    "histories": "8a6d462fc80293bb175e",
+    "lineages": "fdd87a085f5814c302f3",
+    "log": "19ca12f9259235e04777",
+    "patches": "4729b6145feba4de411e",
+    "saved_scores": "0af99a1631ec9d154026"
+   }
+  ],
+  [
+   "tick 1200",
+   {
+    "brains": "8f4ddcaa5439212a31a3",
+    "carcasses": "fbba3da662d76d585efb",
+    "carnivores": "662999332c70c63c63c5",
+    "clock": "956b242d7fba18b53c3d",
+    "counters": "1287fd21cd05eb8a0eff",
+    "elites": "bcbd4348dcc0153e5989",
+    "food": "db2eb7e7a01915731f15",
+    "gene_history": "a984e3f49199ba1d7065",
+    "hall_of_fame": "bec8e759f96461590585",
+    "herbivores": "097b28e143718d95ea50",
+    "histories": "e9cda587a0f5924e8709",
+    "lineages": "deabc1be3b737cf843eb",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "d77bce75a87b09928868",
+    "saved_scores": "74a6634ff6c9dee475a3"
+   }
+  ],
+  [
+   "tick 1250",
+   {
+    "brains": "b416ca294f3a0c299fd4",
+    "carcasses": "d8e15203cd2438def633",
+    "carnivores": "5371692eb3d2812b9ff4",
+    "clock": "9ff63922ca17fef6acd2",
+    "counters": "be95f1fc39e506168625",
+    "elites": "bcbd4348dcc0153e5989",
+    "food": "786611a505012b50a8bb",
+    "gene_history": "a984e3f49199ba1d7065",
+    "hall_of_fame": "bec8e759f96461590585",
+    "herbivores": "34340450b9f8297aab03",
+    "histories": "e9cda587a0f5924e8709",
+    "lineages": "deabc1be3b737cf843eb",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "ac930d979f810be309d6",
+    "saved_scores": "74a6634ff6c9dee475a3"
+   }
+  ],
+  [
+   "tick 1300",
+   {
+    "brains": "1b6c5433701425cdc72d",
+    "carcasses": "6892ff6b89c674a4b4e0",
+    "carnivores": "83924edb7e8ae5e71010",
+    "clock": "f7e2383c3a8a07fd4936",
+    "counters": "e716938f06641ec1a847",
+    "elites": "ce9b83ec1ede63272527",
+    "food": "cebf194814a566de3971",
+    "gene_history": "a984e3f49199ba1d7065",
+    "hall_of_fame": "7e9c1722cf08a6438be5",
+    "herbivores": "216345d990d0c2491a3b",
+    "histories": "e9cda587a0f5924e8709",
+    "lineages": "deabc1be3b737cf843eb",
+    "log": "8f6b9049a676b2176676",
+    "patches": "bdf055e4fc19a9e4d8d0",
+    "saved_scores": "dc9ac71218227d048133"
+   }
+  ],
+  [
+   "tick 1350",
+   {
+    "brains": "b48ff2c078e44dea639f",
+    "carcasses": "92f440b1c14682084020",
+    "carnivores": "baaa672149ecda795190",
+    "clock": "69886fa54187a286b1f4",
+    "counters": "c0dca10698c476fa0317",
+    "elites": "b09ec938a95fb4632f2d",
+    "food": "ef0c2a4bf42f62c78ccf",
+    "gene_history": "a984e3f49199ba1d7065",
+    "hall_of_fame": "7e9c1722cf08a6438be5",
+    "herbivores": "db53730a9047d7e15a0e",
+    "histories": "e9cda587a0f5924e8709",
+    "lineages": "deabc1be3b737cf843eb",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "02de9ef966b8251a44db",
+    "saved_scores": "dc9ac71218227d048133"
+   }
+  ],
+  [
+   "tick 1400",
+   {
+    "brains": "63a716579a137bc0cd63",
+    "carcasses": "aa2d7f76a52afe7aebbf",
+    "carnivores": "0acf5ae633d0b25c44f4",
+    "clock": "ee7f9bb4ef8966d89a8d",
+    "counters": "b08be1394a084343c64d",
+    "elites": "5fd13aa3dd5eff250804",
+    "food": "23c9acc063a1eefb226c",
+    "gene_history": "9284af50e6b4aef09ab3",
+    "hall_of_fame": "e7a841567e4296924e37",
+    "herbivores": "d933024e489195cfff95",
+    "histories": "f74ef02b880ca248dc15",
+    "lineages": "e9fdf62405670f4a2cad",
+    "log": "19f973e21685a2a8ddd1",
+    "patches": "8b28d0c8d9478e88f245",
+    "saved_scores": "dea75dbbc393f3c26f0f"
+   }
+  ],
+  [
+   "tick 1450",
+   {
+    "brains": "3a6df915cb0de15374e1",
+    "carcasses": "88d80a568a3c31a93206",
+    "carnivores": "2531ad810b054334215d",
+    "clock": "78ca5751551da97a3d06",
+    "counters": "c9257a992b45bda3d724",
+    "elites": "22fc80c5ce50e271dc6c",
+    "food": "79d2fda9af2b53932a72",
+    "gene_history": "9284af50e6b4aef09ab3",
+    "hall_of_fame": "e7a841567e4296924e37",
+    "herbivores": "2b8005ad80e81bdfed81",
+    "histories": "f74ef02b880ca248dc15",
+    "lineages": "e9fdf62405670f4a2cad",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "146fb7108becf9771410",
+    "saved_scores": "dea75dbbc393f3c26f0f"
+   }
+  ],
+  [
+   "tick 1500",
+   {
+    "brains": "4352182d8bae904c5475",
+    "carcasses": "b25cd9eff13b0e1f87be",
+    "carnivores": "53beacfb305a99bdf6ea",
+    "clock": "ac9c31a7e4be9c65549f",
+    "counters": "04454f54f7ddd7abaa9d",
+    "elites": "0eeab9774172260231f3",
+    "food": "21adff8e336ca2b24af8",
+    "gene_history": "9284af50e6b4aef09ab3",
+    "hall_of_fame": "fa8e99fd365e36091f43",
+    "herbivores": "d589baac0b3410f1513b",
+    "histories": "f74ef02b880ca248dc15",
+    "lineages": "e9fdf62405670f4a2cad",
+    "log": "e5c0419da598f88dadf0",
+    "patches": "4040a24f5f90b1f154fa",
+    "saved_scores": "a025f349c41f08221e88"
+   }
+  ],
+  [
+   "tick 1550",
+   {
+    "brains": "aa5c786bb562e2ce3ce5",
+    "carcasses": "fbc0525af563e4e92f0a",
+    "carnivores": "da1402285f1e28847e26",
+    "clock": "05aefa82f07b54189f9e",
+    "counters": "de1cb994594c4987210c",
+    "elites": "160a5c6d571d3c024727",
+    "food": "8eaf67440ff8eb8e754b",
+    "gene_history": "9284af50e6b4aef09ab3",
+    "hall_of_fame": "fa8e99fd365e36091f43",
+    "herbivores": "edc2f874e3dc1611ddda",
+    "histories": "f74ef02b880ca248dc15",
+    "lineages": "e9fdf62405670f4a2cad",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "fb25056d50632806a04e",
+    "saved_scores": "a025f349c41f08221e88"
+   }
+  ],
+  [
+   "tick 1600",
+   {
+    "brains": "e67e4546ae47dea6aca1",
+    "carcasses": "121b788df282c0655727",
+    "carnivores": "706920cbf21198fe6b0c",
+    "clock": "a1141fe78af5af61a003",
+    "counters": "d5e23572c64019c0c052",
+    "elites": "b9c7bad9ad35b7eb4c9e",
+    "food": "6dba0802da8c846466b0",
+    "gene_history": "4c6a5dfb2066c1b177f9",
+    "hall_of_fame": "0b59a13e3ca029b88b74",
+    "herbivores": "328adddd09d54f7f9fef",
+    "histories": "2ddcd530bcc183e520f0",
+    "lineages": "973c3a6efb4c0eb1cd8c",
+    "log": "9fb43a8809a274e63760",
+    "patches": "61e8cf3932bddb86a6ad",
+    "saved_scores": "0790ef4092ea07fe9b54"
+   }
+  ],
+  [
+   "tick 1650",
+   {
+    "brains": "1cc8dde388a102fb4049",
+    "carcasses": "73e659059d4a338bb737",
+    "carnivores": "f1c9dd065807eb840d43",
+    "clock": "25677a0d5cbdde711a68",
+    "counters": "ab6b97b895e35d9752f5",
+    "elites": "b9c7bad9ad35b7eb4c9e",
+    "food": "fec5fc8aa4e4e26cb445",
+    "gene_history": "4c6a5dfb2066c1b177f9",
+    "hall_of_fame": "0b59a13e3ca029b88b74",
+    "herbivores": "087358063af2cb8ab7c3",
+    "histories": "2ddcd530bcc183e520f0",
+    "lineages": "973c3a6efb4c0eb1cd8c",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "9ecb34836bac0251f7e1",
+    "saved_scores": "0790ef4092ea07fe9b54"
+   }
+  ],
+  [
+   "tick 1700",
+   {
+    "brains": "ba6865c9f565e1cb0541",
+    "carcasses": "a27c348b79a38e2a707f",
+    "carnivores": "f3a5a452f489c3460033",
+    "clock": "2eaa44f391ea4d287a3f",
+    "counters": "78224d7913c7ff6ef6b8",
+    "elites": "b9c7bad9ad35b7eb4c9e",
+    "food": "6571a60d28c825c18639",
+    "gene_history": "4c6a5dfb2066c1b177f9",
+    "hall_of_fame": "0b59a13e3ca029b88b74",
+    "herbivores": "e71bf93e73608b4ffdb6",
+    "histories": "2ddcd530bcc183e520f0",
+    "lineages": "973c3a6efb4c0eb1cd8c",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "141b16d8ef546e571b29",
+    "saved_scores": "0790ef4092ea07fe9b54"
+   }
+  ],
+  [
+   "tick 1750",
+   {
+    "brains": "6b2b31d298814ccdcb74",
+    "carcasses": "5e9355543e167421e28c",
+    "carnivores": "2af7ae5b1c5c62d0ed9f",
+    "clock": "149664171ae4d3d78f1c",
+    "counters": "5ef9c49606e58cbfff45",
+    "elites": "b9c7bad9ad35b7eb4c9e",
+    "food": "8426b12aa628d331dbb5",
+    "gene_history": "4c6a5dfb2066c1b177f9",
+    "hall_of_fame": "0b59a13e3ca029b88b74",
+    "herbivores": "33330d4f68af4a2f0520",
+    "histories": "2ddcd530bcc183e520f0",
+    "lineages": "973c3a6efb4c0eb1cd8c",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "1731d56c378244485dbb",
+    "saved_scores": "0790ef4092ea07fe9b54"
+   }
+  ],
+  [
+   "tick 1800",
+   {
+    "brains": "6b5784a10f4b897fde02",
+    "carcasses": "4461e0a43d1997a52055",
+    "carnivores": "380bd0db5f5130713925",
+    "clock": "25d93d647dc64592dd98",
+    "counters": "2cb953da76496e3f3422",
+    "elites": "aaae81a5d2cd9108b92b",
+    "food": "c0220886713133cb7013",
+    "gene_history": "1dd4e8f0fb0fba31e9b7",
+    "hall_of_fame": "104dcb30f5f64216f510",
+    "herbivores": "51b52a7a9140e2acb9e6",
+    "histories": "df8d17aaa7552a54d638",
+    "lineages": "bd238ab50fe04212ce6f",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "b6376af3a0d69e3cf2f6",
+    "saved_scores": "b0085c10ca045b963ca0"
+   }
+  ],
+  [
+   "tick 1850",
+   {
+    "brains": "647ad18742e9d2f5dfd7",
+    "carcasses": "3400a686e80fb2207aa0",
+    "carnivores": "20862178fb896b431fc0",
+    "clock": "713b12f225349f0cbd73",
+    "counters": "38cb3f39fd3e579f34ea",
+    "elites": "8e4130a547e6d1f89b7e",
+    "food": "3f77285a621aaecf91f2",
+    "gene_history": "1dd4e8f0fb0fba31e9b7",
+    "hall_of_fame": "104dcb30f5f64216f510",
+    "herbivores": "097138f71539ab5dba26",
+    "histories": "df8d17aaa7552a54d638",
+    "lineages": "bd238ab50fe04212ce6f",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "bd2fcdfcb9bfd6b41297",
+    "saved_scores": "b0085c10ca045b963ca0"
+   }
+  ],
+  [
+   "tick 1900",
+   {
+    "brains": "e1b0b589d351dcc12097",
+    "carcasses": "b8b927f4b37fd6004741",
+    "carnivores": "dfac134a4a6e7fc480f8",
+    "clock": "32279c88e476242551d3",
+    "counters": "5e7c191c17b9f5ff2f38",
+    "elites": "f85da606e59bf6c8de5a",
+    "food": "ef346047b7f67d1c11c5",
+    "gene_history": "1dd4e8f0fb0fba31e9b7",
+    "hall_of_fame": "104dcb30f5f64216f510",
+    "herbivores": "10e9c10da2b9127b2c47",
+    "histories": "df8d17aaa7552a54d638",
+    "lineages": "bd238ab50fe04212ce6f",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "287101fd94a4ed06abe2",
+    "saved_scores": "b0085c10ca045b963ca0"
+   }
+  ],
+  [
+   "tick 1950",
+   {
+    "brains": "d962aa807a6c761b0482",
+    "carcasses": "154a49dafcdf1eab31a5",
+    "carnivores": "f4eb5a01a2c52dfef739",
+    "clock": "16186b985819f0c7c721",
+    "counters": "0619e285c7171d804e09",
+    "elites": "e7d621b10c176167960a",
+    "food": "adc1a1fce5ed53c47d4c",
+    "gene_history": "1dd4e8f0fb0fba31e9b7",
+    "hall_of_fame": "104dcb30f5f64216f510",
+    "herbivores": "a827d4e6c23c51ad3035",
+    "histories": "df8d17aaa7552a54d638",
+    "lineages": "bd238ab50fe04212ce6f",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "8cce1064a7b6d95512aa",
+    "saved_scores": "b0085c10ca045b963ca0"
+   }
+  ],
+  [
+   "tick 2000",
+   {
+    "brains": "71b8d359431337126f8d",
+    "carcasses": "bf479c22ed6513f92fc3",
+    "carnivores": "2db74cf415609646f041",
+    "clock": "4d2f6bb1c8739b78445b",
+    "counters": "0619e285c7171d804e09",
+    "elites": "06382e37c8e28530871b",
+    "food": "7314c346ae726b610084",
+    "gene_history": "752662af8d4350f8f78d",
+    "hall_of_fame": "7c85e8d964d818c47bb8",
+    "herbivores": "ac4bd5a3fb6cae1eba4a",
+    "histories": "aaaf8573548d43a602a8",
+    "lineages": "b59b1fa5eed7646356e9",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "9d301ae1d1e5b7bfea37",
+    "saved_scores": "23a13e12945afa631e7a"
+   }
+  ],
+  [
+   "tick 2050",
+   {
+    "brains": "257a08a3ffdad0c52c87",
+    "carcasses": "3469de99b0622db38bfc",
+    "carnivores": "898febca75dd02a204f8",
+    "clock": "88371e85a2b1ab941cc9",
+    "counters": "0619e285c7171d804e09",
+    "elites": "029ef4905b741f9264a6",
+    "food": "ffc995e4a364186436fd",
+    "gene_history": "752662af8d4350f8f78d",
+    "hall_of_fame": "7c85e8d964d818c47bb8",
+    "herbivores": "a4207724021cc433ae66",
+    "histories": "aaaf8573548d43a602a8",
+    "lineages": "b59b1fa5eed7646356e9",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "6bb07340d46b3c1d41e6",
+    "saved_scores": "23a13e12945afa631e7a"
+   }
+  ],
+  [
+   "tick 2100",
+   {
+    "brains": "7ca5bce07b44b37b41c6",
+    "carcasses": "4c5774e4a83224bb4977",
+    "carnivores": "3a8a1c4bbba32cb30722",
+    "clock": "e9185d1c2d638fe10003",
+    "counters": "fab7a59d33a1dd6adac8",
+    "elites": "5474d2c162b50690f03d",
+    "food": "c9b8c99287cc91c0e011",
+    "gene_history": "752662af8d4350f8f78d",
+    "hall_of_fame": "4d6a99dc5332f16825c0",
+    "herbivores": "72319c1a3b82cee4e77f",
+    "histories": "aaaf8573548d43a602a8",
+    "lineages": "b59b1fa5eed7646356e9",
+    "log": "6c843fdd83be67d7971a",
+    "patches": "2a5f03e07d1cb49f0f30",
+    "saved_scores": "dacddd454ca65c89435d"
+   }
+  ],
+  [
+   "tick 2150",
+   {
+    "brains": "b15b730860af0be007c9",
+    "carcasses": "58f0a38cd03e61182432",
+    "carnivores": "de09b32dc210957afa77",
+    "clock": "b662ccf2d2df5ed5e69d",
+    "counters": "d4ae3f5b9cb39e4b2421",
+    "elites": "6d23452ec8298d10036e",
+    "food": "a4dac1d53ea1d9c0b286",
+    "gene_history": "752662af8d4350f8f78d",
+    "hall_of_fame": "4d6a99dc5332f16825c0",
+    "herbivores": "c07e5aefd751c48fc459",
+    "histories": "aaaf8573548d43a602a8",
+    "lineages": "b59b1fa5eed7646356e9",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "34638d26116aa8dcbc2a",
+    "saved_scores": "dacddd454ca65c89435d"
+   }
+  ],
+  [
+   "tick 2200",
+   {
+    "brains": "414505e86ec2da3dec0e",
+    "carcasses": "bd6ee8560699dbe77570",
+    "carnivores": "e1b196402a94571fd232",
+    "clock": "edb7b11270fd2c9bd8f1",
+    "counters": "384b476643e19ee19ff6",
+    "elites": "a202cceca66b82746c42",
+    "food": "1448ef36bff069f7ff38",
+    "gene_history": "b0a9218d9f764a7e5520",
+    "hall_of_fame": "f1a7d60e71e707c463ea",
+    "herbivores": "e2c96cfb4f3d6e391b32",
+    "histories": "14fac1b8e9a495267f5a",
+    "lineages": "b11debbd1d0348cc7550",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "43d820095e136dd97cab",
+    "saved_scores": "3e4eb71c5be97f2c3855"
+   }
+  ],
+  [
+   "tick 2250",
+   {
+    "brains": "05f901b1c12811e78f38",
+    "carcasses": "c97937957f8a75b2b08d",
+    "carnivores": "1c047e48cd092f3cf345",
+    "clock": "64b9c1e019ba1cac8bb7",
+    "counters": "5587ea096c8d605ce070",
+    "elites": "8b2a5d0bcd6ec7820068",
+    "food": "eb564c770b2d945b3e97",
+    "gene_history": "b0a9218d9f764a7e5520",
+    "hall_of_fame": "f1a7d60e71e707c463ea",
+    "herbivores": "a379dcc03eb2b916df11",
+    "histories": "14fac1b8e9a495267f5a",
+    "lineages": "b11debbd1d0348cc7550",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "05af71bc76c2bf77afac",
+    "saved_scores": "3e4eb71c5be97f2c3855"
+   }
+  ],
+  [
+   "tick 2300",
+   {
+    "brains": "8190659262abde513f58",
+    "carcasses": "4327ce32e91cd1708128",
+    "carnivores": "e91280e17311938bc9d9",
+    "clock": "6d46cd14d53e9aaecae3",
+    "counters": "c0e96afa5faacbe2d269",
+    "elites": "f6a628859f5d997e9477",
+    "food": "840b2dd9b05153da7ca5",
+    "gene_history": "b0a9218d9f764a7e5520",
+    "hall_of_fame": "d7113bf1a7b6b0f6f6b1",
+    "herbivores": "5b3e2e0192436aeb0e84",
+    "histories": "14fac1b8e9a495267f5a",
+    "lineages": "b11debbd1d0348cc7550",
+    "log": "01a721d3e852f82ed1f1",
+    "patches": "d2f3ded22762cace1fce",
+    "saved_scores": "80fc10d688314c495e1c"
+   }
+  ],
+  [
+   "tick 2350",
+   {
+    "brains": "e72db0282d02508c083f",
+    "carcasses": "f9c156850792c4c043fd",
+    "carnivores": "d25f0c53fb07e230221d",
+    "clock": "366506fc10752334f816",
+    "counters": "35c0dfa4d68b75aba2f3",
+    "elites": "1f3d5bc8e2360464ad3e",
+    "food": "b6b04d6cabcffed14b1b",
+    "gene_history": "b0a9218d9f764a7e5520",
+    "hall_of_fame": "d7113bf1a7b6b0f6f6b1",
+    "herbivores": "903d560b95eb3b256641",
+    "histories": "14fac1b8e9a495267f5a",
+    "lineages": "b11debbd1d0348cc7550",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "d021a4a48188a9005653",
+    "saved_scores": "80fc10d688314c495e1c"
+   }
+  ],
+  [
+   "tick 2400",
+   {
+    "brains": "a4ece2735d9f55655dbc",
+    "carcasses": "996bcc84761f9663ddb5",
+    "carnivores": "e2b68120ac022e7fa1ce",
+    "clock": "23f1491dee946ec336b5",
+    "counters": "35c0dfa4d68b75aba2f3",
+    "elites": "ef9f1fbb92d18f462d8f",
+    "food": "3ce3e2213fc95e2bc978",
+    "gene_history": "aa5f57c4650a9bc89403",
+    "hall_of_fame": "ea109b582e941b312df7",
+    "herbivores": "c18335ce738824641171",
+    "histories": "1956dc10f0c3b5235b66",
+    "lineages": "04afa5573f037cb61afe",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "4242295d9ba6f8a3d125",
+    "saved_scores": "beecd2df3f7df9d312fa"
+   }
+  ],
+  [
+   "tick 2450",
+   {
+    "brains": "0133b749559193d02dfe",
+    "carcasses": "5301beeedbebabc9d0aa",
+    "carnivores": "4fb2804c0a672b57061c",
+    "clock": "7f46528dea928b1bfb15",
+    "counters": "35c0dfa4d68b75aba2f3",
+    "elites": "ef9f1fbb92d18f462d8f",
+    "food": "554627c0654ea0e28604",
+    "gene_history": "aa5f57c4650a9bc89403",
+    "hall_of_fame": "ea109b582e941b312df7",
+    "herbivores": "e506f7d6e36948f947ec",
+    "histories": "1956dc10f0c3b5235b66",
+    "lineages": "04afa5573f037cb61afe",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "2781b63ecce7827495e4",
+    "saved_scores": "beecd2df3f7df9d312fa"
+   }
+  ],
+  [
+   "tick 2500",
+   {
+    "brains": "3127fc3184597b059fbb",
+    "carcasses": "7a4ade8d58b26645e6ec",
+    "carnivores": "fafc062a21c0806debe7",
+    "clock": "dc5733c8dbb4b88efc49",
+    "counters": "35c0dfa4d68b75aba2f3",
+    "elites": "79d12b71c614df8a7d9e",
+    "food": "4f58a8e3023e54d5cd69",
+    "gene_history": "aa5f57c4650a9bc89403",
+    "hall_of_fame": "ea109b582e941b312df7",
+    "herbivores": "d79c46ecfa15ee8534cc",
+    "histories": "1956dc10f0c3b5235b66",
+    "lineages": "04afa5573f037cb61afe",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "81ee35e472abc124ad0a",
+    "saved_scores": "beecd2df3f7df9d312fa"
+   }
+  ],
+  [
+   "tick 2550",
+   {
+    "brains": "1811368aca4608624a98",
+    "carcasses": "ead80b83f5676f42e838",
+    "carnivores": "f4df469d4bcd0488ee41",
+    "clock": "1fc47f679fe767c7a1a8",
+    "counters": "51509f6c69085c6948d0",
+    "elites": "f5a7c357ee1c52550e4b",
+    "food": "24a8f082ce7b17115d48",
+    "gene_history": "aa5f57c4650a9bc89403",
+    "hall_of_fame": "58b22941bb7572cc2a0d",
+    "herbivores": "815ab11efcdf573bb10f",
+    "histories": "1956dc10f0c3b5235b66",
+    "lineages": "04afa5573f037cb61afe",
+    "log": "010a3a266921d54f083d",
+    "patches": "717b7afe2968d2aa100d",
+    "saved_scores": "5452a5cc15c9996daf03"
+   }
+  ],
+  [
+   "tick 2600",
+   {
+    "brains": "933c8a7cd4d4d9c9c252",
+    "carcasses": "ed5eb2c58258880b98c2",
+    "carnivores": "0c20c38556b55cb4d001",
+    "clock": "cc9459cafe75c9725fa5",
+    "counters": "51509f6c69085c6948d0",
+    "elites": "ae7b19e585e4e3f414cf",
+    "food": "3487fd5be299530af1e1",
+    "gene_history": "c043345da56e51ac986d",
+    "hall_of_fame": "d3ba7592d4afd6f8f742",
+    "herbivores": "f494948225ae10a254cb",
+    "histories": "ac937fbbf5ecaaa43b54",
+    "lineages": "0dec22e4b611ee4e4f6f",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "e145ea0bd80c604b5535",
+    "saved_scores": "fc5514c4bdd9237c4dc9"
+   }
+  ],
+  [
+   "tick 2650",
+   {
+    "brains": "ed55f6b3dcc26fa78b64",
+    "carcasses": "f5fecd4641dbc9674caa",
+    "carnivores": "52a1e15e38ec668ca154",
+    "clock": "ce3e53c9fd2e5740e103",
+    "counters": "50938cb7c040f4d4f9b1",
+    "elites": "cb95408c2b28f6b9f36d",
+    "food": "611d2e65eb3f56df8d8e",
+    "gene_history": "c043345da56e51ac986d",
+    "hall_of_fame": "a87762bdd2e6636441ec",
+    "herbivores": "266cb85a4018cf2cf80d",
+    "histories": "ac937fbbf5ecaaa43b54",
+    "lineages": "0dec22e4b611ee4e4f6f",
+    "log": "7c143021d4ef79a2bf8c",
+    "patches": "bacf23aa1a124138c8cc",
+    "saved_scores": "4c199693b1d58657bddb"
+   }
+  ],
+  [
+   "tick 2700",
+   {
+    "brains": "74d0b37eb5e4b36ac065",
+    "carcasses": "f6ab87cbfd91fc39d7b2",
+    "carnivores": "bb9ae38faf6aea46b597",
+    "clock": "3089ac82cda9fb81b2e8",
+    "counters": "b87eb66a0b89249cd4a1",
+    "elites": "7314ea208128f9d130c2",
+    "food": "4a0aa54d69c674aa224f",
+    "gene_history": "c043345da56e51ac986d",
+    "hall_of_fame": "088952cdce33f51fb1df",
+    "herbivores": "6ad73f185538719ccf47",
+    "histories": "ac937fbbf5ecaaa43b54",
+    "lineages": "0dec22e4b611ee4e4f6f",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "d2fd9d4e5d02c1b3857b",
+    "saved_scores": "4c199693b1d58657bddb"
+   }
+  ],
+  [
+   "tick 2750",
+   {
+    "brains": "97075b4f41667642e4d3",
+    "carcasses": "6bd2a322813a32db03d8",
+    "carnivores": "0a5831ae78223b03d207",
+    "clock": "1ed72145f86301c81226",
+    "counters": "5dfd54a872cb46a90556",
+    "elites": "7314ea208128f9d130c2",
+    "food": "5ebdf72f7b6a269ef1de",
+    "gene_history": "c043345da56e51ac986d",
+    "hall_of_fame": "088952cdce33f51fb1df",
+    "herbivores": "1128d2013def884de641",
+    "histories": "ac937fbbf5ecaaa43b54",
+    "lineages": "0dec22e4b611ee4e4f6f",
+    "log": "70c1be4379c331e979bc",
+    "patches": "20f78c41b8a52e0df7e4",
+    "saved_scores": "541acf439e8ee42c9aff"
+   }
+  ],
+  [
+   "tick 2800",
+   {
+    "brains": "c56d2607f9faf29d14da",
+    "carcasses": "03a54ae1a099997d683e",
+    "carnivores": "e1203588b3d0c4875377",
+    "clock": "b8b215e61753f55e4610",
+    "counters": "5dfd54a872cb46a90556",
+    "elites": "1312bf6c2ef73773a205",
+    "food": "c6b6484d2a4db86081af",
+    "gene_history": "d70f393276f35439ef4a",
+    "hall_of_fame": "9273e0be283502128575",
+    "herbivores": "f8a046d028b4d882401d",
+    "histories": "63e559ad6196e5d9fc8d",
+    "lineages": "9dcbf90d21c9edd27b6c",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "82a74c556260d1c058d5",
+    "saved_scores": "bd7df1192a060e91668b"
+   }
+  ],
+  [
+   "tick 2850",
+   {
+    "brains": "b4a5718cfaa3dd2a758e",
+    "carcasses": "8459c24be2fc530ad49c",
+    "carnivores": "d28a2a2110e8af748ed0",
+    "clock": "2b7ecafcb5dedbebb4d8",
+    "counters": "8492969a392c4871129b",
+    "elites": "6d0bb99e215b5d32a079",
+    "food": "d911f3ce106e049e6ff0",
+    "gene_history": "d70f393276f35439ef4a",
+    "hall_of_fame": "9273e0be283502128575",
+    "herbivores": "66b6d4dc89d515405ac5",
+    "histories": "63e559ad6196e5d9fc8d",
+    "lineages": "9dcbf90d21c9edd27b6c",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "2f4263235a29157181ee",
+    "saved_scores": "bd7df1192a060e91668b"
+   }
+  ],
+  [
+   "tick 2900",
+   {
+    "brains": "5c7964b6f37f8ccc6a4b",
+    "carcasses": "0dbd0217dcfd2b448f62",
+    "carnivores": "6767df91d47e1e264685",
+    "clock": "c8f879a272eeeacf1908",
+    "counters": "dcce92416b34d73b9038",
+    "elites": "bbd33b524906debb4790",
+    "food": "35c67fb14acf573e43a4",
+    "gene_history": "d70f393276f35439ef4a",
+    "hall_of_fame": "9273e0be283502128575",
+    "herbivores": "76d24a14dee5ef33f54a",
+    "histories": "63e559ad6196e5d9fc8d",
+    "lineages": "9dcbf90d21c9edd27b6c",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "b430643c43188589639d",
+    "saved_scores": "bd7df1192a060e91668b"
+   }
+  ],
+  [
+   "tick 2950",
+   {
+    "brains": "0596662420e3efe18c21",
+    "carcasses": "34c2e8801f3281ae12c5",
+    "carnivores": "0249771cf80f5e408c32",
+    "clock": "954e2f1f959d8b857b7c",
+    "counters": "7c1f954bd4eb0a4e2372",
+    "elites": "d0a182c73efb558c6b4d",
+    "food": "dee4fdcc2972b948e347",
+    "gene_history": "d70f393276f35439ef4a",
+    "hall_of_fame": "9273e0be283502128575",
+    "herbivores": "897061f01ba58a3af086",
+    "histories": "63e559ad6196e5d9fc8d",
+    "lineages": "9dcbf90d21c9edd27b6c",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "55cc42fa57091736d07c",
+    "saved_scores": "bd7df1192a060e91668b"
+   }
+  ],
+  [
+   "tick 3000",
+   {
+    "brains": "b9d725a351b61b0820d7",
+    "carcasses": "f989189143f4053d57a3",
+    "carnivores": "4bfd56cfc46e86959756",
+    "clock": "aeaf2fda6a9f164aeb5d",
+    "counters": "3354829efa4dc9556716",
+    "elites": "b3c568655fa17876c282",
+    "food": "7e40113664044c8237d2",
+    "gene_history": "4857443ca67c0ec7ee61",
+    "hall_of_fame": "ea715624e1e8f3139005",
+    "herbivores": "b2597e692cca7d128f58",
+    "histories": "e7ddd597dc47e5b87be6",
+    "lineages": "9dcbf90d21c9edd27b6c",
+    "log": "12ae32cb1ec02d01eda3",
+    "patches": "17b972986442c3a4c168",
+    "saved_scores": "277425b9480f5d655f29"
+   }
+  ],
+  [
+   "exit save",
+   {
+    "files": "0daf81ad9cf5740a5154",
+    "log": "695c05d595645e74fab2"
+   }
+  ],
+  [
+   "reload",
+   {
+    "brains": "c5b9776e551f7b839145",
+    "carcasses": "4f53cda18c2baa0c0354",
+    "carnivores": "f0948fcac506bd62ef31",
+    "clock": "02ba107a589a8390870e",
+    "counters": "aad02285e1bb7bc738d2",
+    "elites": "043307b2d23f0fd7f0d8",
+    "food": "740d01075bfae82b1992",
+    "gene_history": "e67c6491466052bd7425",
+    "hall_of_fame": "b618f3146ae74674b821",
+    "herbivores": "d93978faf6093e59f9de",
+    "histories": "e7ddd597dc47e5b87be6",
+    "lakes": "24960732bf4ae0ff2913",
+    "lineages": "ee5fd08f44b0bfecdb22",
+    "log": "8f41b3b37667746dbf0f",
+    "obstacles": "1bd3e6f7261f531db558",
+    "patches": "181b659dfa5026c224e8",
+    "saved_scores": "8ab6624f19ac012417bf"
+   }
+  ],
+  [
+   "reload run",
+   {
+    "brains": "387febe516eced5d9c2f",
+    "carcasses": "aa0f5f6a0f0585a4141e",
+    "carnivores": "6767785dbf89d6137970",
+    "clock": "8ac8b4c01835d84464eb",
+    "counters": "317b37c9505a2777b502",
+    "elites": "262d87ecefe50abae7b1",
+    "food": "4da680540be72569f3c5",
+    "gene_history": "8224b4c7a60b3e060be9",
+    "hall_of_fame": "abe905e4bd17eeb0f821",
+    "herbivores": "8155e51b7c0eaf250309",
+    "histories": "d5bfd65df77441853a1c",
+    "lineages": "3d7809888b44eba658b9",
+    "log": "fe2dd628ffa91fe80b24",
+    "patches": "74858cc663161ada442c",
+    "saved_scores": "50aa76aacb4a798dab4d"
+   }
+  ],
+  [
+   "islands",
+   {
+    "brains": "c6bb481b762861a8f724",
+    "carcasses": "edde298a22a67886e7c3",
+    "carnivores": "2fb36b3149976f724f9f",
+    "clock": "3515926432397de6813f",
+    "counters": "20f5c47df768addfafbb",
+    "elites": "e67ccbaf85e39ad91f6e",
+    "files": "0ca3690bb85a76da4ea2",
+    "food": "7b302f11e17632abb247",
+    "gene_history": "5b2c80ef3132f8255435",
+    "hall_of_fame": "89dbfc709fa36ff0565e",
+    "herbivores": "1d4d13d360542492c138",
+    "histories": "9887ce5455ba7eb3e157",
+    "imported": "19baf732c790ed75458d",
+    "lineages": "bd7eb835b86f93958027",
+    "log": "ac93fded94108d0a6455",
+    "main_carn": "ae7bb9dc9d897252ee07",
+    "patches": "1a05269cc5675582bd8c",
+    "saved_scores": "c8204c96d29fd24e3504"
+   }
+  ]
+ ],
+ "imitation": {
+  "X": "e69b19c4a909a7ca5dbb",
+  "Y": "51c38158155f674a89c2",
+  "brain": "add814f0d9eae67fa6f6",
+  "loss": "7e6b707c52a08a484add"
+ },
+ "render": {
+  "platform": "Darwin arm64 pygame 2.6.1 SDL (2, 32, 74)",
+  "frames": [
+   [
+    "frame 40",
+    {
+     "pixels": "564ddaa6ea0476144e71",
+     "sim": "c093e66c97c45603d882"
+    }
+   ],
+   [
+    "frame 80",
+    {
+     "pixels": "8ad853a402bbb1002548",
+     "sim": "33a59825413706a71428"
+    }
+   ],
+   [
+    "frame 120",
+    {
+     "pixels": "373332bd4365dec784ef",
+     "sim": "ed1b5c5954f2a1904512"
+    }
+   ],
+   [
+    "frame 160",
+    {
+     "pixels": "b263effa23083f291666",
+     "sim": "d7d6520625705665b30a"
+    }
+   ],
+   [
+    "frame 200",
+    {
+     "pixels": "7d443ce9832c9d670c97",
+     "sim": "066729df5bc31d2c0962"
+    }
+   ],
+   [
+    "frame 240",
+    {
+     "pixels": "209716caf48c87f618eb",
+     "sim": "5cab964fdfa2b7b8d599"
+    }
+   ]
+  ]
+ },
+ "digest": "69f7c3cacda37f855b1f"
+}
