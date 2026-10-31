@@ -108,16 +108,25 @@ python game_headless.py
 ## Files
 
 - `game.py`: Main simulation with graphics
-- `game_headless.py`: Console-only version for faster evolution
+- `game_headless.py`: Console-only version for faster evolution (also the island worker)
+- `pretrain.py`: Pretrains both species' brains by imitating a hand-written policy
+- `src/evolution/`: The simulation library, in layers that only import downward:
+  - `ui/`: pygame app, controls, HUD and renderer
+  - `app/`: shared startup, command line, headless runner, Prometheus metrics
+  - `persistence/`: brain files, history snapshots, autosave, island brain exchange
+  - `sim/`: the simulation step, Hall of Fame, statistics, breeding
+  - `world/`: world state, creatures, perception, terrain
+  - `brain/`: neural network, batched inference, input/output layout
+  - `species.py`, `genetics.py`, `config.py`
 - `saved_brains/`: Directory containing saved neural networks
 - Best brains are automatically saved as:
   - `best_brain_herbivore.json`
   - `best_brain_carnivore.json`
-- Autosaves occur every 100 generations
+- Autosaves happen when a new Hall of Fame record is set, at most once per `AUTOSAVE_INTERVAL` ticks
 
 ## Notes
 
-- The simulation uses wrapped boundaries (creatures/food loop around edges)
+- The world edges are walls: creatures bump off them
 - Population caps prevent exponential growth
 - Extinct species can recover from Hall of Fame specimens
 - Performance varies based on population size and environment complexity

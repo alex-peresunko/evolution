@@ -3,8 +3,9 @@ import random
 import pytest
 
 from evolution import config
+from evolution.brain.network import NeuralNetwork
 from evolution.genetics import combine_brains, combine_genes, mutate_genes
-from evolution.neural_network import NeuralNetwork
+from evolution.species import CARNIVORE, HERBIVORE
 
 
 def test_combine_genes_respects_constraints():
@@ -12,7 +13,7 @@ def test_combine_genes_respects_constraints():
     g1 = config.DEFAULT_HERBIVORE_GENES.copy()
     g2 = config.DEFAULT_HERBIVORE_GENES.copy()
     for _ in range(50):
-        child = combine_genes(g1, g2, config.DEFAULT_HERBIVORE_GENES)
+        child = combine_genes(g1, g2, HERBIVORE)
         for key, (min_val, max_val) in config.GENE_MIN_MAX.items():
             assert min_val <= child[key] <= max_val, f"{key} out of range: {child[key]}"
 
@@ -21,8 +22,7 @@ def test_mutate_genes_respects_constraints():
     random.seed(1)
     genes = config.DEFAULT_CARNIVORE_GENES.copy()
     for _ in range(50):
-        mutated = mutate_genes(genes, config.DEFAULT_CARNIVORE_GENES,
-                               gene_constraints=config.CARNIVORE_GENE_MIN_MAX)
+        mutated = mutate_genes(genes, CARNIVORE)
         for key, (min_val, max_val) in config.CARNIVORE_GENE_MIN_MAX.items():
             assert min_val <= mutated[key] <= max_val, f"{key} out of range: {mutated[key]}"
 
@@ -70,7 +70,7 @@ def test_mutation_genes_are_inherited_and_clamped():
     lo, hi = config.GENE_MIN_MAX["mutation_rate"]
     g1 = {**config.DEFAULT_HERBIVORE_GENES, "mutation_rate": hi}
     g2 = {**config.DEFAULT_HERBIVORE_GENES, "mutation_rate": hi}
-    child = combine_genes(g1, g2, config.DEFAULT_HERBIVORE_GENES)
+    child = combine_genes(g1, g2, HERBIVORE)
     assert hi * 0.85 <= child["mutation_rate"] <= hi
 
 
@@ -80,7 +80,7 @@ def test_color_mutates_additively_within_bounds():
     amount = config.ADDITIVE_GENE_MUTATION["color"]
     seen = set()
     for _ in range(200):
-        c = mutate_genes(genes, config.DEFAULT_HERBIVORE_GENES)["color"]
+        c = mutate_genes(genes, HERBIVORE)["color"]
         assert 0.0 <= c <= amount
         seen.add(c > 0)
     assert seen == {True, False}  # moves off 0 although a multiplicative step could not
@@ -90,22 +90,24 @@ def test_old_gene_dicts_get_defaults_for_new_genes():
     old = {k: config.DEFAULT_HERBIVORE_GENES[k]
            for k in ("size", "max_speed", "sight_distance", "sight_angle", "max_stamina",
                      "attractiveness")}
-    child = combine_genes(old, old, config.DEFAULT_HERBIVORE_GENES)
+    child = combine_genes(old, old, HERBIVORE)
     assert set(child) == set(config.DEFAULT_HERBIVORE_GENES)
 
 
 def test_genetic_distance_is_symmetric_and_range_scaled():
     from evolution.genetics import compatible, genetic_distance
     g = config.DEFAULT_HERBIVORE_GENES
-    assert genetic_distance(g, g) == 0 and compatible(g, g)
+    bounds = config.GENE_MIN_MAX
+    assert genetic_distance(g, g, bounds) == 0 and compatible(g, g, HERBIVORE)
     lo, hi = config.GENE_MIN_MAX["color"]
     far = {**g, "color": hi}
     near = {**g, "color": g["color"] + 0.01}
-    assert genetic_distance(g, far) == genetic_distance(far, g)
+    assert genetic_distance(g, far, bounds) == genetic_distance(far, g, bounds)
     n = len(config.GENE_MIN_MAX)
-    assert genetic_distance(g, far) == pytest.approx(((hi - g["color"]) / (hi - lo)) / n ** 0.5)
-    assert compatible(g, near)
-    assert not compatible({**g, "color": lo, "size": 5}, {**g, "color": hi, "size": 25})
+    assert genetic_distance(g, far, bounds) == pytest.approx(((hi - g["color"]) / (hi - lo)) / n ** 0.5)
+    assert compatible(g, near, HERBIVORE)
+    assert not compatible({**g, "color": lo, "size": 5}, {**g, "color": hi, "size": 25},
+                          HERBIVORE)
 
 
 def test_combine_brains_takes_each_neuron_from_one_parent():
