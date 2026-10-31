@@ -292,3 +292,18 @@ def test_only_the_tree_trunk_blocks():
         c.lost = health - c.health
     assert trunk.lost >= config.HEALTH_LOST_ON_HIT
     assert crown.lost < config.HEALTH_LOST_ON_HIT
+
+
+def test_stamina_drains_with_effort_even_when_weak():
+    weak = _adult_at(False, 500, 400)
+    weak.health = weak.max_health * 0.4
+    weak.stamina = 500
+    weak.act([0.0, 1.0], [], [], [], _empty_grid())
+    assert weak.stamina == pytest.approx(500 - config.STAMINA_DEPLETION_RATE)
+
+
+def test_cruising_below_the_effort_threshold_regenerates_stamina():
+    c = _adult_at(False, 500, 400)
+    c.stamina = 500
+    c.act([0.0, config.STAMINA_EFFORT_THRESHOLD - 0.05], [], [], [], _empty_grid())
+    assert c.stamina == pytest.approx(500 + config.STAMINA_REGEN_RATE)

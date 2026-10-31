@@ -126,8 +126,8 @@ LITTER_SPREAD = 6               # px; littermates are placed around the parents'
 JUVENILE_SIZE_FACTOR = 0.2
 
 # --- Stamina ---
-STAMINA_DEPLETION_SPEED_THRESHOLD = 0.7
-STAMINA_DEPLETION_RATE = 2.5
+STAMINA_EFFORT_THRESHOLD = 0.6  # brain speed output above which running costs stamina
+STAMINA_DEPLETION_RATE = 5.0    # per tick at full effort
 STAMINA_REGEN_RATE = 1.0
 STAMINA_EXHAUSTION_PENALTY = 0.2
 

@@ -20,7 +20,7 @@ CARCASS_SMELL_STRENGTH = CARCASS_SMELL_ANGLE + 1
 
 OBSTACLE_NEAR = 0.7      # whisker proximity that overrides steering
 FLEE_SMELL = 0.6         # predator smell strength that makes a herbivore run
-CRUISE_SPEED = 0.65      # below STAMINA_DEPLETION_SPEED_THRESHOLD, so cruising is free
+CRUISE_SPEED = 0.55      # below STAMINA_EFFORT_THRESHOLD, so cruising is free
 SPRINT_MIN_STAMINA = 0.2
 WANDER_TURN = 0.05
 TARGET_LIMIT = 0.95      # tanh outputs never reach +-1

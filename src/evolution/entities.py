@@ -6,7 +6,7 @@ import numpy as np
 
 from .config import (
     CARNIVORE_HEALTH, HERBIVORE_HEALTH, ADULTHOOD_AGE, JUVENILE_SIZE_FACTOR,
-    CREATURE_ROTATION_SPEED, STAMINA_DEPLETION_SPEED_THRESHOLD, STAMINA_DEPLETION_RATE,
+    CREATURE_ROTATION_SPEED, STAMINA_EFFORT_THRESHOLD, STAMINA_DEPLETION_RATE,
     STAMINA_REGEN_RATE, STAMINA_EXHAUSTION_PENALTY, HUNGER_MAX, HUNGER_HEALTH_PENALTY,
     HEALTH_LOSS_PER_TICK, HEALTH_LOSS_SPEED_FACTOR, HEALTH_LOST_ON_HIT,
     GENE_MIN_MAX, CARNIVORE_GENE_MIN_MAX, DEFAULT_HERBIVORE_GENES, DEFAULT_CARNIVORE_GENES,
@@ -186,25 +186,25 @@ class Creature:
         self.size = self.genetic_size * growth_factor * (1 + fat_ratio * FAT_SIZE_FACTOR)
         self.max_speed = self.effective_max_speed * growth_factor
 
+        effort = 0.0
         if self.eating_ticks > 0:
             new_speed = 0.0
         else:
+            effort = max(0.0, outputs[1])
             self.angle = (self.angle + outputs[0] * CREATURE_ROTATION_SPEED) % (2 * math.pi)
             speed_multiplier = max(0.1, self.health / self.max_health)
             is_exhausted = self.stamina <= 0
             speed_penalty = STAMINA_EXHAUSTION_PENALTY if is_exhausted else 1.0
             weight_penalty = 1 / (1 + fat_ratio * FAT_SPEED_PENALTY)
             water_penalty = WATER_SPEED_FACTOR if self.in_water else 1.0
-            new_speed = (max(0, outputs[1]) * self.max_speed * speed_multiplier * speed_penalty
+            new_speed = (effort * self.max_speed * speed_multiplier * speed_penalty
                          * weight_penalty * water_penalty)
 
         if self.in_water:
             self.stamina -= (CARNIVORE_SWIM_STAMINA_COST if self.is_carnivore
                              else HERBIVORE_SWIM_STAMINA_COST)
-        elif self.max_speed > 0 and new_speed / self.max_speed > STAMINA_DEPLETION_SPEED_THRESHOLD:
-            speed_ratio = new_speed / self.max_speed
-            depletion_amount = (speed_ratio ** SPEED_STAMINA_EXPONENT) * STAMINA_DEPLETION_RATE
-            self.stamina -= depletion_amount
+        elif effort > STAMINA_EFFORT_THRESHOLD:
+            self.stamina -= (effort ** SPEED_STAMINA_EXPONENT) * STAMINA_DEPLETION_RATE
         else:
             self.stamina += STAMINA_REGEN_RATE
         self.stamina = max(0, min(self.stamina, self.max_stamina))
