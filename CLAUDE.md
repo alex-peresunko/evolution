@@ -22,7 +22,7 @@ poetry run ruff check .                          # lint (E, F, I, UP; line-lengt
 poetry run python -m cProfile -s time <script.py>
 ```
 
-**Docker:** `docker compose up` — runs `game_headless.py` with `requirements-headless.txt` (no pygame), exposes metrics on port 8000. See `README.Docker.md`.
+**Containers (Podman, not Docker):** `podman compose up --build` runs `game_headless.py` with `requirements-headless.txt` (no pygame) and exposes metrics on port 8000. See `README.Podman.md`.
 
 ## Architecture
 

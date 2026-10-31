@@ -1,4 +1,4 @@
-"""The headless run loop: game_headless.py, Docker, and game.py's island workers."""
+"""The headless run loop: game_headless.py, the container, and game.py's island workers."""
 import os
 import signal
 import sys
@@ -40,7 +40,7 @@ class HeadlessRunner:
         self.exchange = IslandExchange(self.sim) if worker_id is not None else None
 
     def run(self):
-        # SIGTERM (game.py stopping its workers, `docker stop`) runs the finally-block save too.
+        # SIGTERM (game.py stopping its workers, `podman stop`) runs the finally-block save too.
         signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
         parent_pid = os.getppid()
         sim = self.sim
