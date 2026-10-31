@@ -153,6 +153,15 @@ def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasse
         target_whiskers.append(best)
         inputs.append(0.0 if best is None else 1.0 - best / eye)
     inputs.append(season)
+
+    cc_smell_angle, cc_smell_strength = 0.0, 0.0
+    if self.is_carnivore and carcasses:
+        closest = min(carcasses, key=lambda cc: self.pos.distance_to(cc.pos))
+        dist = self.pos.distance_to(closest.pos)
+        if dist < config.SMELL_DISTANCE:
+            cc_smell_angle = rel_angle(closest) / math.pi
+            cc_smell_strength = 1.0 - dist / config.SMELL_DISTANCE
+    inputs += [cc_smell_angle, cc_smell_strength]
     return inputs, whiskers, target_whiskers, nearest_target_dist, nearest_smell_strength
 
 

@@ -186,6 +186,7 @@ BRAIN_INPUTS = (
     + NUM_MEMORY
     + NUM_WHISKERS  # target whiskers (food / prey along each ray)
     + 1             # season
+    + 2             # carcass smell angle/strength
 )
 BRAIN_OUTPUTS = 3 + NUM_MEMORY  # rotation, speed, signal, memory
 BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]

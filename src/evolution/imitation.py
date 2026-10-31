@@ -4,7 +4,7 @@ import math
 
 import numpy as np
 
-from .config import BRAIN_OUTPUTS, CREATURE_ROTATION_SPEED, NUM_WHISKERS
+from .config import BRAIN_OUTPUTS, CREATURE_ROTATION_SPEED, NUM_MEMORY, NUM_WHISKERS
 
 # Column indices into a perception.perceive_all row; must match its layout.
 TARGET_ANGLE = NUM_WHISKERS
@@ -15,6 +15,8 @@ SIGHT_ANGLE = NUM_WHISKERS + 12
 STAMINA = NUM_WHISKERS + 13
 CARCASS_ANGLE = NUM_WHISKERS + 20
 CARCASS_DIST = NUM_WHISKERS + 21
+CARCASS_SMELL_ANGLE = 2 * NUM_WHISKERS + 24 + NUM_MEMORY
+CARCASS_SMELL_STRENGTH = CARCASS_SMELL_ANGLE + 1
 
 OBSTACLE_NEAR = 0.7      # whisker proximity that overrides steering
 FLEE_SMELL = 0.6         # predator smell strength that makes a herbivore run
@@ -41,6 +43,8 @@ def teacher_actions(X, is_carnivore):
     rel = np.where(carcass, X[:, CARCASS_ANGLE] * half, rel)
     tracking = carn & ~seen & ~carcass & (X[:, SMELL_STRENGTH] > 0)
     rel = np.where(tracking, X[:, SMELL_ANGLE] * math.pi, rel)
+    carrion = carn & ~seen & ~carcass & ~tracking & (X[:, CARCASS_SMELL_STRENGTH] > 0)
+    rel = np.where(carrion, X[:, CARCASS_SMELL_ANGLE] * math.pi, rel)
 
     fleeing = ~carn & (X[:, SMELL_STRENGTH] > FLEE_SMELL)
     rel = np.where(fleeing, _wrap(X[:, SMELL_ANGLE] * math.pi + math.pi), rel)

@@ -143,12 +143,12 @@ def test_winter_stops_food_respawn_above_the_cap(monkeypatch):
     assert len(sim_state["food_items"]) <= math.ceil(winter_cap)
 
 
-def test_season_is_the_last_brain_input():
+def test_season_is_a_brain_input():
     sim_state = _make_sim()
     sim_state["tick"] = config.SEASON_LENGTH_TICKS // 8
     update_world(sim_state)
     for c in sim_state["creatures"] + sim_state["carnivores"]:
-        assert c.brain_inputs[-1] == pytest.approx(sim_state["season"])
+        assert c.brain_inputs[-3] == pytest.approx(sim_state["season"])
 
 
 def test_elite_reinjection_replaces_the_weakest_with_hall_of_fame():

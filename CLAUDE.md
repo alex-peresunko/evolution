@@ -51,7 +51,7 @@ World mechanics, all tuned through `config.py`:
   A creature with default genes pays exactly `HEALTH_LOSS_PER_TICK`, and every other trait has a cost.
 - **Life history:** past its `lifespan` gene, a creature loses an extra `Creature.senescence()` per tick. A pair has a litter of `stochastic_round(mean litter_size)` young, which split `LITTER_ENDOWMENT` of max health between them.
 - **Speciation:** only pairs within `SPECIATION_DISTANCE` (`genetics.genetic_distance`, the RMS of gene differences scaled by `GENE_MIN_MAX` ranges) breed or seek each other. The neutral `color` gene hue-shifts the sprite (`COLOR_BUCKETS`, `COLOR_HUE_RANGE`).
-- **Seasons:** `season(tick)` runs over `SEASON_LENGTH_TICKS` and goes into `sim_state["season"]` (-1 is midwinter, 1 is midsummer). It scales the food cap (`food_cap`, `SEASON_FOOD_AMPLITUDE`) and is the last brain input.
+- **Seasons:** `season(tick)` runs over `SEASON_LENGTH_TICKS` and goes into `sim_state["season"]` (-1 is midwinter, 1 is midsummer). It scales the food cap (`food_cap`, `SEASON_FOOD_AMPLITUDE`) and is a brain input.
 - **Lineage:** a child inherits `lineage` (the founder id) from its first parent and gets `parent_ids` and `descent`. At each score sample, `sample_genes` records the species' mean genes in `sim_state["gene_history"]` and the number of live lineages in `sim_state["lineages"]`.
 - **Signal and memory:** after `batch_forward`, the extra outputs are stored as `c.signal` (heard by kin within `SIGNAL_RADIUS`, with a small health cost) and `c.memory` (fed back as inputs next tick).
 
@@ -88,7 +88,7 @@ Zoom (`sim_state["zoom"]`, mouse wheel): `draw_world` scales positions and sprit
 
 ### Neural network
 
-Topology is `config.BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]` = `[32, 16, 8, 5]`, tanh on all layers. Changing the inputs in `perception.perceive_all` means updating the `BRAIN_INPUTS` formula too. Append new inputs/outputs at the end: `NeuralNetwork.load` copies the overlapping top-left block, so saved brains keep their existing wiring. Inputs, in order:
+Topology is `config.BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]` = `[34, 16, 8, 5]`, tanh on all layers. Changing the inputs in `perception.perceive_all` means updating the `BRAIN_INPUTS` formula too. Append new inputs/outputs at the end: `NeuralNetwork.load` copies the overlapping top-left block, so saved brains keep their existing wiring. Inputs, in order:
 
 ```
 whisker[0..2]                obstacle proximity (1 = touching)
@@ -107,6 +107,8 @@ target_whisker[0..2]               food (herbivore) / prey or carcass (carnivore
                                    WHISKER_TARGET_WIDTH of each whisker ray, up to the night-
                                    shrunk sight, occluded by obstacles (1 = touching, 0 = none)
 season                             -1 = midwinter, 1 = midsummer
+carcass_smell_angle, carcass_smell_strength   carnivore only: nearest carcass within
+                                   SMELL_DISTANCE, omnidirectional, else 0
 ```
 
 Outputs: `[rotation_delta, speed, signal, memory...]`. `_apply_mate_seeking_drive` may override them for adults.

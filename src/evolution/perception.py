@@ -177,7 +177,7 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
                  light=1.0, season=0.0):
     """Brain inputs for `creatures` (any mix of species) as an (N, N_INPUTS) array.
 
-    Carnivores look at and smell `herbivores` and look at `carcasses`; herbivores look at
+    Carnivores look at and smell `herbivores` and `carcasses`; herbivores look at
     `food_items`, look at and smell `carnivores`. Both sense their own species (kin and
     signals). `light` (0 = midnight, 1 = noon) shrinks the vision cones, not whiskers or smell.
     `season` (-1 = midwinter, 1 = midsummer) is passed through as the last input.
@@ -249,10 +249,13 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
             social_cols = _social(_Relative(xy[gi], angle[gi], ids[gi], kin), signals)
             for j, values in enumerate(social_cols):
                 out[gi, social + j] = values
+    tw = social + 8 + NUM_MEMORY
     if len(ci) and carcasses:
         _, _, (cc_angle, cc_dist) = _vision(_Relative(xy[ci], angle[ci], ids[ci], carcasses),
                                             eye[ci], half_angle[ci])
         out[ci, social + 5], out[ci, social + 6] = cc_angle, cc_dist
+        cc_smell = _smell(_Relative(xy[ci], angle[ci], ids[ci], carcasses))
+        out[ci, tw + NUM_WHISKERS + 1], out[ci, tw + NUM_WHISKERS + 2] = cc_smell
     out[:, social + 7] = light
     out[:, social + 8:social + 8 + NUM_MEMORY] = [c.memory for c in creatures]
     for gi, targets in ((ci, list(herbivores) + list(carcasses)), (hi, food_items)):
@@ -260,7 +263,6 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
             target_whisker_dist[gi] = _target_whiskers(xy[gi], angle[gi], eye[gi],
                                                        whisker_angles[gi], _xy(targets),
                                                        whisker_dist[gi])
-    tw = social + 8 + NUM_MEMORY
     out[:, tw:tw + NUM_WHISKERS] = np.where(np.isfinite(target_whisker_dist),
                                             1.0 - target_whisker_dist / eye[:, None], 0.0)
     out[:, tw + NUM_WHISKERS] = season

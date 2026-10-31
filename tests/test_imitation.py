@@ -7,6 +7,8 @@ from evolution import config
 from evolution.imitation import (
     CARCASS_ANGLE,
     CARCASS_DIST,
+    CARCASS_SMELL_ANGLE,
+    CARCASS_SMELL_STRENGTH,
     SIGHT_ANGLE,
     SMELL_ANGLE,
     SMELL_STRENGTH,
@@ -53,6 +55,15 @@ def test_carnivore_follows_smell_then_carcass():
     assert _act(row, carnivore=True)[0] < 0
     row[CARCASS_DIST], row[CARCASS_ANGLE] = 0.5, 0.4
     assert _act(row, carnivore=True)[0] > 0
+
+
+def test_carnivore_follows_carcass_smell_last():
+    row = _row()
+    row[CARCASS_SMELL_STRENGTH], row[CARCASS_SMELL_ANGLE] = 0.5, 0.3
+    assert _act(row, carnivore=True)[0] > 0
+    assert _act(row)[0] == pytest.approx(_act(_row())[0])
+    row[SMELL_STRENGTH], row[SMELL_ANGLE] = 0.5, -0.1
+    assert _act(row, carnivore=True)[0] < 0
 
 
 def test_near_obstacle_overrides_target():
