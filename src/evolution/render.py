@@ -30,9 +30,9 @@ BG_CACHE_MARGIN = 0.25  # share of the view cached around it on each side when z
 NIGHT_COLOR = (8, 12, 42)
 
 HERBIVORE_PALETTE = {
-    "rim": (34, 100, 68), "core": (150, 228, 140), "leg": (28, 78, 54), "spot": (196, 242, 178),
-    "tail": (238, 246, 224), "tail_rim": (168, 198, 158), "ear_in": (238, 158, 170),
-    "eye": (255, 255, 255), "pupil": (15, 15, 20), "nose": (236, 116, 138),
+    "rim": (36, 88, 70), "core": (132, 196, 136), "leg": (28, 70, 56), "spot": (168, 216, 156),
+    "stripe": (58, 120, 92), "crest": (150, 210, 150), "claw": (226, 220, 200),
+    "eye": (255, 255, 255), "pupil": (15, 15, 20), "nose": (24, 52, 42),
 }
 CARNIVORE_PALETTE = {
     "rim": (92, 44, 22), "core": (206, 128, 58), "leg": (70, 34, 18), "stripe": (54, 26, 14),
@@ -102,26 +102,44 @@ def _tinted_palette(palette, bucket):
 # Creature art (facing +x; u = body radius in supersampled pixels)
 # =============================================================================
 def _draw_herbivore(s, cx, cy, u, p, frame):
-    swing = math.sin(frame * math.pi / 2) * 0.16 * u
-    for fx, side, sgn in ((0.45, 1, 1), (0.45, -1, -1), (-0.45, 1, -1), (-0.45, -1, 1)):
-        _ellipse(s, p["leg"], cx + fx * u + sgn * swing, cy + side * 0.72 * u, 0.22 * u, 0.14 * u)
-    _shaded_ellipse(s, p["tail_rim"], p["tail"], cx - 1.0 * u, cy, 0.28 * u, 0.28 * u, steps=4)
-    _shaded_ellipse(s, p["rim"], p["core"], cx - 0.1 * u, cy, 0.95 * u, 0.78 * u, steps=7,
-                    hx=-0.05 * u)
-    for sx, sy, r in ((-0.38, -0.3, 0.12), (-0.08, 0.34, 0.1), (-0.6, 0.12, 0.09), (0.12, -0.14, 0.08)):
-        _ellipse(s, p["spot"], cx + sx * u, cy + sy * u, r * u, r * u)
+    ph = frame * math.pi / 2
+    sway = math.sin(ph + 1.0)
+    n = 18
+    for i in range(n):
+        t = i / (n - 1)
+        r = 0.26 * (1 - t) ** 1.2 + 0.03
+        _ellipse(s, _mix(p["rim"], p["core"], 0.4 * (1 - t)),
+                 cx + (-0.75 - 1.1 * t) * u, cy + sway * 0.3 * t * t * u, r * u, r * u)
+    swing = math.sin(ph) * 0.16 * u
+    for fx, side, sgn in ((0.45, 1, 1), (0.45, -1, -1), (-0.6, 1, -1), (-0.6, -1, 1)):
+        lx, ly = cx + fx * u + sgn * swing, cy + side * 0.5 * u
+        _shaded_ellipse(s, p["leg"], p["core"], lx, ly, 0.21 * u, 0.19 * u, steps=4,
+                        hy=-side * 0.03 * u)
+        for d in (-0.09, 0.0, 0.09):
+            _ellipse(s, p["claw"], lx + 0.19 * u, ly + d * u, 0.04 * u, 0.035 * u)
+    _shaded_ellipse(s, p["rim"], p["core"], cx - 0.12 * u, cy, 1.0 * u, 0.56 * u, steps=12,
+                    hx=0.1 * u)
+    spot = _mix(p["core"], p["spot"], 0.6)
+    for sx, sy, r in ((-0.5, -0.26, 0.08), (-0.15, 0.3, 0.07), (-0.72, 0.14, 0.06),
+                      (0.18, -0.26, 0.06), (0.32, 0.2, 0.05), (-0.32, 0.08, 0.05)):
+        _ellipse(s, spot, cx + sx * u, cy + sy * u, r * u, r * u * 0.8)
+    for i in range(7):
+        _ellipse(s, p["stripe"], cx + (-0.85 + i * 0.25) * u, cy, 0.07 * u, 0.04 * u)
+    neck_sway = math.sin(ph + 2.5) * 0.12
+    n = 16
+    for i in range(n):
+        t = i / (n - 1)
+        r = 0.3 - 0.17 * t ** 0.7
+        _ellipse(s, _mix(p["rim"], p["core"], 0.55 + 0.25 * t),
+                 cx + (0.55 + 1.3 * t) * u, cy + neck_sway * t * t * u, r * u, r * u)
+    hx, hy = cx + 2.02 * u, cy + neck_sway * u
+    _shaded_ellipse(s, p["rim"], p["core"], hx, hy, 0.26 * u, 0.18 * u, steps=5, hx=0.03 * u)
+    _ellipse(s, p["crest"], hx - 0.04 * u, hy, 0.1 * u, 0.07 * u)
     for side in (1, -1):
-        _ellipse(s, p["rim"], cx + 0.32 * u, cy + side * 0.45 * u, 0.42 * u, 0.17 * u, rot=-side * 0.6)
-        _ellipse(s, p["ear_in"], cx + 0.3 * u, cy + side * 0.46 * u, 0.28 * u, 0.08 * u,
-                 rot=-side * 0.6)
-    _shaded_ellipse(s, p["rim"], p["core"], cx + 0.75 * u, cy, 0.55 * u, 0.5 * u, steps=6,
-                    hx=0.05 * u)
-    for side in (1, -1):
-        ey = cy + side * 0.26 * u
-        _ellipse(s, p["eye"], cx + 0.95 * u, ey, 0.15 * u, 0.15 * u)
-        _ellipse(s, p["pupil"], cx + 1.0 * u, ey, 0.09 * u, 0.09 * u)
-        _ellipse(s, p["eye"], cx + 1.03 * u, ey - 0.04 * u, 0.035 * u, 0.035 * u)
-    _ellipse(s, p["nose"], cx + 1.27 * u, cy, 0.08 * u, 0.1 * u)
+        ey = hy + side * 0.13 * u
+        _ellipse(s, p["eye"], hx - 0.02 * u, ey, 0.06 * u, 0.05 * u)
+        _ellipse(s, p["pupil"], hx + 0.0 * u, ey, 0.035 * u, 0.035 * u)
+        _ellipse(s, p["nose"], hx + 0.2 * u, hy + side * 0.05 * u, 0.025 * u, 0.02 * u)
 
 
 def _head_outline(cx, cy, u, k=1.0, dx=0.0):
@@ -407,7 +425,7 @@ class Renderer:
     def _build_creature(carn, sb, hl, frame, cb):
         """Unrotated sprite facing +x, its shadow silhouette, and the x offset of the
         sprite centre from the creature origin."""
-        x0, x1, y_half = (-2.32, 1.92, 0.86) if carn else (-1.32, 1.4, 0.9)
+        x0, x1, y_half = (-2.32, 1.92, 0.86) if carn else (-1.92, 2.32, 0.76)
         w = math.ceil((x1 - x0) * sb) + 2
         h = math.ceil(2 * y_half * sb) + 2
         ox = 1 - x0 * sb
