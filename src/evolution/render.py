@@ -35,8 +35,8 @@ HERBIVORE_PALETTE = {
     "eye": (255, 255, 255), "pupil": (15, 15, 20), "nose": (236, 116, 138),
 }
 CARNIVORE_PALETTE = {
-    "rim": (108, 30, 24), "core": (242, 124, 62), "leg": (84, 25, 20), "stripe": (58, 18, 14),
-    "claw": (236, 226, 210), "snout": (232, 172, 124), "eye": (255, 212, 60),
+    "rim": (92, 44, 22), "core": (206, 128, 58), "leg": (70, 34, 18), "stripe": (54, 26, 14),
+    "claw": (236, 226, 210), "snout": (226, 168, 106), "eye": (255, 212, 60),
     "pupil": (10, 10, 10), "fang": (250, 250, 240), "nose": (30, 10, 10),
 }
 _NO_FADE = {"eye", "pupil", "fang", "claw"}
@@ -124,42 +124,69 @@ def _draw_herbivore(s, cx, cy, u, p, frame):
     _ellipse(s, p["nose"], cx + 1.27 * u, cy, 0.08 * u, 0.1 * u)
 
 
+def _head_outline(cx, cy, u, k=1.0, dx=0.0):
+    """Top-down T-Rex skull outline, shrunk by k toward its centre and shifted by dx (in u)."""
+    half = ((0.84, 0.32), (0.98, 0.43), (1.22, 0.41), (1.5, 0.32), (1.73, 0.23), (1.85, 0.12),
+            (1.88, 0.0))
+    mid = 1.36
+    pts = [(mid + (x - mid) * k + dx, -y * k) for x, y in half]
+    pts += [(x, -y) for x, y in reversed(pts[:-1])]
+    return [(cx + x * u, cy + y * u) for x, y in pts]
+
+
 def _draw_carnivore(s, cx, cy, u, p, frame):
     ph = frame * math.pi / 2
-    swing = math.sin(ph) * 0.2 * u
-    for fx, side, sgn in ((0.5, 1, 1), (0.5, -1, -1), (-0.5, 1, -1), (-0.5, -1, 1)):
-        lx, ly = cx + fx * u + sgn * swing, cy + side * 0.55 * u
-        _ellipse(s, p["leg"], lx, ly, 0.25 * u, 0.11 * u, rot=side * 0.4)
-        _ellipse(s, p["claw"], lx + 0.2 * u, ly + side * 0.09 * u, 0.05 * u, 0.05 * u)
     sway = math.sin(ph + 1.0)
-    n = 10
+    n = 26
     for i in range(n):
         t = i / (n - 1)
-        r = 0.22 * (1 - 0.7 * t)
-        _ellipse(s, p["stripe"] if i >= n - 2 else p["rim"],
-                 cx + (-0.85 - 1.1 * t) * u, cy + sway * 0.35 * t * t * u, r * u, r * u)
-    _shaded_ellipse(s, p["rim"], p["core"], cx - 0.1 * u, cy, 1.05 * u, 0.55 * u, steps=7)
-    for sx in (-0.7, -0.42, -0.14, 0.14):
-        _ellipse(s, p["stripe"], cx + sx * u, cy, 0.055 * u, 0.4 * u * (1 - abs(sx + 0.28) * 0.5))
+        r = 0.38 * (1 - t) ** 1.2 + 0.03
+        _ellipse(s, _mix(p["rim"], p["core"], 0.35 * (1 - t)),
+                 cx + (-0.5 - 1.75 * t) * u, cy + sway * 0.38 * t * t * u, r * u, r * u)
+    swing = math.sin(ph) * 0.24 * u
     for side in (1, -1):
-        pygame.draw.polygon(s, p["rim"], [
-            (cx + 0.78 * u, cy + side * 0.16 * u), (cx + 0.5 * u, cy + side * 0.5 * u),
-            (cx + 0.98 * u, cy + side * 0.32 * u),
-        ])
-    _shaded_ellipse(s, p["rim"], p["core"], cx + 0.95 * u, cy, 0.46 * u, 0.38 * u, steps=5)
-    pygame.draw.polygon(s, p["snout"], [
-        (cx + 1.12 * u, cy - 0.24 * u), (cx + 1.6 * u, cy - 0.09 * u), (cx + 1.66 * u, cy),
-        (cx + 1.6 * u, cy + 0.09 * u), (cx + 1.12 * u, cy + 0.24 * u),
-    ])
+        lx, ly = cx - 0.12 * u + side * swing, cy + side * 0.5 * u
+        fx, fy = lx + 0.34 * u, ly + side * 0.1 * u
+        _ellipse(s, p["leg"], fx, fy, 0.16 * u, 0.11 * u)
+        for a in (-0.55, 0.0, 0.55):
+            _ellipse(s, p["claw"], fx + 0.16 * u * math.cos(a), fy + 0.13 * u * math.sin(a),
+                     0.055 * u, 0.035 * u, rot=a)
+        _shaded_ellipse(s, p["leg"], p["core"], lx, ly, 0.4 * u, 0.22 * u, steps=5,
+                        hx=0.05 * u, hy=-side * 0.04 * u)
+    _shaded_ellipse(s, p["rim"], p["core"], cx - 0.1 * u, cy, 0.88 * u, 0.5 * u, steps=7,
+                    hx=0.08 * u)
+    _shaded_ellipse(s, p["rim"], p["core"], cx + 0.68 * u, cy, 0.4 * u, 0.34 * u, steps=5)
+    for sx, sy, r in ((-0.5, 0.22, 0.07), (-0.2, -0.27, 0.06), (0.15, 0.24, 0.05),
+                      (-0.75, -0.12, 0.05), (0.4, -0.18, 0.045)):
+        _ellipse(s, _mix(p["rim"], p["core"], 0.4), cx + sx * u, cy + sy * u, r * u, r * u)
+    for i in range(9):
+        x = -1.3 + i * 0.2
+        k = 1 - abs(x + 0.4) * 0.35
+        _ellipse(s, _mix(p["stripe"], p["rim"], 0.3), cx + x * u, cy, 0.08 * u * k, 0.05 * u * k)
     for side in (1, -1):
-        pygame.draw.polygon(s, p["fang"], [
-            (cx + 1.36 * u, cy + side * 0.15 * u), (cx + 1.5 * u, cy + side * 0.13 * u),
-            (cx + 1.45 * u, cy + side * 0.24 * u),
-        ])
-        ey = cy + side * 0.2 * u
-        _ellipse(s, p["eye"], cx + 1.08 * u, ey, 0.11 * u, 0.065 * u, rot=side * 0.35)
-        _ellipse(s, p["pupil"], cx + 1.1 * u, ey, 0.025 * u, 0.06 * u, rot=side * 0.35)
-    _ellipse(s, p["nose"], cx + 1.62 * u, cy, 0.06 * u, 0.08 * u)
+        ax, ay = cx + 0.6 * u, cy + side * 0.36 * u
+        _ellipse(s, p["leg"], ax, ay, 0.17 * u, 0.075 * u, rot=side * 0.5)
+        _ellipse(s, p["core"], ax - 0.01 * u, ay - side * 0.01 * u, 0.12 * u, 0.04 * u,
+                 rot=side * 0.5)
+        for d in (-0.04, 0.04):
+            _ellipse(s, p["claw"], ax + 0.15 * u, ay + (side * 0.09 + d) * u, 0.035 * u, 0.028 * u)
+    pygame.draw.polygon(s, p["rim"], _head_outline(cx, cy, u))
+    pygame.draw.polygon(s, _mix(p["rim"], p["core"], 0.6), _head_outline(cx, cy, u, 0.86))
+    pygame.draw.polygon(s, p["core"], _head_outline(cx, cy, u, 0.64, -0.03))
+    _ellipse(s, p["snout"], cx + 1.58 * u, cy, 0.24 * u, 0.15 * u)
+    for side in (1, -1):
+        for x, y in ((1.25, 0.39), (1.38, 0.36), (1.5, 0.32), (1.62, 0.275), (1.74, 0.22)):
+            pygame.draw.polygon(s, p["fang"], [
+                (cx + (x - 0.045) * u, cy + side * (y - 0.03) * u),
+                (cx + (x + 0.045) * u, cy + side * (y - 0.03) * u),
+                (cx + (x + 0.01) * u, cy + side * (y + 0.06) * u),
+            ])
+        ey = cy + side * 0.27 * u
+        _ellipse(s, p["stripe"], cx + 1.1 * u, cy + side * 0.21 * u, 0.16 * u, 0.06 * u,
+                 rot=side * 0.3)
+        _ellipse(s, p["eye"], cx + 1.08 * u, ey, 0.1 * u, 0.06 * u, rot=side * 0.35)
+        _ellipse(s, p["pupil"], cx + 1.1 * u, ey, 0.022 * u, 0.055 * u, rot=side * 0.35)
+        _ellipse(s, p["nose"], cx + 1.79 * u, cy + side * 0.07 * u, 0.035 * u, 0.025 * u)
 
 
 # =============================================================================
@@ -380,7 +407,7 @@ class Renderer:
     def _build_creature(carn, sb, hl, frame, cb):
         """Unrotated sprite facing +x, its shadow silhouette, and the x offset of the
         sprite centre from the creature origin."""
-        x0, x1, y_half = (-2.04, 1.74, 0.8) if carn else (-1.32, 1.4, 0.9)
+        x0, x1, y_half = (-2.32, 1.92, 0.86) if carn else (-1.32, 1.4, 0.9)
         w = math.ceil((x1 - x0) * sb) + 2
         h = math.ceil(2 * y_half * sb) + 2
         ox = 1 - x0 * sb
