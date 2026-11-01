@@ -1,4 +1,5 @@
 """Record the golden trace of the current code (make golden-record)."""
+import contextlib
 import json
 import os
 import platform
@@ -20,12 +21,26 @@ def capture_evolution():
         return [[label, fingerprint(obs)] for label, obs in scenarios.evolution_run(workdir)]
 
 
+@contextlib.contextmanager
+def _scratch_cwd():
+    """The scenarios autosave brains into ./saved_brains; keep them out of the real one."""
+    cwd = os.getcwd()
+    with tempfile.TemporaryDirectory() as workdir:
+        os.chdir(workdir)
+        try:
+            yield
+        finally:
+            os.chdir(cwd)
+
+
 def capture_imitation():
-    return fingerprint(scenarios.imitation_run())
+    with _scratch_cwd():
+        return fingerprint(scenarios.imitation_run())
 
 
 def capture_render():
-    return [[label, fingerprint(obs)] for label, obs in scenarios.render_run()]
+    with _scratch_cwd():
+        return [[label, fingerprint(obs)] for label, obs in scenarios.render_run()]
 
 
 def main():
