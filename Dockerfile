@@ -1,25 +1,13 @@
 # syntax=docker/dockerfile:1
 
-# Comments are provided throughout this file to help you get started.
-# If you need more help, visit the Dockerfile reference guide at
-# https://docs.docker.com/go/dockerfile-reference/
-
-# Want to help us make this template better? Share your feedback here: https://forms.gle/ybq9Krt8jtBL3iCk7
-
 ARG PYTHON_VERSION=3.12.3
 FROM python:${PYTHON_VERSION}-slim as base
 
-# Prevents Python from writing pyc files.
 ENV PYTHONDONTWRITEBYTECODE=1
-
-# Keeps Python from buffering stdout and stderr to avoid situations where
-# the application crashes without emitting any logs due to buffering.
 ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Create a non-privileged user that the app will run under.
-# See https://docs.docker.com/go/dockerfile-user-best-practices/
 ARG UID=10001
 RUN adduser \
     --disabled-password \
@@ -34,19 +22,14 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     --mount=type=bind,source=requirements-headless.txt,target=requirements-headless.txt \
     python -m pip install -r requirements-headless.txt
 
-# Copy the source code into the container.
 COPY . .
 
-# Install the evolution package (no-deps: headless deps already installed above).
-# As root: appuser has no home for pip to write to. The app saves brains into saved_brains/.
+# --no-deps: the headless deps are installed above. As root: appuser has no home for pip.
 RUN pip install -e . --no-deps --quiet && chown -R appuser saved_brains
 
-# Switch to the non-privileged user to run the application.
 USER appuser
 
-# Expose the port that the application listens on.
 EXPOSE 8000
 
-# Run the headless simulation (no display required in container). Exec form, so python is
-# PID 1 and gets SIGTERM on stop: it saves the Hall of Fame before exiting.
+# Exec form, so python is PID 1 and gets SIGTERM on stop: it saves the Hall of Fame first.
 CMD ["python", "game_headless.py"]
