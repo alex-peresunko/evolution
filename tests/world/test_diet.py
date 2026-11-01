@@ -84,3 +84,92 @@ def test_kill_gives_earlier_biters_an_assist():
     assert prey.health <= 0
     assert first.score == pytest.approx(score + config.PACK_ASSIST_SCORE)
     assert second.score == pytest.approx(config.BITE_SCORE + 1)
+
+
+def _charge(herb, carnivores, herbivores=(), tick=1, speed=config.TRAMPLE_REF_SPEED):
+    """herb's feed at `speed` among the given creatures; returns the world."""
+    world = World(WORLD_BOUNDS, {HERBIVORE: [herb, *herbivores], CARNIVORE: list(carnivores)}, [])
+    world.tick = tick
+    world.reindex()
+    herb.current_speed = speed
+    HERBIVORE.diet.feed(herb, world)
+    return world
+
+
+LONE_TRAMPLE = config.TRAMPLE_DAMAGE * 2   # size 16 vs 8 at the reference speed
+
+
+def test_charge_tramples_and_stuns_the_predator():
+    herb, carn = _adult(HERBIVORE, 500, 400, size=16), _adult(CARNIVORE, 520, 400)
+    carn.eating_ticks = 10
+    world = _charge(herb, [carn])
+    assert config.CARNIVORE_HEALTH - carn.health == pytest.approx(LONE_TRAMPLE)
+    assert carn.stunned_ticks == config.TRAMPLE_STUN_TICKS and carn.eating_ticks == 0
+    assert carn.hurt == 1.0
+    assert herb.score == config.TRAMPLE_SCORE and herb.last_trample_tick == 1
+    assert world.tally.tramples == 1 and world.tally.mob_tramples == 0
+
+
+@pytest.mark.parametrize("setup", ["slow", "behind", "cooldown", "juvenile"])
+def test_no_trample(setup):
+    herb, carn = _adult(HERBIVORE, 500, 400, size=16), _adult(CARNIVORE, 520, 400)
+    speed = config.TRAMPLE_REF_SPEED
+    if setup == "slow":
+        speed = config.TRAMPLE_MIN_SPEED - 0.1
+    elif setup == "behind":
+        herb.angle = math.pi
+    elif setup == "cooldown":
+        herb.last_trample_tick = 1 - config.TRAMPLE_COOLDOWN_TICKS + 1
+    else:
+        herb.is_adult = False
+    world = _charge(herb, [carn], speed=speed)
+    assert carn.health == config.CARNIVORE_HEALTH and world.tally.tramples == 0
+
+
+def test_faster_charge_hits_harder_up_to_the_cap():
+    carn = _adult(CARNIVORE, 520, 400)
+    _charge(_adult(HERBIVORE, 500, 400, size=16), [carn], speed=100)
+    assert config.CARNIVORE_HEALTH - carn.health == pytest.approx(
+        LONE_TRAMPLE * config.TRAMPLE_MAX_SPEED_RATIO)
+
+
+def test_herd_gives_courage():
+    herb, carn = _adult(HERBIVORE, 500, 400, size=16), _adult(CARNIVORE, 520, 400)
+    _charge(herb, [carn], herbivores=_herd(config.CONFUSION_HERD_NORM, x=470, y=380))
+    assert config.CARNIVORE_HEALTH - carn.health == pytest.approx(
+        LONE_TRAMPLE * (1 + config.HERD_COURAGE_MAX))
+
+
+@pytest.mark.parametrize("gap, bonus", [(10, True), (config.MOB_WINDOW_TICKS + 1, False)])
+def test_mobbing_tramples_harder(gap, bonus):
+    carn = _adult(CARNIVORE, 520, 400)
+    first = _adult(HERBIVORE, 500, 400, size=16)
+    second = _adult(HERBIVORE, 520, 420, size=16, angle=-math.pi / 2)
+    _charge(first, [carn], tick=1)
+    before = carn.health
+    world = _charge(second, [carn], tick=1 + gap)
+    assert before - carn.health == pytest.approx(
+        LONE_TRAMPLE * (config.MOB_BONUS if bonus else 1))
+    assert world.tally.mob_tramples == int(bonus)
+
+
+def test_trample_kill_credits_the_mob():
+    carn = _adult(CARNIVORE, 520, 400)
+    first = _adult(HERBIVORE, 500, 400, size=16)
+    second = _adult(HERBIVORE, 520, 420, size=16, angle=-math.pi / 2)
+    _charge(first, [carn], tick=1)
+    carn.health = 1
+    _charge(second, [carn], tick=5)
+    assert carn.death_cause(5) == "trampled"
+    assert second.score == config.TRAMPLE_SCORE + 1
+    assert first.score == config.TRAMPLE_SCORE + config.MOB_ASSIST_SCORE
+
+
+def test_stunned_carnivore_cannot_bite(monkeypatch):
+    monkeypatch.setattr(diet, "CONFUSION_MAX_MISS", 0.0)
+    carn, prey = _adult(CARNIVORE, 500, 400), _adult(HERBIVORE, 505, 400)
+    carn.stunned_ticks = 2
+    _bite(carn, [prey], tick=1)
+    assert prey.health == config.HERBIVORE_HEALTH and carn.stunned_ticks == 1
+    _bite(carn, [prey], tick=2)
+    assert prey.health < config.HERBIVORE_HEALTH

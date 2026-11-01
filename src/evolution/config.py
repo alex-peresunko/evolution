@@ -175,6 +175,25 @@ CONFUSION_MAX_MISS = 0.6
 PACK_WINDOW_TICKS = 60
 PACK_BITE_BONUS = 1.3
 PACK_ASSIST_SCORE = 0.5
+# Trampling: an adult herbivore running head-on into a carnivore (within TRAMPLE_ANGLE, at
+# TRAMPLE_MIN_SPEED or more) does TRAMPLE_DAMAGE x clamp(size ratio, 1, TRAMPLE_MAX_SIZE_RATIO)
+# x min(TRAMPLE_MAX_SPEED_RATIO, speed / TRAMPLE_REF_SPEED) x herd courage x mob bonus, and
+# stuns it (no bites) for TRAMPLE_STUN_TICKS.
+TRAMPLE_DAMAGE = 600
+TRAMPLE_MIN_SPEED = 3.0         # px/tick
+TRAMPLE_REF_SPEED = 5.0
+TRAMPLE_MAX_SPEED_RATIO = 1.5
+TRAMPLE_MAX_SIZE_RATIO = 3.0
+TRAMPLE_ANGLE = math.radians(60)
+TRAMPLE_COOLDOWN_TICKS = 30
+TRAMPLE_STUN_TICKS = 20
+TRAMPLE_SCORE = 0.25            # per trample; a kill adds 1
+HERD_COURAGE_MAX = 0.5          # x(1 + this * min(1, herd / CONFUSION_HERD_NORM)), herd as for confusion
+# Mobbing: a trample on a carnivore another herbivore trampled within MOB_WINDOW_TICKS does
+# MOB_BONUS x damage, and a kill gives those other tramplers MOB_ASSIST_SCORE.
+MOB_WINDOW_TICKS = 60
+MOB_BONUS = 1.3
+MOB_ASSIST_SCORE = 0.5
 
 # --- Carcasses ---
 CARCASS_MEAT_PER_SIZE = 120

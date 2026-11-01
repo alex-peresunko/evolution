@@ -80,6 +80,7 @@ def test_death_causes():
     lifespan = HERBIVORE.default_genes["lifespan"]
     assert _dying(HERBIVORE, last_hit_tick=7, hunger=10_000).death_cause(7) == "bitten"
     assert _dying(CARNIVORE, last_hit_tick=7).death_cause(7) == "retaliation"
+    assert _dying(CARNIVORE, last_hit_tick=7, last_trampled_tick=7).death_cause(7) == "trampled"
     assert _dying(HERBIVORE, last_impact_tick=7, hunger=10_000).death_cause(7) == "impact"
     assert _dying(HERBIVORE, last_hit_tick=6, hunger=10_000).death_cause(7) == "starved"
     assert _dying(HERBIVORE, age=lifespan + 1).death_cause(7) == "old_age"
@@ -101,9 +102,12 @@ def test_group_hunting_metrics_follow_the_tally(sim, tmp_path):
     metrics.watch(sim, HallOfFameAutosaver(save_dir=tmp_path))
     for _ in range(50):
         sim.step()
-    sim.world.tally.bites_confused, sim.world.tally.pack_bites = 3, 2
+    tally = sim.world.tally
+    tally.bites_confused, tally.pack_bites, tally.tramples, tally.mob_tramples = 3, 2, 5, 4
     s = _samples(metrics)
     assert s[("evolution_bites_confused_total", ())] == 3
     assert s[("evolution_pack_bites_total", ())] == 2
+    assert s[("evolution_tramples_total", ())] == 5
+    assert s[("evolution_mob_tramples_total", ())] == 4
     for species in ALL_SPECIES:
         assert 0 <= s[("evolution_herd_density", (("species", species.name),))] <= 1

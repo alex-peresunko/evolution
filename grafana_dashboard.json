@@ -1156,7 +1156,7 @@
     {
       "type": "timeseries",
       "title": "Herbivore deaths by cause",
-      "description": "Deaths per minute, stacked by likely cause. bitten: died in the tick a carnivore bit it. retaliation: a carnivore killed by large prey fighting back. impact: a hard collision with another body. starved: hunger past HUNGER_MAX. old_age: older than its lifespan gene. attrition: everything else (upkeep, running, signalling, hitting walls and rocks). A shift from starved to old_age means the species learned to eat.",
+      "description": "Deaths per minute, stacked by likely cause. bitten: died in the tick a carnivore bit it. retaliation: a carnivore killed by large prey fighting back. trampled: a carnivore killed by a charging herbivore. impact: a hard collision with another body. starved: hunger past HUNGER_MAX. old_age: older than its lifespan gene. attrition: everything else (upkeep, running, signalling, hitting walls and rocks). A shift from starved to old_age means the species learned to eat.",
       "datasource": {
         "type": "prometheus",
         "uid": "fev2gbax7os8we"
@@ -1212,6 +1212,21 @@
                 "value": {
                   "mode": "fixed",
                   "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*trampled.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
                 }
               }
             ]
@@ -1291,7 +1306,7 @@
     {
       "type": "timeseries",
       "title": "Carnivore deaths by cause",
-      "description": "Deaths per minute, stacked by likely cause. bitten: died in the tick a carnivore bit it. retaliation: a carnivore killed by large prey fighting back. impact: a hard collision with another body. starved: hunger past HUNGER_MAX. old_age: older than its lifespan gene. attrition: everything else (upkeep, running, signalling, hitting walls and rocks). A shift from starved to old_age means the species learned to eat.",
+      "description": "Deaths per minute, stacked by likely cause. bitten: died in the tick a carnivore bit it. retaliation: a carnivore killed by large prey fighting back. trampled: a carnivore killed by a charging herbivore. impact: a hard collision with another body. starved: hunger past HUNGER_MAX. old_age: older than its lifespan gene. attrition: everything else (upkeep, running, signalling, hitting walls and rocks). A shift from starved to old_age means the species learned to eat.",
       "datasource": {
         "type": "prometheus",
         "uid": "fev2gbax7os8we"
@@ -1347,6 +1362,21 @@
                 "value": {
                   "mode": "fixed",
                   "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*trampled.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
                 }
               }
             ]
@@ -2206,8 +2236,8 @@
     },
     {
       "type": "timeseries",
-      "title": "Bites",
-      "description": "Carnivore bites that landed, per minute.",
+      "title": "Bites and tramples",
+      "description": "Carnivore bites that landed, and herbivores trampling a carnivore, per minute.",
       "datasource": {
         "type": "prometheus",
         "uid": "fev2gbax7os8we"
@@ -2251,6 +2281,21 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*tramples.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
           }
         ]
       },
@@ -2275,6 +2320,16 @@
           "expr": "rate(evolution_bites_total{job=\"evolution\"}[2m]) * 60",
           "legendFormat": "bites / min",
           "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fev2gbax7os8we"
+          },
+          "expr": "rate(evolution_tramples_total{job=\"evolution\"}[2m]) * 60",
+          "legendFormat": "tramples / min",
+          "range": true
         }
       ],
       "id": 26
@@ -2282,7 +2337,7 @@
     {
       "type": "timeseries",
       "title": "Group hunting",
-      "description": "Share of attempted bites that a herd around the prey made miss (confusion), and share of landed bites on prey another carnivore bit recently (pack bites, which do extra damage). Rising shares mean herds and packs are forming.",
+      "description": "Share of attempted bites that a herd around the prey made miss (confusion), and share of landed bites on prey another carnivore bit recently (pack bites, which do extra damage), and share of tramples on a carnivore another herbivore trampled recently (mob tramples, extra damage). Rising shares mean herds and packs are forming.",
       "datasource": {
         "type": "prometheus",
         "uid": "fev2gbax7os8we"
@@ -2341,6 +2396,21 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*mob tramples.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
           }
         ]
       },
@@ -2374,6 +2444,16 @@
           },
           "expr": "sum(rate(evolution_pack_bites_total{job=\"evolution\"}[5m])) / sum(rate(evolution_bites_total{job=\"evolution\"}[5m]))",
           "legendFormat": "pack bites",
+          "range": true
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fev2gbax7os8we"
+          },
+          "expr": "sum(rate(evolution_mob_tramples_total{job=\"evolution\"}[5m])) / sum(rate(evolution_tramples_total{job=\"evolution\"}[5m]))",
+          "legendFormat": "mob tramples",
           "range": true
         }
       ],

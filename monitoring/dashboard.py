@@ -11,7 +11,7 @@ DATASOURCE = {"type": "prometheus", "uid": "fev2gbax7os8we"}
 JOB = 'job="evolution"'
 
 SPECIES_COLORS = {"herbivore": "green", "carnivore": "red"}
-CAUSE_COLORS = {"bitten": "red", "retaliation": "orange", "starved": "yellow",
+CAUSE_COLORS = {"bitten": "red", "retaliation": "orange", "trampled": "green", "starved": "yellow",
                 "old_age": "blue", "attrition": "purple"}
 
 
@@ -143,7 +143,8 @@ ROWS = [
         "Life and death",
         *[timeseries(f"{s.title()} deaths by cause", "Deaths per minute, stacked by likely "
                      "cause. bitten: died in the tick a carnivore bit it. retaliation: a "
-                     "carnivore killed by large prey fighting back. impact: a hard collision "
+                     "carnivore killed by large prey fighting back. trampled: a carnivore killed by a "
+                     "charging herbivore. impact: a hard collision "
                      "with another body. starved: hunger past "
                      "HUNGER_MAX. old_age: older than its lifespan gene. attrition: everything "
                      "else (upkeep, running, signalling, hitting walls and rocks). A shift from "
@@ -197,19 +198,25 @@ ROWS = [
                    q(f"sum(rate({m('deaths_total', species='herbivore', cause='bitten')}[5m])) "
                      f"/ sum(rate({m('bites_total')}[5m]))", "kills per bite"),
                    colors={"kills": "red"}, unit="percentunit", min_=0, w=6),
-        timeseries("Bites", "Carnivore bites that landed, per minute.",
-                   q(per_minute(m("bites_total")), "bites / min"), colors={"bites": "red"},
-                   unit="short", min_=0, w=6),
+        timeseries("Bites and tramples", "Carnivore bites that landed, and herbivores "
+                   "trampling a carnivore, per minute.",
+                   q(per_minute(m("bites_total")), "bites / min"),
+                   q(per_minute(m("tramples_total")), "tramples / min"),
+                   colors={"bites": "red", "tramples": "green"}, unit="short", min_=0, w=6),
         timeseries("Group hunting", "Share of attempted bites that a herd around the prey made "
                    "miss (confusion), and share of landed bites on prey another carnivore bit "
-                   "recently (pack bites, which do extra damage). Rising shares mean herds and "
-                   "packs are forming.",
+                   "recently (pack bites, which do extra damage), and share of tramples on a "
+                   "carnivore another herbivore trampled recently (mob tramples, extra damage). "
+                   "Rising shares mean herds and packs are forming.",
                    q(f"sum(rate({m('bites_confused_total')}[5m])) / (sum(rate("
                      f"{m('bites_confused_total')}[5m])) + sum(rate({m('bites_total')}[5m])))",
                      "confused"),
                    q(f"sum(rate({m('pack_bites_total')}[5m])) / sum(rate({m('bites_total')}[5m]))",
                      "pack bites"),
-                   colors={"confused": "green", "pack bites": "red"}, unit="percentunit",
+                   q(f"sum(rate({m('mob_tramples_total')}[5m])) / "
+                     f"sum(rate({m('tramples_total')}[5m]))", "mob tramples"),
+                   colors={"confused": "green", "pack bites": "red", "mob tramples": "blue"},
+                   unit="percentunit",
                    min_=0, w=6),
         timeseries("Herd density", "Mean kin_density brain input per species: 0 when no kin "
                    "is near, 1 in a dense group. Herds and packs push it up.",

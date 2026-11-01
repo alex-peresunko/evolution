@@ -16,11 +16,24 @@ from ..config import (
     CONTACT_REACH,
     FOOD_RADIUS,
     GENE_MIN_MAX,
+    HERD_COURAGE_MAX,
+    MOB_ASSIST_SCORE,
+    MOB_BONUS,
+    MOB_WINDOW_TICKS,
     PACK_ASSIST_SCORE,
     PACK_BITE_BONUS,
     PACK_WINDOW_TICKS,
     RETALIATION_DAMAGE,
     SCAVENGE_SCORE_FACTOR,
+    TRAMPLE_ANGLE,
+    TRAMPLE_COOLDOWN_TICKS,
+    TRAMPLE_DAMAGE,
+    TRAMPLE_MAX_SIZE_RATIO,
+    TRAMPLE_MAX_SPEED_RATIO,
+    TRAMPLE_MIN_SPEED,
+    TRAMPLE_REF_SPEED,
+    TRAMPLE_SCORE,
+    TRAMPLE_STUN_TICKS,
 )
 
 _MAX_SIZE = GENE_MIN_MAX["size"][1]
@@ -31,8 +44,33 @@ def _reach(c):
     return c.size + _MAX_SIZE + CONTACT_REACH
 
 
+def _touching(c, other):
+    return c.pos.distance_to(other.pos) < c.size + other.size + CONTACT_REACH
+
+
+def _in_front(c, other, arc):
+    """Whether other's centre lies within arc (radians, centred on c's heading)."""
+    vec = other.pos - c.pos
+    facing = (math.atan2(vec.y, vec.x) - c.angle + math.pi) % (2 * math.pi) - math.pi
+    return abs(facing) <= arc / 2
+
+
+def _herd_size(c, world):
+    """Other live creatures of c's species within CONFUSION_RADIUS."""
+    return sum(1 for other in world.index.of(c.species).query(c.pos, CONFUSION_RADIUS)
+               if other is not c and other.health > 0
+               and c.pos.distance_to(other.pos) < CONFUSION_RADIUS)
+
+
+def _prune(recent, tick, window):
+    for attacker, t in list(recent.items()):
+        if tick - t > window:
+            del recent[attacker]
+
+
 class GrazingDiet:
-    """Eats the first food item it touches, then digests it over the species' eat_ticks."""
+    """Eats the first food item it touches, then digests it over the species' eat_ticks.
+    Charging head-on into a predator tramples it."""
 
     tracks_by_smell = False
 
@@ -40,6 +78,10 @@ class GrazingDiet:
         if c.eating_ticks > 0:
             c.digest()
             return
+        if (c.is_adult and c.current_speed >= TRAMPLE_MIN_SPEED
+                and (c.last_trample_tick is None
+                     or world.tick - c.last_trample_tick >= TRAMPLE_COOLDOWN_TICKS)):
+            self._trample(c, world, world.tick)
         for food in world.index.food.query(c.pos, _reach(c)):
             if food.consumed:
                 continue
@@ -55,6 +97,44 @@ class GrazingDiet:
                 c.score += 1
                 return
 
+    @staticmethod
+    def _trample(c, world, tick):
+        """Trample the first live predator in contact and in front; returns whether one was hit."""
+        for species in world.populations:
+            if not species.is_predator:
+                continue
+            for foe in world.index.of(species).query(c.pos, _reach(c)):
+                if (foe.health <= 0 or not _touching(c, foe)
+                        or not _in_front(c, foe, TRAMPLE_ANGLE)):
+                    continue
+                size_ratio = c.size / foe.size if foe.size > 0 else TRAMPLE_MAX_SIZE_RATIO
+                damage = (TRAMPLE_DAMAGE
+                          * min(TRAMPLE_MAX_SIZE_RATIO, max(1.0, size_ratio))
+                          * min(TRAMPLE_MAX_SPEED_RATIO, c.current_speed / TRAMPLE_REF_SPEED)
+                          * (1 + HERD_COURAGE_MAX * min(1.0, _herd_size(c, world)
+                                                         / CONFUSION_HERD_NORM)))
+                tramplers = foe.recent_tramplers
+                _prune(tramplers, tick, MOB_WINDOW_TICKS)
+                if any(other is not c for other in tramplers):
+                    damage *= MOB_BONUS
+                    world.tally.mob_tramples += 1
+                tramplers[c] = tick
+                world.tally.tramples += 1
+                c.last_trample_tick = tick
+                foe.health -= damage
+                foe.hurt = 1.0
+                foe.last_hit_tick = foe.last_trampled_tick = tick
+                foe.stunned_ticks = TRAMPLE_STUN_TICKS
+                foe.stop_eating()
+                c.score += TRAMPLE_SCORE
+                if foe.health <= 0:
+                    c.score += 1
+                    for other in tramplers:
+                        if other is not c and other.health > 0:
+                            other.score += MOB_ASSIST_SCORE
+                return True
+        return False
+
 
 BITTEN, CONFUSED = "bitten", "confused"
 
@@ -63,9 +143,7 @@ def _confused(prey, world):
     """Whether the herd around prey makes the bite miss."""
     if CONFUSION_MAX_MISS <= 0:
         return False
-    herd = sum(1 for other in world.index.of(prey.species).query(prey.pos, CONFUSION_RADIUS)
-               if other is not prey and other.health > 0
-               and prey.pos.distance_to(other.pos) < CONFUSION_RADIUS)
+    herd = _herd_size(prey, world)
     if herd == 0:
         return False
     return random.random() < CONFUSION_MAX_MISS * min(1.0, herd / CONFUSION_HERD_NORM)
@@ -74,8 +152,7 @@ def _confused(prey, world):
 def _attackers(c, prey, world):
     """Carnivores of c's species in contact with prey, c included."""
     others = sum(1 for other in world.index.of(c.species).query(prey.pos, _reach(prey))
-                 if other is not c and other.health > 0
-                 and prey.pos.distance_to(other.pos) < other.size + prey.size + CONTACT_REACH)
+                 if other is not c and other.health > 0 and _touching(prey, other))
     return 1 + others
 
 
@@ -93,7 +170,8 @@ class PredatorDiet:
         elif c.respawn_immunity_ticks == 0:
             tick = world.tick
             outcome = None
-            if c.last_bite_tick is None or tick - c.last_bite_tick >= BITE_COOLDOWN_TICKS:
+            if c.stunned_ticks == 0 and (c.last_bite_tick is None
+                                         or tick - c.last_bite_tick >= BITE_COOLDOWN_TICKS):
                 outcome = self._bite(c, world, tick)
             if outcome == BITTEN:
                 world.tally.bites += 1
@@ -106,20 +184,14 @@ class PredatorDiet:
         """Bite the first live prey in contact and in front. Returns BITTEN, CONFUSED (the herd
         around the prey made the bite miss; the cooldown is still spent) or None."""
         for prey in world.index.of(self.prey).query(c.pos, _reach(c)):
-            if (prey.health <= 0
-                    or c.pos.distance_to(prey.pos) >= c.size + prey.size + CONTACT_REACH):
-                continue
-            vec = prey.pos - c.pos
-            facing = (math.atan2(vec.y, vec.x) - c.angle + math.pi) % (2 * math.pi) - math.pi
-            if abs(facing) > CARNIVORE_BITE_ANGLE / 2:
+            if (prey.health <= 0 or not _touching(c, prey)
+                    or not _in_front(c, prey, CARNIVORE_BITE_ANGLE)):
                 continue
             c.last_bite_tick = tick
             if _confused(prey, world):
                 return CONFUSED
             biters = prey.recent_biters
-            for biter, t in list(biters.items()):
-                if tick - t > PACK_WINDOW_TICKS:
-                    del biters[biter]
+            _prune(biters, tick, PACK_WINDOW_TICKS)
             ratio = c.size / prey.size if prey.size > 0 else 2.0
             damage = BITE_DAMAGE * min(2.0, max(0.5, ratio))
             if any(biter is not c for biter in biters):

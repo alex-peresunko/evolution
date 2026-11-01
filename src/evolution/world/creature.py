@@ -43,7 +43,7 @@ from ..genetics import clamp_genes
 from .geometry import HEADLESS
 
 # attrition: upkeep, effort, signalling and wall or rock hits, with no other cause in effect.
-DEATH_CAUSES = ("bitten", "retaliation", "impact", "starved", "old_age", "attrition")
+DEATH_CAUSES = ("bitten", "retaliation", "trampled", "impact", "starved", "old_age", "attrition")
 
 
 class Creature:
@@ -77,6 +77,10 @@ class Creature:
         self.knock = geometry.vec2(0, 0)    # knockback velocity from collisions, px/tick
         self.hurt = 0.0                     # 1 when bitten or hit back, fading to 0
         self.recent_biters = {}             # prey: carnivore -> tick of its last bite
+        self.last_trample_tick: int | None = None
+        self.last_trampled_tick: int | None = None
+        self.recent_tramplers = {}          # predator: herbivore -> tick of its last trample
+        self.stunned_ticks = 0              # > 0 after being trampled: no bites
         self.eating_ticks = 0               # > 0 while standing still to eat
         self.meal_health = 0.0              # grazer: health still to absorb from the meal
         self.meal_carcass = None            # predator: carcass being eaten
@@ -133,6 +137,8 @@ class Creature:
 
     def death_cause(self, tick):
         """The most likely killer of a creature that died during `tick`, one of DEATH_CAUSES."""
+        if self.last_trampled_tick == tick:
+            return "trampled"
         if self.last_hit_tick == tick:
             return "retaliation" if self.species.is_predator else "bitten"
         if self.last_impact_tick == tick:
@@ -173,6 +179,7 @@ class Creature:
     def act(self, outputs, world):
         """Live one tick on the brain's `outputs`. The steps' order is part of the rules."""
         self.hurt = max(0.0, self.hurt - 1 / HURT_FADE_TICKS)
+        self.stunned_ticks = max(0, self.stunned_ticks - 1)
         growth_factor = self._grow(world.lakes)
         if self.eating_ticks > 0 and outputs[OUT.stop_eating] > MEAL_BREAK_THRESHOLD:
             self.stop_eating()

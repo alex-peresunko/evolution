@@ -84,7 +84,11 @@ class GameMetrics:
                 ("counter", "bites_confused", "Bites missed because of the herd around the prey",
                  tally.bites_confused),
                 ("counter", "pack_bites", "Bites on prey another carnivore bit recently",
-                 tally.pack_bites)):
+                 tally.pack_bites),
+                ("counter", "tramples", "Herbivores trampling a carnivore", tally.tramples),
+                ("counter", "mob_tramples",
+                 "Tramples on a carnivore another herbivore trampled recently",
+                 tally.mob_tramples)):
             family = _family(kind, name, doc)
             family.add_metric([], value)
             yield family
