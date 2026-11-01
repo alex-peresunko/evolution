@@ -48,6 +48,16 @@ def test_food_does_not_spawn_in_lakes():
         assert not world.lakes[0].contains(food.pos.x, food.pos.y)
 
 
+def test_food_does_not_spawn_on_obstacles():
+    world = _empty_world()
+    world.food_patches = []
+    rock = Obstacle(0, 0, WORLD_BOUNDS[0] / 4, WORLD_BOUNDS[1])
+    world.obstacles = [rock]
+    for _ in range(200):
+        food = world.spawn_food()
+        assert food.pos.x >= rock.rect.right + config.FOOD_RADIUS
+
+
 def test_food_patches_bounce_off_world_edges():
     world = _empty_world()
     world.food_patches = [FoodPatch(WORLD_BOUNDS[0] - 0.1, 300.0, 0.0)]

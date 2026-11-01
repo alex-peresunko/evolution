@@ -13,7 +13,6 @@ from ..sim.populations import founders
 from ..sim.records import Record
 from ..sim.simulation import Simulation
 from ..species import ALL_SPECIES
-from ..world.food import Food
 from ..world.geometry import HEADLESS
 from ..world.world import World
 from ..world.worldgen import generate_lakes, generate_obstacles
@@ -57,10 +56,11 @@ def start_populations(source, world_bounds=WORLD_BOUNDS, *, geometry=HEADLESS):
 
 
 def build_world(populations, world_bounds=WORLD_BOUNDS, *, geometry=HEADLESS):
-    food = [Food(world_bounds, geometry=geometry) for _ in range(NUM_FOOD)]
     obstacles = generate_obstacles(world_bounds, geometry)
-    return World(world_bounds, populations, food, obstacles,
-                 generate_lakes(world_bounds, obstacles), geometry=geometry)
+    world = World(world_bounds, populations, [], obstacles,
+                  generate_lakes(world_bounds, obstacles), geometry=geometry)
+    world.food = [world.spawn_food(near_patches=False) for _ in range(NUM_FOOD)]
+    return world
 
 
 def restore_progress(sim, species, progenitor, source=SAVE_DIR):

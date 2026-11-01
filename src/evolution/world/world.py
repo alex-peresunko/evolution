@@ -14,6 +14,7 @@ from .geometry import HEADLESS
 from .perception import perceive_all
 from .spatial import SpatialIndex
 from .tally import WorldTally
+from .terrain import circle_hits_rect
 
 
 class World:
@@ -70,19 +71,23 @@ class World:
         for patch in self.food_patches:
             patch.drift(self.bounds)
 
-    def spawn_food(self, attempts=10):
-        """New food near a random patch (FOOD_PATCH_SHARE of the time) or anywhere, on dry land
-        unless `attempts` placements all land in a lake."""
+    def spawn_food(self, attempts=10, near_patches=True):
+        """New food near a random patch (FOOD_PATCH_SHARE of the time, unless near_patches is
+        False) or anywhere, on dry land off obstacles unless `attempts` placements all fail."""
         for _ in range(attempts):
-            food = self._place_food()
-            if not any(lake.contains(food.pos.x, food.pos.y) for lake in self.lakes):
+            food = self._place_food(near_patches)
+            if self._open_ground(food.pos.x, food.pos.y):
                 break
         return food
 
-    def _place_food(self):
+    def _open_ground(self, x, y):
+        return not (any(lake.contains(x, y) for lake in self.lakes)
+                    or any(circle_hits_rect(x, y, FOOD_RADIUS, o.rect) for o in self.obstacles))
+
+    def _place_food(self, near_patches):
         w, h = self.bounds
         pos = None
-        if self.food_patches and random.random() < FOOD_PATCH_SHARE:
+        if near_patches and self.food_patches and random.random() < FOOD_PATCH_SHARE:
             patch = random.choice(self.food_patches)
             pos = (min(max(patch.x + random.gauss(0, FOOD_PATCH_RADIUS), FOOD_RADIUS),
                        w - FOOD_RADIUS),
