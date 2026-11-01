@@ -24,7 +24,11 @@ def snapshot_names(save_dir=SAVE_DIR):
 
 
 # Rewritten on every exit even when the brain is unchanged, so not part of a brain's identity.
-VOLATILE_BRAIN_KEYS = ("history", "metric_game_uptime_seconds")
+_VOLATILE_KEYS = ("history", "metric_game_uptime_seconds")
+
+
+def brain_identity(data):
+    return {k: v for k, v in data.items() if k not in _VOLATILE_KEYS}
 
 
 def _brain_identity(path):
@@ -35,7 +39,7 @@ def _brain_identity(path):
         return None
     except json.JSONDecodeError:
         return ("unreadable", os.path.getsize(path))
-    return {k: v for k, v in data.items() if k not in VOLATILE_BRAIN_KEYS}
+    return brain_identity(data)
 
 
 def _same_as(folder, save_dir):

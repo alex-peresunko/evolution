@@ -36,6 +36,20 @@ def save_brain(brain, filename, *, generation=None, genes=None, score=None, upti
     print(f"Brain saved to {filename}")
 
 
+def brain_from_data(data, topology=BRAIN_TOPOLOGY):
+    """(brain, generation, genes or None) from a parsed brain file."""
+    return NeuralNetwork.from_data(data, topology), data.get("generation", 1), data.get("genes")
+
+
+def read_brain_data(filename, save_dir=SAVE_DIR):
+    """The parsed brain file, or None when it does not exist."""
+    try:
+        with open(os.path.join(save_dir, filename)) as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return None
+
+
 def load_brain(filename, topology=BRAIN_TOPOLOGY, save_dir=SAVE_DIR):
     """(brain, generation, genes or None); raises FileNotFoundError."""
     path = os.path.join(save_dir, filename)
@@ -43,9 +57,9 @@ def load_brain(filename, topology=BRAIN_TOPOLOGY, save_dir=SAVE_DIR):
         raise FileNotFoundError(f"Brain file not found at {path}")
     with open(path) as f:
         data = json.load(f)
-    brain = NeuralNetwork.from_data(data, topology)
+    loaded = brain_from_data(data, topology)
     print(f"Brain loaded from {path} into topology {topology}")
-    return brain, data.get("generation", 1), data.get("genes")
+    return loaded
 
 
 def _read(filename, key, save_dir):

@@ -35,3 +35,15 @@ def test_reload_without_a_file_changes_nothing(tmp_path):
     before = list(sim.world.carnivores)
     assert bootstrap.reload_population(sim, CARNIVORE, str(tmp_path)) is None
     assert sim.world.carnivores == before
+
+
+def test_reload_from_parsed_data_ignores_the_file_on_disk(tmp_path):
+    save_brain(NeuralNetwork(config.BRAIN_TOPOLOGY), HERBIVORE.brain_file, generation=3,
+               score=1.0, save_dir=tmp_path)
+    sim = bootstrap.start_simulation(None, world_bounds=SMALL)
+    data = NeuralNetwork(config.BRAIN_TOPOLOGY).to_data()
+    data.update(generation=9, score=7.0, history={"score": [5.0], "longevity": [1]})
+    progenitor = bootstrap.reload_population(sim, HERBIVORE, str(tmp_path), data=data)
+    assert progenitor.generation == 9
+    assert sim.hall_of_fame[HERBIVORE].best.score == 7.0
+    assert sim.stats[HERBIVORE].score_history == [5.0]

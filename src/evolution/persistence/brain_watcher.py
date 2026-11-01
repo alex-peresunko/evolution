@@ -4,12 +4,8 @@ import os
 
 from ..config import WATCH_POLL_SECONDS
 from ..species import ALL_SPECIES
-from .brain_history import VOLATILE_BRAIN_KEYS
+from .brain_history import brain_identity
 from .brain_store import SAVE_DIR
-
-
-def _identity(data):
-    return {k: v for k, v in data.items() if k not in VOLATILE_BRAIN_KEYS}
 
 
 class BrainWatcher:
@@ -21,8 +17,7 @@ class BrainWatcher:
         self.save_dir = save_dir
         self.interval = interval
         self._next_poll = None
-        self._signature = {}  # species -> (st_mtime_ns, st_size) of the last file read
-        self._identity = {}   # species -> brain identity of the last file read
+        self._identity = {}  # species -> brain identity of the last file read
         for species in ALL_SPECIES:
             self._scan(species)
 
@@ -37,21 +32,12 @@ class BrainWatcher:
     def _scan(self, species):
         """(species, data) if the species' file now holds a different brain, else None. A missing
         or half-written file is retried on the next poll."""
-        path = os.path.join(self.save_dir, species.brain_file)
         try:
-            st = os.stat(path)
-        except OSError:
-            return None
-        signature = (st.st_mtime_ns, st.st_size)
-        if signature == self._signature.get(species):
-            return None
-        try:
-            with open(path) as f:
+            with open(os.path.join(self.save_dir, species.brain_file)) as f:
                 data = json.load(f)
         except (OSError, json.JSONDecodeError):
             return None
-        self._signature[species] = signature
-        identity = _identity(data)
+        identity = brain_identity(data)
         if identity == self._identity.get(species):
             return None
         self._identity[species] = identity

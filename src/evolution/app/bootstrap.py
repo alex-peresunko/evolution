@@ -3,7 +3,9 @@ from ..config import NUM_FOOD, WORLD_HEIGHT, WORLD_WIDTH
 from ..persistence.brain_history import archive_after_start
 from ..persistence.brain_store import (
     SAVE_DIR,
+    brain_from_data,
     load_brain,
+    read_brain_data,
     read_saved_history,
     read_saved_score,
 )
@@ -66,12 +68,16 @@ def restore_progress(sim, species, progenitor, source=SAVE_DIR):
     chart samples don't drop to 0) and restore its chart histories. `progenitor` (a Creature or
     Record) is the brain loaded from that file."""
     filename = species.brain_file
-    score = read_saved_score(filename, save_dir=source)
+    _continue_from(sim, species, progenitor, read_saved_score(filename, save_dir=source),
+                   read_saved_history(filename, save_dir=source))
+
+
+def _continue_from(sim, species, progenitor, score, history):
     if score is not None:
         sim.hall_of_fame[species].seed(Record(score, progenitor.brain.copy(),
                                               dict(progenitor.genes or {}),
                                               progenitor.generation))
-    sim.stats.restore(species, read_saved_history(filename, save_dir=source) or {})
+    sim.stats.restore(species, history or {})
 
 
 def start_simulation(source, *, geometry=HEADLESS, listeners=(), world_bounds=WORLD_BOUNDS):
@@ -88,15 +94,20 @@ def start_simulation(source, *, geometry=HEADLESS, listeners=(), world_bounds=WO
     return sim
 
 
-def reload_population(sim, species, source=SAVE_DIR):
-    """Replace the species with founders from its brain file in `source` and continue that
-    file's progress. Returns the progenitor Record, or None (nothing changed) without a file."""
-    progenitor = read_progenitor(species, source)
-    if progenitor is not None:
-        world = sim.world
-        world.populations[species] = founders(species, world.bounds, progenitor=progenitor,
-                                              geometry=world.geometry)
-        restore_progress(sim, species, progenitor, source)
+def reload_population(sim, species, source=SAVE_DIR, data=None):
+    """Replace the species with founders from its brain file in `source` (or from `data`, that
+    file already parsed) and continue that file's progress. Returns the progenitor Record, or
+    None (nothing changed) without a file."""
+    if data is None:
+        data = read_brain_data(species.brain_file, source)
+        if data is None:
+            return None
+    brain, generation, genes = brain_from_data(data)
+    progenitor = Record(score=None, brain=brain, genes=genes, generation=generation)
+    world = sim.world
+    world.populations[species] = founders(species, world.bounds, progenitor=progenitor,
+                                          geometry=world.geometry)
+    _continue_from(sim, species, progenitor, data.get("score"), data.get("history"))
     return progenitor
 
 

@@ -1,4 +1,5 @@
-"""What each key and mouse action does. KEY_COMMANDS is the whole keyboard map."""
+"""What each key and mouse action does. KEY_COMMANDS is the whole keyboard map;
+READ_ONLY_KEY_COMMANDS is the watch-mode subset that never writes saved_brains/."""
 import pygame
 
 from ..app.bootstrap import reload_population
@@ -10,9 +11,6 @@ from .hud import minimap
 
 def save_living_best(app):
     """Save each species' best living creature over its best_brain file."""
-    if app.read_only:
-        print("Saving is disabled in watch mode.")
-        return
     sim = app.sim
     for species in ALL_SPECIES:
         best = max(sim.world.population(species), key=lambda c: c.score, default=None)
@@ -23,11 +21,13 @@ def save_living_best(app):
                        history=sim.stats[species].saved_history())
 
 
-def reload_species(app, species_list):
-    """Restart the given species from their best_brain files, logging each one."""
+def reload_species(app, species_list, data_by_species=None):
+    """Restart the given species from their best_brain files, logging each one.
+    data_by_species: {species: parsed file} to load instead of re-reading those files."""
+    data_by_species = data_by_species or {}
     generations = []
     for species in species_list:
-        progenitor = reload_population(app.sim, species)
+        progenitor = reload_population(app.sim, species, data=data_by_species.get(species))
         if progenitor is None:
             print(f"No {species.name} brain file found to load.")
         else:
@@ -35,6 +35,9 @@ def reload_species(app, species_list):
             print(f"Loaded new {species.name} population from generation "
                   f"{progenitor.generation}.")
     if generations:
+        # The species not reloaded keep their creatures, so the deepest generation stays.
+        if set(species_list) != set(ALL_SPECIES):
+            generations.append(app.sim.generation)
         app.sim.generation = max(generations)
 
 
@@ -82,9 +85,6 @@ def toggle_drawing(app):
 
 
 def toggle_background_mode(app):
-    if app.read_only:
-        print("Island workers are disabled in watch mode.")
-        return
     if app.workers.running:
         app.workers.stop()
         print("--- Island Workers Stopped ---")
@@ -110,6 +110,9 @@ KEY_COMMANDS = {
     pygame.K_d: toggle_drawing,
     pygame.K_b: toggle_background_mode,
 }
+
+READ_ONLY_KEY_COMMANDS = {key: command for key, command in KEY_COMMANDS.items()
+                          if command not in (save_living_best, toggle_background_mode)}
 
 
 def click(app, pos):
@@ -138,7 +141,7 @@ def handle_events(app):
         if event.type == pygame.QUIT:
             view.running = False
         elif event.type == pygame.KEYDOWN:
-            command = KEY_COMMANDS.get(event.key)
+            command = app.key_commands.get(event.key)
             if command:
                 command(app)
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:

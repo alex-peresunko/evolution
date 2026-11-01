@@ -11,9 +11,6 @@ def _save(tmp_path, species, generation=1, score=1.0, history=None):
     brain = NeuralNetwork(config.BRAIN_TOPOLOGY)
     save_brain(brain, species.brain_file, save_dir=str(tmp_path), generation=generation,
                score=score, history=history)
-    # Force a distinct mtime so the signature check sees the rewrite even on a coarse clock.
-    stamp = os.stat(os.path.join(tmp_path, species.brain_file)).st_mtime + generation
-    os.utime(os.path.join(tmp_path, species.brain_file), (stamp, stamp))
 
 
 def test_files_present_at_startup_are_not_reported(tmp_path):
@@ -69,3 +66,15 @@ def test_polls_are_throttled_to_the_interval(tmp_path):
     _save(tmp_path, HERBIVORE, generation=3)
     assert watcher.poll(0.5) == []
     assert watcher.poll(1.0) != []
+
+
+def test_rewrite_with_same_size_and_mtime_is_reported(tmp_path):
+    brain = NeuralNetwork(config.BRAIN_TOPOLOGY)
+    path = os.path.join(tmp_path, HERBIVORE.brain_file)
+    save_brain(brain, HERBIVORE.brain_file, save_dir=str(tmp_path), generation=1, score=1.0)
+    before = os.stat(path)
+    watcher = BrainWatcher(save_dir=str(tmp_path), interval=0)
+    save_brain(brain, HERBIVORE.brain_file, save_dir=str(tmp_path), generation=1, score=2.0)
+    os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))  # a coarse-mtime filesystem
+    assert os.stat(path).st_size == before.st_size
+    assert [species for species, _ in watcher.poll(0)] == [HERBIVORE]

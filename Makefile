@@ -2,8 +2,9 @@
 .PHONY: run ui watch headless stop logs test lint not-running
 
 GRAFANA := http://localhost:3000
-# Brackets keep pgrep from matching the recipe shell's own command line.
-LOCAL_SIM := [g]ame(_headless)?\.py
+# Brackets keep grep from matching the recipe shell's own command line. Watch mode never
+# writes saved_brains/, so it does not count as a running simulation.
+LOCAL_SIM := ps -Ao pid=,command= | grep -E '[g]ame(_headless)?\.py' | grep -v -- '--watch'
 CONTAINER_SIM := --filter label=io.podman.compose.project=evolution \
 	--filter label=io.podman.compose.service=server
 
@@ -30,8 +31,8 @@ headless: not-running
 
 # Both write saved_brains/best_brain_*.json, so only one simulation may run.
 not-running:
-	@if pgrep -f '$(LOCAL_SIM)' >/dev/null; then \
-		echo "a simulation is already running locally:"; pgrep -fl '$(LOCAL_SIM)'; exit 1; fi
+	@if $(LOCAL_SIM) >/dev/null; then \
+		echo "a simulation is already running locally:"; $(LOCAL_SIM); exit 1; fi
 	@if [ -n "$$(podman ps -q $(CONTAINER_SIM) 2>/dev/null)" ]; then \
 		echo "the headless simulation container is running (make stop)"; exit 1; fi
 

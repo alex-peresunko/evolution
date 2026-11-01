@@ -12,7 +12,7 @@ from ..app.metrics import GameMetrics
 from ..persistence.autosave import HallOfFameAutosaver, save_on_exit
 from ..persistence.brain_watcher import BrainWatcher
 from ..world.geometry import Geometry
-from .commands import handle_events, reload_species
+from .commands import KEY_COMMANDS, READ_ONLY_KEY_COMMANDS, handle_events, reload_species
 from .hud import draw_hud
 from .render import WorldRenderer
 from .view_state import ViewState
@@ -56,6 +56,9 @@ class GameApp:
         self.font = pygame.font.Font(None, config.HUD_FONT_SIZE)
         self.clock = pygame.time.Clock()
         self.metrics = GameMetrics()
+        self.key_commands = READ_ONLY_KEY_COMMANDS if read_only else KEY_COMMANDS
+        # Baseline before start_simulation reads the files, so a save in between is not lost.
+        self.watcher = BrainWatcher() if read_only else None
         self.autosaver = None if read_only else HallOfFameAutosaver(
             uptime=self.metrics.uptime_seconds)
         self.sim = start_simulation(source, geometry=PYGAME_GEOMETRY,
@@ -67,17 +70,17 @@ class GameApp:
         if not read_only:
             archive_previous_best(source, new)
         self.view = ViewState()
-        # Never started in watch mode (the B key is disabled), so its autosaver is unused.
-        self.workers = WorkerPool(self.sim, self.autosaver)
-        self.watcher = BrainWatcher() if read_only else None
+        self.workers = None if read_only else WorkerPool(self.sim, self.autosaver)
 
     def _follow_brain_files(self):
-        for species, data in self.watcher.poll(time.perf_counter()):
+        changed = dict(self.watcher.poll(time.perf_counter()))
+        for species, data in changed.items():
             score = data.get("score")
             score_text = "unscored" if score is None else f"score {score:.3f}"
             print(f"[watch] {species.name} brain updated on disk (generation "
                   f"{data.get('generation')}, {score_text}), repopulating")
-            reload_species(self, [species])
+        if changed:
+            reload_species(self, list(changed), changed)
 
     def run(self):
         sim, view = self.sim, self.view
@@ -91,7 +94,8 @@ class GameApp:
                     for _ in range(view.ticks_per_frame):
                         sim.step()
                         view.record_brain()
-                        self.workers.sync_due()
+                        if self.workers is not None:
+                            self.workers.sync_due()
                 view.follow_selected(sim.world)
                 now = time.perf_counter()
                 if now - tps_window_start >= 1.0:
@@ -102,8 +106,8 @@ class GameApp:
                                self.clock.get_fps())
                 self.clock.tick(60 if view.fps_limited else 0)
         finally:  # also on Ctrl+C or a crash, so workers are never left running
-            self.workers.stop()
             if not self.read_only:
+                self.workers.stop()
                 print("Saving Hall of Fame on exit...")
                 save_on_exit(sim, uptime=self.metrics.uptime_seconds)
             pygame.quit()
