@@ -88,6 +88,9 @@ class Creature:
         self.parent_ids = ()
         self.descent = 0                    # generations since the lineage's founder
         self.generation = 1                 # parents' generation + 1, carried across extinctions
+        # sim.breeding's memo: other id -> (own genes, other's genes, compatible); the genes
+        # dicts are compared by identity, so reassigning genes invalidates the entry.
+        self.compatibility = {}
 
         # Written by perception.perceive_all each tick.
         self.whiskers = [0.0] * NUM_WHISKERS
@@ -180,7 +183,7 @@ class Creature:
         """Live one tick on the brain's `outputs`. The steps' order is part of the rules."""
         self.hurt = max(0.0, self.hurt - 1 / HURT_FADE_TICKS)
         self.stunned_ticks = max(0, self.stunned_ticks - 1)
-        growth_factor = self._grow(world.lakes)
+        growth_factor = self._grow(world.terrain.near(self.pos.x, self.pos.y)[1])
         if self.eating_ticks > 0 and outputs[OUT.stop_eating] > MEAL_BREAK_THRESHOLD:
             self.stop_eating()
             world.tally.meals_abandoned[self.species.name] += 1
@@ -188,7 +191,8 @@ class Creature:
         self._metabolize(growth_factor, speed)
         self.current_speed = speed
         self.species.diet.feed(self, world)
-        self._collide(world.obstacles)
+        self._collide(world.obstacles if self.size > world.terrain.reach
+                      else world.terrain.near(self.pos.x, self.pos.y)[0])
         self._reward_pursuit()
 
     def _grow(self, lakes):

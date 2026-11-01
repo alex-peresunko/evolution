@@ -32,6 +32,16 @@ def _ready_to_seek(c):
             and c.hunger < HUNGER_MAX * MATE_SEEK_HUNGER_THRESHOLD)
 
 
+def _compatible(a, b):
+    hit = a.compatibility.get(b.id)
+    if hit is not None and hit[0] is a.genes and hit[1] is b.genes:
+        return hit[2]
+    result = compatible(a.genes, b.genes, a.species)
+    a.compatibility[b.id] = (a.genes, b.genes, result)
+    b.compatibility[a.id] = (b.genes, a.genes, result)
+    return result
+
+
 def mate_seeking_drive(c, outputs, kin_grid):
     """outputs with steering blended toward the nearest compatible, ready adult of c's species
     (within MATE_ATTRACTION_RADIUS) while c is a fed, healthy adult out of danger."""
@@ -41,15 +51,14 @@ def mate_seeking_drive(c, outputs, kin_grid):
         return outputs
     if c.health < c.max_health * REPRODUCTION_HEALTH_THRESHOLD:
         return outputs
-    eligible = [
-        m for m in kin_grid.query(c.pos, MATE_ATTRACTION_RADIUS)
-        if m.id != c.id and m.is_adult and _ready_to_seek(m)
-        and compatible(c.genes, m.genes, c.species)
-    ]
-    if not eligible:
-        return outputs
-    nearest = min(eligible, key=lambda m: c.pos.distance_to(m.pos))
-    if c.pos.distance_to(nearest.pos) < 1:
+    pos = c.pos
+    nearest, nearest_dist = None, math.inf
+    for m in kin_grid.query(pos, MATE_ATTRACTION_RADIUS):
+        if m is not c and m.is_adult and _ready_to_seek(m) and _compatible(c, m):
+            d = pos.distance_to(m.pos)
+            if d < nearest_dist:  # strict: the first of equally near mates wins, like min()
+                nearest, nearest_dist = m, d
+    if nearest is None or nearest_dist < 1:
         return outputs
     vec = nearest.pos - c.pos
     angle_diff = (math.atan2(vec.y, vec.x) - c.angle + math.pi) % (2 * math.pi) - math.pi
@@ -101,7 +110,7 @@ def breed(world):
             if p1.id in paired or len(group) + len(offspring) >= pop_cap:
                 continue
             mates = [ready[j] for j in np.flatnonzero(close[i])
-                     if ready[j].id not in paired and compatible(p1.genes, ready[j].genes, species)]
+                     if ready[j].id not in paired and _compatible(p1, ready[j])]
             if not mates:
                 continue
             p2 = max(mates, key=mate_preference(mates, species))

@@ -1,6 +1,7 @@
 import random
 
 from ..config import (
+    FAT_SIZE_FACTOR,
     FOOD_PATCH_COUNT,
     FOOD_PATCH_RADIUS,
     FOOD_PATCH_SHARE,
@@ -15,7 +16,7 @@ from .geometry import HEADLESS
 from .perception import perceive_all
 from .spatial import SpatialIndex
 from .tally import WorldTally
-from .terrain import circle_hits_rect
+from .terrain import TerrainGrid, circle_hits_rect
 
 
 def _fold(v, lo, hi):
@@ -24,6 +25,11 @@ def _fold(v, lo, hi):
     elif v > hi:
         v = 2 * hi - v
     return min(max(v, lo), hi)
+
+
+# Largest body: the biggest size gene, full grown, with full fat stores; +2 covers pygame.Rect's
+# integer truncation.
+_MAX_BODY_SIZE = max(s.gene_bounds["size"][1] for s in ALL_SPECIES) * (1 + FAT_SIZE_FACTOR) + 2
 
 
 class World:
@@ -36,8 +42,9 @@ class World:
         self.geometry = geometry
         self.populations = {s: list(populations.get(s, ())) for s in ALL_SPECIES}
         self.food = food
-        self.obstacles = obstacles
-        self.lakes = list(lakes)
+        self._obstacles = obstacles
+        self._lakes = list(lakes)
+        self._terrain = None
         self.carcasses = []
         self.food_patches = FoodPatch.scatter(world_bounds, FOOD_PATCH_COUNT)
         self.tick = 0
@@ -45,6 +52,30 @@ class World:
         self.season = 0.0
         self.index = SpatialIndex(world_bounds, ALL_SPECIES, GRID_CELL_SIZE)
         self.tally = WorldTally()
+
+    @property
+    def obstacles(self):
+        return self._obstacles
+
+    @obstacles.setter
+    def obstacles(self, obstacles):
+        self._obstacles, self._terrain = obstacles, None
+
+    @property
+    def lakes(self):
+        return self._lakes
+
+    @lakes.setter
+    def lakes(self, lakes):
+        self._lakes, self._terrain = lakes, None
+
+    @property
+    def terrain(self):
+        """TerrainGrid of the obstacles and lakes; rebuilt when either list is replaced."""
+        if self._terrain is None:
+            self._terrain = TerrainGrid(self.bounds, self._obstacles, self._lakes,
+                                        GRID_CELL_SIZE, _MAX_BODY_SIZE)
+        return self._terrain
 
     @property
     def herbivores(self):
@@ -75,7 +106,7 @@ class World:
                             self.obstacles, self.carcasses, self.light, self.season, self.lakes)
 
     def separate(self):
-        separate(self.creatures(), self.carcasses, self.obstacles, self.tick)
+        separate(self.creatures(), self.carcasses, self.obstacles, self.tick, self.terrain)
 
     # --- food ------------------------------------------------------------------------------
 

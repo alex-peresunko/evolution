@@ -98,10 +98,11 @@ class Simulation:
             for c, sig, mem, x, y in zip(creatures, signals, memories, inputs, outputs):
                 c.signal, c.memory = sig, mem
                 c.brain_inputs, c.brain_outputs = x, y
-        for c, raw in zip(creatures, outputs):
-            steered = mate_seeking_drive(c, list(raw), world.index.of(c.species))
-            c.mate_override = (steered[OUT.rotation] != raw[OUT.rotation]
-                               or steered[OUT.speed] != raw[OUT.speed])
+        rows = outputs.tolist() if len(outputs) else []
+        for c, row in zip(creatures, rows):
+            rotation, speed = row[OUT.rotation], row[OUT.speed]
+            steered = mate_seeking_drive(c, row, world.index.of(c.species))
+            c.mate_override = steered[OUT.rotation] != rotation or steered[OUT.speed] != speed
             c.act(steered, world)
 
     def _retire_the_dead(self):

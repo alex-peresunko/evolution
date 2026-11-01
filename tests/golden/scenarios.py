@@ -4,6 +4,7 @@ This is the only golden module that knows the simulation's API: when the API mov
 adapter here, never the observations' meaning (each field must keep producing the same values).
 """
 import contextlib
+import functools
 import hashlib
 import io
 import json
@@ -130,6 +131,27 @@ def save_on_exit(sim):
     _save_on_exit(sim)
 
 
+def _plain(value):
+    """value with numpy scalars as Python scalars: the fingerprint hashes the repr, and whether
+    a value is np.float64 or float is not part of the simulation's behaviour."""
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, dict):
+        return {k: _plain(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return type(value)(_plain(v) for v in value)
+    return value
+
+
+def _plain_observations(run):
+    @functools.wraps(run)
+    def wrapper(*args, **kwargs):
+        for label, observation in run(*args, **kwargs):
+            yield label, _plain(observation)
+    return wrapper
+
+
+@_plain_observations
 def evolution_run(workdir, seed=1234, ticks=3000, every=50):
     """Random start, long run with autosaves, then the exit save; then a second world started
     from those files with an island exchange. Yields (label, observation) pairs."""
@@ -199,6 +221,7 @@ def imitation_run(seed=99):
     return {"X": X, "Y": Y, "loss": final, "brain": _brain(brain)}
 
 
+@_plain_observations
 def render_run(seed=7, ticks=240, every=40):
     """Frames of the full game.py screen (world, minimap, HUD, brain panel, gene chart) under
     pygame's dummy video driver, at two zoom levels. Yields (label, frame bytes)."""

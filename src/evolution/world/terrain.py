@@ -48,3 +48,41 @@ def circle_hits_rect(x, y, r, rect):
     nx = min(max(x, rect.left), rect.right)
     ny = min(max(y, rect.top), rect.bottom)
     return (x - nx) ** 2 + (y - ny) ** 2 < r ** 2
+
+
+class TerrainGrid:
+    """Per grid cell, the obstacles and lake blobs a creature in that cell can touch, in their
+    original order. Obstacle candidates hold only for bodies of size <= `reach`. Cells on the
+    border extend to infinity, so positions outside the world are covered too."""
+
+    def __init__(self, world_bounds, obstacles, lakes, cell_size, reach):
+        self.cell_size = cell_size
+        self.reach = reach
+        self.cols = max(1, math.ceil(world_bounds[0] / cell_size))
+        self.rows = max(1, math.ceil(world_bounds[1] / cell_size))
+        self.cells = {}
+        for cx in range(self.cols):
+            x0 = -math.inf if cx == 0 else cx * cell_size
+            x1 = math.inf if cx == self.cols - 1 else (cx + 1) * cell_size
+            for cy in range(self.rows):
+                y0 = -math.inf if cy == 0 else cy * cell_size
+                y1 = math.inf if cy == self.rows - 1 else (cy + 1) * cell_size
+                near_obstacles = tuple(
+                    o for o in obstacles
+                    if o.rect.left - reach <= x1 and o.rect.right + reach >= x0
+                    and o.rect.top - reach <= y1 and o.rect.bottom + reach >= y0)
+                near_lakes = tuple(
+                    lake for lake in lakes
+                    if _box_distance(lake.x, lake.y, x0, x1, y0, y1) <= lake.max_radius + 1)
+                self.cells[cx, cy] = (near_obstacles, near_lakes)
+
+    def near(self, x, y):
+        """(obstacles, lake blobs) that may touch a body at x, y."""
+        return self.cells[min(self.cols - 1, max(0, int(x // self.cell_size))),
+                          min(self.rows - 1, max(0, int(y // self.cell_size)))]
+
+
+def _box_distance(x, y, x0, x1, y0, y1):
+    dx = max(x0 - x, 0.0, x - x1)
+    dy = max(y0 - y, 0.0, y - y1)
+    return math.hypot(dx, dy)

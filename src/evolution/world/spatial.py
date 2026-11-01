@@ -9,9 +9,11 @@ class SpatialHashGrid:
         self.cols = int(math.ceil(width / cell_size))
         self.rows = int(math.ceil(height / cell_size))
         self.grid = {}
+        self._queries = {}
 
     def clear(self):
         self.grid = {}
+        self._queries = {}
 
     def insert(self, obj):
         # Clamped so entities slightly outside the world (e.g. after an obstacle bounce)
@@ -19,19 +21,26 @@ class SpatialHashGrid:
         key = (min(self.cols - 1, max(0, int(obj.pos.x / self.cell_size))),
                min(self.rows - 1, max(0, int(obj.pos.y / self.cell_size))))
         self.grid.setdefault(key, []).append(obj)
+        self._queries = {}
 
     def query(self, pos, radius):
+        """Everything in the cells the square around pos touches, as a tuple; the same tuple
+        until the next insert or clear."""
         min_x = max(0, int((pos.x - radius) / self.cell_size))
         max_x = min(self.cols - 1, int((pos.x + radius) / self.cell_size))
         min_y = max(0, int((pos.y - radius) / self.cell_size))
         max_y = min(self.rows - 1, int((pos.y + radius) / self.cell_size))
-        grid = self.grid
-        results = []
-        for x in range(min_x, max_x + 1):
-            for y in range(min_y, max_y + 1):
-                cell = grid.get((x, y))
-                if cell:
-                    results.extend(cell)
+        key = (min_x, max_x, min_y, max_y)
+        results = self._queries.get(key)
+        if results is None:
+            grid = self.grid
+            found = []
+            for x in range(min_x, max_x + 1):
+                for y in range(min_y, max_y + 1):
+                    cell = grid.get((x, y))
+                    if cell:
+                        found.extend(cell)
+            results = self._queries[key] = tuple(found)
         return results
 
 

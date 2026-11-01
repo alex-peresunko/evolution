@@ -26,7 +26,7 @@ def test_clear():
     grid.insert(_Obj(50, 50))
     grid.clear()
     results = grid.query(Vector2(50, 50), 200)
-    assert results == []
+    assert results == ()
 
 
 def test_query_boundary_cell():

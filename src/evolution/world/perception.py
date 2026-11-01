@@ -37,6 +37,10 @@ def _ids(items):
     return np.array([o.id for o in items], dtype=np.int64)
 
 
+def _positions(items):
+    return _xy(items), _ids(items)
+
+
 def _wrap(a):
     return (a + math.pi) % (2 * math.pi) - math.pi
 
@@ -47,12 +51,13 @@ class _Relative:
     __slots__ = ("dist", "dx", "dy", "angle", "not_self")
 
     def __init__(self, xy, angle, ids, targets):
-        txy = _xy(targets)
+        """targets: (xy, ids) arrays, as from _positions."""
+        txy, tids = targets
         self.dx = txy[None, :, 0] - xy[:, None, 0]
         self.dy = txy[None, :, 1] - xy[:, None, 1]
         self.dist = np.hypot(self.dx, self.dy)
         self.angle = angle
-        self.not_self = ids[:, None] != _ids(targets)[None, :]
+        self.not_self = ids[:, None] != tids[None, :]
 
     def angle_to(self, idx):
         rows = np.arange(len(idx))
@@ -219,20 +224,28 @@ def _whiskers(xy, angle, sight, whisker_angles, obstacles, world_bounds):
     return np.minimum(dist, hit_dist)
 
 
-def _target_whiskers(xy, angle, length, whisker_angles, targets_xy, occlusion):
+def _target_whiskers(xy, angle, length, whisker_angles, targets_xy, occlusion, dist):
     """Distance along each whisker ray to the nearest target within WHISKER_TARGET_WIDTH of
-    it, no farther than `length` and closer than the ray's obstacle hit; inf when none."""
+    it, no farther than `length` and closer than the ray's obstacle hit; inf when none.
+    `dist` is the (N, M) observer-target distance matrix."""
     n, w = whisker_angles.shape
+    result = np.full((n, w), np.inf)
     if len(targets_xy) == 0:
-        return np.full((n, w), np.inf)
+        return result
+    # A hit lies within sqrt(length² + width²) <= length + width; the +1 absorbs rounding.
+    rows, cols = np.nonzero(dist <= (length + WHISKER_TARGET_WIDTH + 1.0)[:, None])
+    if len(rows) == 0:
+        return result
     a = (angle[:, None] + whisker_angles)[..., None]
-    dx = targets_xy[None, None, :, 0] - xy[:, None, None, 0]
-    dy = targets_xy[None, None, :, 1] - xy[:, None, None, 1]
-    t = dx * np.cos(a) + dy * np.sin(a)
-    perp = np.abs(dy * np.cos(a) - dx * np.sin(a))
-    hit = ((t > 0) & (t <= length[:, None, None]) & (t < occlusion[..., None])
+    cos, sin = np.cos(a)[rows, :, 0], np.sin(a)[rows, :, 0]
+    dx = (targets_xy[cols, 0] - xy[rows, 0])[:, None]
+    dy = (targets_xy[cols, 1] - xy[rows, 1])[:, None]
+    t = dx * cos + dy * sin
+    perp = np.abs(dy * cos - dx * sin)
+    hit = ((t > 0) & (t <= length[rows, None]) & (t < occlusion[rows])
            & (perp <= WHISKER_TARGET_WIDTH))
-    return np.where(hit, t, np.inf).min(axis=-1)
+    np.minimum.at(result, (rows[:, None], np.arange(w)[None, :]), np.where(hit, t, np.inf))
+    return result
 
 
 def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carcasses=(),
@@ -277,9 +290,12 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
     out[:, IN.kin_dist] = 1.0      # when there is none
     out[:, IN.carcass_dist] = 1.0  # when there is none (and for herbivores)
 
+    at_herbivores, at_carnivores = _positions(herbivores), _positions(carnivores)
+    at_food, at_carcasses = _positions(food_items), _positions(carcasses)
+    to_prey = to_preds = None
     ci = np.flatnonzero(carn)
     if len(ci):
-        to_prey = _Relative(xy[ci], angle[ci], ids[ci], herbivores)
+        to_prey = _Relative(xy[ci], angle[ci], ids[ci], at_herbivores)
         idx, found, (t_angle, t_dist) = _vision(to_prey, eye[ci], half_angle[ci], xy[ci], crowns)
         out[ci, IN.target_angle], out[ci, IN.target_dist] = t_angle, t_dist
         target_dist[ci], target_found[ci] = t_dist, found
@@ -295,8 +311,9 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
     hi = np.flatnonzero(~carn)
     if len(hi):
         observer = (xy[hi], angle[hi], ids[hi])
-        to_preds = _Relative(*observer, carnivores)
-        _, food_found, (food_angle, food_dist) = _vision(_Relative(*observer, food_items),
+        to_preds = _Relative(*observer, at_carnivores)
+        to_food = _Relative(*observer, at_food)
+        _, food_found, (food_angle, food_dist) = _vision(to_food,
                                                          eye[hi], half_angle[hi], xy[hi], crowns)
         _, _, (pred_angle, pred_dist) = _vision(to_preds, eye[hi], half_angle[hi], xy[hi], crowns)
         out[hi, IN.target_angle] = np.clip(food_angle - pred_angle * (1 - pred_dist) ** 2, -1, 1)
@@ -306,33 +323,42 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
         out[hi, IN.smell_angle], out[hi, IN.smell_strength] = sm_angle, sm_strength
         smell_strength_self[hi] = sm_strength  # read by the mate-seeking danger check
 
-    for gi, kin in ((ci, carnivores), (hi, herbivores)):
+    kin_rels = {}
+    for gi, kin, at_kin in ((ci, carnivores, at_carnivores), (hi, herbivores, at_herbivores)):
         if len(gi):
             signals = np.array([k.signal for k in kin], dtype=np.float64)
-            social = _social(_Relative(xy[gi], angle[gi], ids[gi], kin), signals)
+            kin_rels[id(kin)] = rel = _Relative(xy[gi], angle[gi], ids[gi], at_kin)
+            social = _social(rel, signals)
             for column, values in zip((IN.kin_angle, IN.kin_dist, IN.kin_density,
                                        IN.signal_angle, IN.signal_strength), social):
                 out[gi, column] = values
-    for gi, kin, other in ((ci, carnivores, herbivores), (hi, herbivores, carnivores)):
+    for gi, kin, other, to_other in ((ci, carnivores, herbivores, to_prey),
+                                     (hi, herbivores, carnivores, to_preds)):
         if len(gi):
-            for targets, strength_col, angle_col in ((kin, IN.touch_kin, IN.touch_kin_angle),
-                                                     (other, IN.touch_other, IN.touch_other_angle)):
-                rel = _Relative(xy[gi], angle[gi], ids[gi], targets)
+            for rel, targets, strength_col, angle_col in (
+                    (kin_rels[id(kin)], kin, IN.touch_kin, IN.touch_kin_angle),
+                    (to_other, other, IN.touch_other, IN.touch_other_angle)):
                 out[gi, strength_col], out[gi, angle_col] = _touch(rel, s[gi, 5], targets)
     crown_occ = _crown_occlusion(xy, angle, whisker_angles, crowns)
     if len(ci) and carcasses:
-        _, _, (cc_angle, cc_dist) = _vision(_Relative(xy[ci], angle[ci], ids[ci], carcasses),
-                                            eye[ci], half_angle[ci], xy[ci], crowns)
+        to_carcasses = _Relative(xy[ci], angle[ci], ids[ci], at_carcasses)
+        _, _, (cc_angle, cc_dist) = _vision(to_carcasses, eye[ci], half_angle[ci], xy[ci], crowns)
         out[ci, IN.carcass_angle], out[ci, IN.carcass_dist] = cc_angle, cc_dist
-        cc_smell = _smell(_Relative(xy[ci], angle[ci], ids[ci], carcasses))
+        cc_smell = _smell(to_carcasses)
         out[ci, IN.carcass_smell_angle], out[ci, IN.carcass_smell_strength] = cc_smell
     out[:, IN.light] = light
     out[:, IN.memory] = [c.memory for c in creatures]
-    for gi, targets in ((ci, list(herbivores) + list(carcasses)), (hi, food_items)):
-        if len(gi):
-            target_whisker_dist[gi] = _target_whiskers(xy[gi], angle[gi], eye[gi],
-                                                       whisker_angles[gi], _xy(targets),
-                                                       np.minimum(whisker_dist[gi], crown_occ[gi]))
+    if len(ci):
+        carcass_dist = to_carcasses.dist if len(carcasses) else np.zeros((len(ci), 0))
+        target_whisker_dist[ci] = _target_whiskers(
+            xy[ci], angle[ci], eye[ci], whisker_angles[ci],
+            np.concatenate((at_herbivores[0], at_carcasses[0])),
+            np.minimum(whisker_dist[ci], crown_occ[ci]),
+            np.concatenate((to_prey.dist, carcass_dist), axis=1))
+    if len(hi):
+        target_whisker_dist[hi] = _target_whiskers(
+            xy[hi], angle[hi], eye[hi], whisker_angles[hi], at_food[0],
+            np.minimum(whisker_dist[hi], crown_occ[hi]), to_food.dist)
     out[:, IN.target_whiskers] = np.where(np.isfinite(target_whisker_dist),
                                             1.0 - target_whisker_dist / eye[:, None], 0.0)
     out[:, IN.season] = season

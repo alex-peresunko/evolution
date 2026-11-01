@@ -195,3 +195,20 @@ def test_knock_into_a_wall_stops_on_that_axis():
     assert c.pos.x == c.size
     assert c.knock.x == 0 and c.knock.y == pytest.approx(3.0 * config.KNOCK_FRICTION)
     assert c.health == c.max_health
+
+
+@pytest.mark.parametrize("distinct", [True, False])
+def test_overlapping_matches_the_full_pair_matrix(distinct):
+    rng = np.random.default_rng(3)
+    axy = rng.uniform(0, 400, (120, 2))
+    ar = rng.uniform(2, 15, 120)
+    bxy = axy if distinct else rng.uniform(0, 400, (80, 2))
+    br = ar if distinct else rng.uniform(2, 15, 80)
+    full = np.hypot(bxy[None, :, 0] - axy[:, None, 0],
+                    bxy[None, :, 1] - axy[:, None, 1]) < ar[:, None] + br[None, :]
+    if distinct:
+        full &= np.triu(np.ones_like(full), 1).astype(bool)
+    i, j = collision._overlapping(axy, ar, bxy, br, distinct=distinct)
+    want_i, want_j = np.nonzero(full)
+    assert len(want_i) > 0
+    assert i.tolist() == want_i.tolist() and j.tolist() == want_j.tolist()

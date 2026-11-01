@@ -138,3 +138,31 @@ def test_lake_shore_is_irregular():
         a = t * math.pi / 18
         assert lake.contains(500 + math.cos(a) * (r - 1), 500 + math.sin(a) * (r - 1))
         assert not lake.contains(500 + math.cos(a) * (r + 1), 500 + math.sin(a) * (r + 1))
+
+
+def test_terrain_grid_keeps_every_obstacle_and_lake_a_body_can_touch():
+    import random as rnd
+
+    world = World(WORLD_BOUNDS, {}, [])
+    world.obstacles = generate_obstacles(WORLD_BOUNDS, world.geometry)
+    world.lakes = generate_lakes(WORLD_BOUNDS, world.obstacles)
+    grid, rng = world.terrain, rnd.Random(5)
+    for _ in range(3000):
+        x = rng.uniform(-50, WORLD_BOUNDS[0] + 50)
+        y = rng.uniform(-50, WORLD_BOUNDS[1] + 50)
+        size = rng.uniform(1, grid.reach)
+        body = world.geometry.rect(x - size, y - size, 2 * size, 2 * size)
+        near_obstacles, near_lakes = grid.near(x, y)
+        assert ([o for o in world.obstacles if o.rect.colliderect(body)]
+                == [o for o in near_obstacles if o.rect.colliderect(body)])
+        assert ([lake for lake in world.lakes if lake.contains(x, y)]
+                == [lake for lake in near_lakes if lake.contains(x, y)])
+
+
+def test_replacing_obstacles_rebuilds_the_terrain_grid():
+    world = World(WORLD_BOUNDS, {}, [])
+    rock = Obstacle(100, 100, 50, 50)
+    world.obstacles = [rock]
+    assert rock in world.terrain.near(120, 120)[0]
+    world.obstacles = []
+    assert world.terrain.near(120, 120)[0] == ()

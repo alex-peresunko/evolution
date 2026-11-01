@@ -18,6 +18,33 @@ def _unit(dx, dy, dist):
     return np.where(dist > 0, dx / safe, 1.0), np.where(dist > 0, dy / safe, 0.0)
 
 
+def _overlapping(axy, ar, bxy, br, distinct=False):
+    """(i, j) index arrays of the pairs with hypot(b[j] - a[i]) < ar[i] + br[j], ordered by
+    i then j, as np.nonzero of the full (A, B) matrix would give them; distinct=True keeps only
+    i < j (a and b being the same bodies)."""
+    empty = np.empty(0, dtype=np.intp)
+    if len(axy) == 0 or len(bxy) == 0:
+        return empty, empty
+    order = np.argsort(bxy[:, 0], kind="stable")
+    bx = bxy[order, 0]
+    reach = ar + br.max() + 1.0   # +1: never lose a pair to rounding at the window edge
+    lo = np.searchsorted(bx, axy[:, 0] - reach, "left")
+    counts = np.searchsorted(bx, axy[:, 0] + reach, "right") - lo
+    total = int(counts.sum())
+    if total == 0:
+        return empty, empty
+    i = np.repeat(np.arange(len(axy)), counts)
+    starts = np.repeat(np.cumsum(counts) - counts, counts)
+    j = order[np.repeat(lo, counts) + np.arange(total) - starts]
+    if distinct:
+        keep = i < j
+        i, j = i[keep], j[keep]
+    near = np.hypot(bxy[j, 0] - axy[i, 0], bxy[j, 1] - axy[i, 1]) < ar[i] + br[j]
+    i, j = i[near], j[near]
+    by_pair = np.lexsort((j, i))
+    return i[by_pair], j[by_pair]
+
+
 def _impulses(xy, v, mass, i, j, cxy, ci, ck):
     """Velocity change (N, 2) of each creature from the collisions of approaching pairs."""
     dv = np.zeros_like(v)
@@ -40,14 +67,15 @@ def _impulses(xy, v, mass, i, j, cxy, ci, ck):
     return dv
 
 
-def separate(creatures, carcasses, obstacles, tick):
+def separate(creatures, carcasses, obstacles, tick, terrain=None):
     """Collide live creatures with each other and with carcasses, which never move.
 
     Approaching bodies exchange an impulse (mass size², RESTITUTION) that is added to their
     `knock` velocity; a velocity change above IMPACT_DAMAGE_THRESHOLD costs health and sets
     `last_impact_tick`. Every creature then moves by its knock, overlaps are pushed apart split
     by mass, and the knock decays by KNOCK_FRICTION. A creature moved into an obstacle keeps
-    its old position and loses its knock; a wall stops the knock along that axis."""
+    its old position and loses its knock; a wall stops the knock along that axis. `terrain`
+    (a TerrainGrid of `obstacles`) narrows that obstacle check."""
     if BODY_RADIUS_FACTOR <= 0:
         return
     live = [c for c in creatures if c.health > 0]
@@ -60,9 +88,7 @@ def separate(creatures, carcasses, obstacles, tick):
     knock = knock0.copy()
     xy = xy0.copy()
 
-    i, j = np.triu_indices(n, 1)
-    near = np.hypot(xy[j, 0] - xy[i, 0], xy[j, 1] - xy[i, 1]) < r[i] + r[j]
-    i, j = i[near], j[near]
+    i, j = _overlapping(xy, r, xy, r, distinct=True)
     mass = r * r
     share_i = mass[j] / (mass[i] + mass[j])
 
@@ -70,8 +96,7 @@ def separate(creatures, carcasses, obstacles, tick):
     if solid:
         cxy = np.array([(k.pos.x, k.pos.y) for k in solid])
         cr = np.array([k.radius for k in solid]) * BODY_RADIUS_FACTOR
-        ci, ck = np.nonzero(np.hypot(xy[:, None, 0] - cxy[None, :, 0],
-                                     xy[:, None, 1] - cxy[None, :, 1]) < r[:, None] + cr[None, :])
+        ci, ck = _overlapping(xy, r, cxy, cr)
     else:
         cxy = np.empty((0, 2))
         ci = ck = np.empty(0, dtype=int)
@@ -127,7 +152,9 @@ def separate(creatures, carcasses, obstacles, tick):
             if c.pos.y != want_y:
                 ky = 0.0
             body = c.geometry.rect(c.pos.x - c.size, c.pos.y - c.size, c.size * 2, c.size * 2)
-            if any(obs.rect.colliderect(body) for obs in obstacles):
+            nearby = (terrain.near(c.pos.x, c.pos.y)[0]
+                      if terrain is not None and c.size <= terrain.reach else obstacles)
+            if any(obs.rect.colliderect(body) for obs in nearby):
                 c.pos.x, c.pos.y = old_x, old_y
                 kx = ky = 0.0
         c.knock.x, c.knock.y = kx, ky
