@@ -58,6 +58,14 @@ def test_food_does_not_spawn_on_obstacles():
         assert food.pos.x >= rock.rect.right + config.FOOD_RADIUS
 
 
+def test_patch_food_at_a_wall_does_not_line_up_on_it(monkeypatch):
+    monkeypatch.setattr(world_module, "FOOD_PATCH_SHARE", 1.0)
+    world = _empty_world()
+    world.food_patches = [FoodPatch(0.0, WORLD_BOUNDS[1] / 2, 0.0)]
+    xs = [world.spawn_food().pos.x for _ in range(200)]
+    assert sum(x == config.FOOD_RADIUS for x in xs) <= 1
+
+
 def test_food_patches_bounce_off_world_edges():
     world = _empty_world()
     world.food_patches = [FoodPatch(WORLD_BOUNDS[0] - 0.1, 300.0, 0.0)]

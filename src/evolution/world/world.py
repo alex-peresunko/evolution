@@ -17,6 +17,14 @@ from .tally import WorldTally
 from .terrain import circle_hits_rect
 
 
+def _fold(v, lo, hi):
+    if v < lo:
+        v = 2 * lo - v
+    elif v > hi:
+        v = 2 * hi - v
+    return min(max(v, lo), hi)
+
+
 class World:
     """Everything that exists in the simulated world: terrain, creatures, food and carcasses,
     plus the clock (tick, light, season)."""
@@ -89,8 +97,8 @@ class World:
         pos = None
         if near_patches and self.food_patches and random.random() < FOOD_PATCH_SHARE:
             patch = random.choice(self.food_patches)
-            pos = (min(max(patch.x + random.gauss(0, FOOD_PATCH_RADIUS), FOOD_RADIUS),
-                       w - FOOD_RADIUS),
-                   min(max(patch.y + random.gauss(0, FOOD_PATCH_RADIUS), FOOD_RADIUS),
-                       h - FOOD_RADIUS))
+            pos = (_fold(patch.x + random.gauss(0, FOOD_PATCH_RADIUS), FOOD_RADIUS,
+                         w - FOOD_RADIUS),
+                   _fold(patch.y + random.gauss(0, FOOD_PATCH_RADIUS), FOOD_RADIUS,
+                         h - FOOD_RADIUS))
         return Food(self.bounds, geometry=self.geometry, pos=pos)
