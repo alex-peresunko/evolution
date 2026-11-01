@@ -70,7 +70,7 @@ def draw_brain_panel(screen, c, history):
             if radii[k] >= 3:
                 pygame.draw.circle(screen, (200, 200, 200), (nx, ny), radii[k], 1)
     in_gap = (net_bottom - top) / len(acts[0])
-    for idx in range(0, len(acts[0]), math.ceil(11 / in_gap)):  # skip labels that would overlap
+    for idx in range(0, len(acts[0]), math.ceil(10 / in_gap)):  # skip labels that would overlap
         ny, v = nodes[0][idx][1], acts[0][idx]
         screen.blit(small.render(in_labels[idx], True, config.COLOR_TEXT), (x0 + 8, ny - 5))
         screen.blit(small.render(f"{v:+.2f}", True, activation_color(v)), (x0 + 82, ny - 5))
