@@ -4,6 +4,7 @@ import pytest
 
 from evolution import config
 from evolution.brain.layout import INPUTS, OUTPUTS
+from evolution.brain.network import NeuralNetwork
 from evolution.species import CARNIVORE, HERBIVORE
 from evolution.world.creature import Creature
 from evolution.world.food import Carcass, Food
@@ -363,3 +364,22 @@ def test_winded_creature_recovers_while_trying_to_run():
     c.stamina = config.STAMINA_RECOVERY_SHARE * c.max_stamina
     _act(c, [0.0, 1.0])
     assert not c.winded and c.stamina < config.STAMINA_RECOVERY_SHARE * c.max_stamina
+
+
+def test_adopt_takes_the_genes_traits_and_keeps_the_life_state():
+    c = Creature(HERBIVORE, (1000, 1000))
+    c.age, c.fat, c.health, c.is_adult = 5000, 600.0, 80.0, True
+    c.stamina = c.max_stamina
+    pos, cid = (c.pos.x, c.pos.y), c.id
+    genes = {**HERBIVORE.default_genes, "size": 13, "max_stamina": 500, "sight_angle": 1.0}
+    brain = NeuralNetwork(config.BRAIN_TOPOLOGY)
+    c.adopt(brain, genes)
+    fresh = Creature(HERBIVORE, (1000, 1000), genes=genes)
+    assert c.brain is brain and c.genes == fresh.genes
+    for trait in ("genetic_size", "max_stamina", "effective_max_speed", "trait_upkeep",
+                  "sight_distance", "sight_angle"):
+        assert getattr(c, trait) == getattr(fresh, trait)
+    assert list(c.whisker_angles) == list(fresh.whisker_angles)
+    assert ((c.pos.x, c.pos.y), c.id, c.age, c.fat, c.health) == (pos, cid, 5000, 600.0, 80.0)
+    assert c.stamina == c.max_stamina
+    assert c.size == 13 * (1 + 600.0 / config.FAT_MAX * config.FAT_SIZE_FACTOR)

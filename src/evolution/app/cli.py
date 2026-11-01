@@ -21,8 +21,9 @@ def parser(description=None, worker_option=False, watch_option=False,
                        help="list the history snapshots and exit")
     if watch_option:
         group.add_argument("--watch", action="store_true",
-                           help="read-only: show the saved best brains and repopulate whenever "
-                                "a running headless simulation saves new ones")
+                           help="read-only: show the saved best brains and swap new ones into the "
+                                "living creatures whenever a running headless simulation "
+                                "saves them")
     return p
 
 

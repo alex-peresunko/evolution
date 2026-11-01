@@ -105,8 +105,17 @@ class Creature:
         self.brain_outputs = None
         self.mate_override = False          # last tick's outputs were steered toward a mate
 
-        default_genes = species.default_genes
-        self.genes = clamp_genes({**default_genes, **(genes or {})}, species)
+        self._set_genes(genes)
+        self.stamina = self.max_stamina
+        self.size = self.genetic_size * JUVENILE_SIZE_FACTOR
+        self.max_speed = self.effective_max_speed * JUVENILE_SIZE_FACTOR
+        self.brain = brain if brain else NeuralNetwork(BRAIN_TOPOLOGY)
+
+    def _set_genes(self, genes):
+        """genes (missing ones from the species defaults, clamped) and the traits derived from
+        them."""
+        default_genes = self.species.default_genes
+        self.genes = clamp_genes({**default_genes, **(genes or {})}, self.species)
 
         self.genetic_size = self.genes["size"]
         self.genetic_max_speed = self.genes["max_speed"]
@@ -116,20 +125,23 @@ class Creature:
 
         base_stamina = self.genes.get("max_stamina", 1000)
         self.max_stamina = base_stamina + (self.genetic_size * SIZE_STAMINA_FACTOR)
-        self.stamina = self.max_stamina
 
         size_diff = self.genetic_size - default_genes["size"]
         self.effective_max_speed = self.genetic_max_speed / (
             1 + max(0, size_diff * SIZE_SPEED_PENALTY_FACTOR))
 
-        self.size = self.genetic_size * JUVENILE_SIZE_FACTOR
-        self.max_speed = self.effective_max_speed * JUVENILE_SIZE_FACTOR
-
         self.trait_upkeep = self._trait_upkeep(default_genes)
 
         self.whisker_angles = np.linspace(-self.sight_angle / 2, self.sight_angle / 2,
                                           NUM_WHISKERS)
-        self.brain = brain if brain else NeuralNetwork(BRAIN_TOPOLOGY)
+
+    def adopt(self, brain, genes):
+        """Take another brain and genes mid-life; position, health, age, fat and the rest of
+        the creature's state stay. `brain` must be this creature's own copy (BatchBrain)."""
+        self.brain = brain
+        self._set_genes(genes)
+        self.stamina = min(self.stamina, self.max_stamina)
+        self._shape_body(self._growth_factor())
 
     @property
     def is_carnivore(self):
@@ -202,15 +214,20 @@ class Creature:
             self.respawn_immunity_ticks -= 1
         if not self.is_adult and self.age >= ADULTHOOD_AGE:
             self.is_adult = True
+        growth_factor = self._growth_factor()
+        self._shape_body(growth_factor)
+        return growth_factor
+
+    def _growth_factor(self):
         if self.is_adult:
-            growth_factor = 1.0
-        else:
-            growth_ratio = self.age / ADULTHOOD_AGE
-            growth_factor = JUVENILE_SIZE_FACTOR + (1 - JUVENILE_SIZE_FACTOR) * growth_ratio
+            return 1.0
+        growth_ratio = self.age / ADULTHOOD_AGE
+        return JUVENILE_SIZE_FACTOR + (1 - JUVENILE_SIZE_FACTOR) * growth_ratio
+
+    def _shape_body(self, growth_factor):
         fat_ratio = self.fat / FAT_MAX
         self.size = self.genetic_size * growth_factor * (1 + fat_ratio * FAT_SIZE_FACTOR)
         self.max_speed = self.effective_max_speed * growth_factor
-        return growth_factor
 
     def _move(self, outputs):
         """Turn, run and bounce off the walls on outputs (rotation, effort); returns the speed."""

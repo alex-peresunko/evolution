@@ -13,7 +13,7 @@ from ..app.workers import WorkerPool, default_worker_count
 from ..persistence.autosave import HallOfFameAutosaver, save_on_exit
 from ..persistence.brain_watcher import BrainWatcher
 from ..world.geometry import Geometry
-from .commands import KEY_COMMANDS, READ_ONLY_KEY_COMMANDS, handle_events, reload_species
+from .commands import KEY_COMMANDS, READ_ONLY_KEY_COMMANDS, adopt_species, handle_events
 from .hud import draw_hud
 from .render import WorldRenderer
 from .render.motion import MotionSmoother
@@ -83,9 +83,9 @@ class GameApp:
             score = data.get("score")
             score_text = "unscored" if score is None else f"score {score:.3f}"
             print(f"[watch] {species.name} brain updated on disk (generation "
-                  f"{data.get('generation')}, {score_text}), repopulating")
+                  f"{data.get('generation')}, {score_text}), swapping it in")
         if changed:
-            reload_species(self, list(changed), changed)
+            adopt_species(self, changed)
 
     def run(self):
         sim, view = self.sim, self.view

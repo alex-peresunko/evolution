@@ -111,6 +111,23 @@ def reload_population(sim, species, source=SAVE_DIR, data=None):
     return progenitor
 
 
+def adopt_population(sim, species, data):
+    """Give every creature of the species an exact copy of the brain and genes in `data` (a
+    parsed brain file) and continue that file's progress; the creatures keep their place and
+    life state. Falls back to reload_population when the species has no creatures. Returns
+    the progenitor Record."""
+    population = sim.world.population(species)
+    if not population:
+        return reload_population(sim, species, data=data)
+    brain, generation, genes = brain_from_data(data)
+    progenitor = Record(score=None, brain=brain, genes=genes, generation=generation)
+    for c in population:
+        c.adopt(brain.copy(), dict(genes or {}))
+        c.generation = generation
+    _continue_from(sim, species, progenitor, data.get("score"), data.get("history"))
+    return progenitor
+
+
 def archive_previous_best(source, new, save_dir=SAVE_DIR):
     snapshot = archive_after_start(source, new, save_dir)
     if snapshot:

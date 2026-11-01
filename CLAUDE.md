@@ -17,7 +17,7 @@ make clean-data                                  # stop the stack and delete the
 poetry run python game.py                        # graphical (requires display); continues from best_brain_*.json
 poetry run python game.py --new                  # random brains; current best brains move to history
 poetry run python game.py --list-brains          # list history snapshots (also game_headless.py)
-poetry run python game.py --watch                # read-only UI: repopulates when best_brain_*.json change (no port 8000, no saves/snapshots)
+poetry run python game.py --watch                # read-only UI: swaps changed best_brain_*.json into the living creatures (no port 8000, no saves/snapshots)
 poetry run python game.py --load 2               # start from snapshot #2 (1 = newest) or a folder name
 poetry run python game_headless.py               # headless, auto-loads saved brains, Prometheus on :8000
 poetry run python game_headless.py --workers 4   # plus 4 island worker processes (one core each)
@@ -213,7 +213,7 @@ When they are written:
 - Autosaves and exit saves (`autosave.save_on_exit`) overwrite them only with a Hall of Fame record set during this run (`Record.fresh`; a faded record may score below the file).
 - The manual **S** key in `game.py` always overwrites.
 
-`game.py` and `game_headless.py` start from them (`bootstrap.start_simulation`) unless given `--new` or `--load`. **L** reloads them mid-run (`bootstrap.reload_population`).
+`game.py` and `game_headless.py` start from them (`bootstrap.start_simulation`) unless given `--new` or `--load`. **L** reloads them mid-run (`bootstrap.reload_population`: fresh founders). `--watch` instead gives every living creature of the species an exact copy of a changed file's brain and genes (`bootstrap.adopt_population`, `Creature.adopt`); position, health, age and fat stay.
 
 Each file also stores that species' chart `history` (score and longevity, capped at `CHART_HISTORY_SAVE_MAX`):
 - After a load, `bootstrap.restore_progress` restores the history and seeds the Hall of Fame with the saved score, so charts continue instead of restarting.

@@ -47,3 +47,36 @@ def test_reload_from_parsed_data_ignores_the_file_on_disk(tmp_path):
     assert progenitor.generation == 9
     assert sim.hall_of_fame[HERBIVORE].best.score == 7.0
     assert sim.stats[HERBIVORE].score_history == [5.0]
+
+
+def _brain_data(generation, score=None, genes=None):
+    data = NeuralNetwork(config.BRAIN_TOPOLOGY).to_data()
+    data["generation"] = generation
+    if score is not None:
+        data["score"] = score
+    if genes is not None:
+        data["genes"] = genes
+    return data
+
+
+def test_adopt_keeps_the_creatures_and_swaps_in_exact_copies():
+    sim = bootstrap.start_simulation(None, world_bounds=(400, 300))
+    before = [(c.id, c.pos.x, c.pos.y) for c in sim.world.herbivores]
+    genes = {**HERBIVORE.default_genes, "size": 20}
+    data = _brain_data(77, score=12.5, genes=genes)
+    bootstrap.adopt_population(sim, HERBIVORE, data)
+    herbivores = sim.world.herbivores
+    assert [(c.id, c.pos.x, c.pos.y) for c in herbivores] == before
+    want = NeuralNetwork.from_data(data, config.BRAIN_TOPOLOGY)
+    assert len({id(c.brain) for c in herbivores}) == len(herbivores)
+    for c in herbivores:
+        assert all((a == b).all() for a, b in zip(c.brain.weights, want.weights))
+        assert c.genes["size"] == 20 and c.generation == 77
+    assert sim.hall_of_fame[HERBIVORE].best.score == 12.5
+
+
+def test_adopt_into_an_empty_species_starts_founders():
+    sim = bootstrap.start_simulation(None, world_bounds=(400, 300))
+    sim.world.populations[CARNIVORE] = []
+    bootstrap.adopt_population(sim, CARNIVORE, _brain_data(5))
+    assert len(sim.world.carnivores) == CARNIVORE.start_count

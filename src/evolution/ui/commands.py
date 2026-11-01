@@ -2,7 +2,7 @@
 READ_ONLY_KEY_COMMANDS is the watch-mode subset that never writes saved_brains/."""
 import pygame
 
-from ..app.bootstrap import reload_population
+from ..app.bootstrap import adopt_population, reload_population
 from ..persistence.brain_store import save_brain
 from ..species import ALL_SPECIES
 from ..world.food import Food
@@ -34,11 +34,32 @@ def reload_species(app, species_list, data_by_species=None):
             generations.append(progenitor.generation)
             print(f"Loaded new {species.name} population from generation "
                   f"{progenitor.generation}.")
+    _update_generation(app.sim, species_list, generations)
+
+
+def adopt_species(app, data_by_species):
+    """Watch mode: swap the brain and genes of each {species: parsed file} into its living
+    creatures, which keep their place (bootstrap.adopt_population)."""
+    generations = []
+    for species, data in data_by_species.items():
+        count = len(app.sim.world.population(species))
+        progenitor = adopt_population(app.sim, species, data)
+        generations.append(progenitor.generation)
+        if count:
+            print(f"Swapped in the new {species.name} brain and genes for {count} creatures "
+                  f"(generation {progenitor.generation}).")
+        else:
+            print(f"Loaded new {species.name} population from generation "
+                  f"{progenitor.generation}.")
+    _update_generation(app.sim, list(data_by_species), generations)
+
+
+def _update_generation(sim, species_list, generations):
     if generations:
         # The species not reloaded keep their creatures, so the deepest generation stays.
         if set(species_list) != set(ALL_SPECIES):
-            generations.append(app.sim.generation)
-        app.sim.generation = max(generations)
+            generations.append(sim.generation)
+        sim.generation = max(generations)
 
 
 def reload_best(app):

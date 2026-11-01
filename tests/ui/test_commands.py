@@ -33,3 +33,12 @@ def test_read_only_keys_cannot_write_saved_brains():
     assert not writers & set(commands.READ_ONLY_KEY_COMMANDS.values())
     assert set(commands.READ_ONLY_KEY_COMMANDS.values()) == (
         set(commands.KEY_COMMANDS.values()) - writers)
+
+
+def test_watch_adopts_new_brains_without_repopulating():
+    sim = bootstrap.start_simulation(None, world_bounds=(400, 300))
+    sim.generation = 3
+    ids = [c.id for c in sim.world.herbivores]
+    commands.adopt_species(SimpleNamespace(sim=sim), {HERBIVORE: _herbivore_data(40)})
+    assert [c.id for c in sim.world.herbivores] == ids
+    assert sim.generation == 40
