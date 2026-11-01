@@ -1,5 +1,5 @@
 # `make run ui` / `make run headless`: `run` only makes the pair read naturally.
-.PHONY: run ui watch headless stop logs test lint not-running
+.PHONY: run ui watch headless stop clean-data logs test lint not-running
 
 GRAFANA := http://localhost:3000
 # Must match DASHBOARD_UID in monitoring/dashboard.py.
@@ -42,6 +42,11 @@ not-running:
 
 stop:
 	podman compose down
+
+# Stops the stack (the simulation saves its brains) and deletes the Prometheus and Grafana
+# volumes, so the next start has empty metrics history and a fresh Grafana database.
+clean-data:
+	podman compose down --volumes
 
 logs:
 	podman compose logs -f server

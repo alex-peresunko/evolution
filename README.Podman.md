@@ -9,14 +9,15 @@ Start the headless simulation together with Prometheus and Grafana:
 (or `make run headless`, which also waits for Grafana and opens it; `make stop` stops it).
 
 Then open http://localhost:3000. Grafana opens straight on the evolution dashboard, with no
-login. The other ports are:
+login, and keeps its database in the `grafana-data` volume between runs. The other ports are:
 - http://localhost:9090: Prometheus, which scrapes the simulation every 5 s and keeps its
   data in the `prometheus-data` volume between runs;
 - http://localhost:8000: the raw metrics.
 
 `podman compose logs -f server` follows the simulation's console. `podman compose down` stops
-everything; on SIGTERM the simulation saves its Hall of Fame before exiting. Add `-v` to
-`down` to also delete the stored Prometheus history.
+everything; on SIGTERM the simulation saves its Hall of Fame before exiting. `make clean-data`
+(`podman compose down -v`) also deletes both volumes, to start Prometheus and Grafana from
+scratch. The brains in `saved_brains/` are not touched.
 
 The monitoring config lives in `monitoring/`: the Prometheus scrape job, and Grafana's
 provisioned data source and dashboard. The dashboard itself is `grafana_dashboard.json`,

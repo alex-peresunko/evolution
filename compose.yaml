@@ -38,6 +38,7 @@ services:
       GF_AUTH_DISABLE_LOGIN_FORM: "true"
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/evolution.json
     volumes:
+      - grafana-data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana_dashboard.json:/var/lib/grafana/dashboards/evolution.json:ro
     ports:
@@ -45,8 +46,10 @@ services:
     depends_on:
       - prometheus
 
+# Kept across make stop; make clean-data removes them.
 volumes:
   prometheus-data:
+  grafana-data:
 
 # The commented out section below is an example of how to define a PostgreSQL
 # database that your application can use. `depends_on` tells Docker Compose to
