@@ -6,6 +6,7 @@ VM once with `podman machine init && podman machine start`. `podman compose` als
 
 ```bash
 make run headless   # podman compose up --build -d, wait for Grafana, open it
+make run headless WORKERS=4   # the same, plus 4 island worker processes (one core each)
 make logs           # podman compose logs -f server: the simulation's console
 make stop           # podman compose down: the simulation saves its Hall of Fame first
 make clean-data     # podman compose down --volumes: also deletes the metrics and Grafana data
@@ -15,6 +16,10 @@ make clean-data     # podman compose down --volumes: also deletes the metrics an
 container. It always rebuilds the image, so after a code change, `make stop` then
 `make run headless` runs the new code. `make run watch` opens a read-only UI next to it that
 reloads whenever the container saves new best brains.
+
+`WORKERS` (default 0) runs that many island workers inside the container, beside the main
+simulation (see the island workers section of CLAUDE.md). The container can only use the cores
+the podman machine has (`podman machine inspect`).
 
 `compose.yaml` runs three services:
 - `server`: `game_headless.py` in a Python 3.12 image, with raw metrics on

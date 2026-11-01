@@ -1,5 +1,6 @@
-"""Island workers for background mode: game_headless.py subprocesses that evolve their own
-worlds and swap best brains with this one (see persistence.islands)."""
+"""Island workers: game_headless.py subprocesses that evolve their own worlds and swap best
+brains with this one (see persistence.islands). game.py starts them with B, game_headless.py
+with --workers."""
 import os
 import subprocess
 import sys
@@ -10,11 +11,22 @@ from ..persistence.brain_store import SAVE_DIR
 from ..persistence.islands import IslandExchange, clear_island_files, worker_file
 from ..species import ALL_SPECIES
 
+# Each worker is one simulation loop; keep numpy's math libraries to one thread in it, so
+# `count` workers use `count` cores.
+_SINGLE_THREAD_ENV = {name: "1" for name in (
+    "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "VECLIB_MAXIMUM_THREADS")}
+
+
+def default_worker_count():
+    """Half the cores, at least one: game.py's B key without --workers."""
+    return max(1, (cpu_count() or 2) // 2)
+
 
 class WorkerPool:
-    def __init__(self, sim, autosaver):
+    def __init__(self, sim, autosaver, count):
         self.sim = sim
         self.autosaver = autosaver
+        self.count = count
         self.workers = []        # (id, Popen, log file)
         self.exchange = None
 
@@ -23,13 +35,14 @@ class WorkerPool:
         return bool(self.workers)
 
     def start(self):
-        n = max(1, (cpu_count() or 2) - 1)
+        n = self.count
         os.makedirs(SAVE_DIR, exist_ok=True)
         clear_island_files()
         self.exchange = IslandExchange(self.sim)
         self.exchange.publish()  # workers start from our best
         env = os.environ.copy()
         env["PYTHONIOENCODING"] = "utf-8"
+        env.update(_SINGLE_THREAD_ENV)
         for i in range(n):
             log = open(os.path.join(SAVE_DIR, f"worker_{i}.log"), "w", encoding="utf-8")
             proc = subprocess.Popen([sys.executable, "game_headless.py", "--worker-id", str(i)],

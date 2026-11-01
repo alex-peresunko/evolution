@@ -2,6 +2,8 @@
 .PHONY: run ui watch headless restart stop clean-data logs test golden golden-record lint not-running
 
 GRAFANA := http://localhost:3000
+# make run headless WORKERS=4: island workers in the container, one core each.
+WORKERS ?= 0
 # Must match DASHBOARD_UID in monitoring/dashboard.py.
 DASHBOARD := $(GRAFANA)/api/dashboards/uid/6a418c28-cbeb-46f9-a1f4-af86d6e6d051
 # Brackets keep grep from matching the recipe shell's own command line. Watch mode never
@@ -25,7 +27,7 @@ watch:
 	poetry run python game.py --watch $(ARGS)
 
 headless: not-running
-	podman compose up --build -d
+	WORKERS=$(WORKERS) podman compose up --build -d
 	@echo "waiting for Grafana..."
 	@# /api/health answers before the data source and dashboard are provisioned.
 	@for i in $$(seq 120); do curl -sf $(DASHBOARD) >/dev/null && exit 0; sleep 1; done; \

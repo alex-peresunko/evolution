@@ -9,6 +9,7 @@ from .. import config
 from ..app.bootstrap import archive_previous_best, start_simulation
 from ..app.console import ExtinctionReporter
 from ..app.metrics import GameMetrics
+from ..app.workers import WorkerPool, default_worker_count
 from ..persistence.autosave import HallOfFameAutosaver, save_on_exit
 from ..persistence.brain_watcher import BrainWatcher
 from ..world.geometry import Geometry
@@ -17,7 +18,6 @@ from .hud import draw_hud
 from .render import WorldRenderer
 from .render.motion import MotionSmoother
 from .view_state import ViewState
-from .workers import WorkerPool
 
 # pygame's C vectors and rects: much faster than the headless ones, and the renderer needs them.
 PYGAME_GEOMETRY = Geometry(pygame.math.Vector2, pygame.Rect)
@@ -41,9 +41,10 @@ def _prefer_performance_cores():
 
 
 class GameApp:
-    def __init__(self, source, new=False, read_only=False):
+    def __init__(self, source, new=False, read_only=False, workers=None):
         """read_only (watch mode): never writes saved_brains/, and follows the best brain files
-        as a headless run rewrites them."""
+        as a headless run rewrites them. `workers`: island workers B starts (None: half the
+        cores)."""
         _prefer_performance_cores()
         pygame.init()
         self.screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT),
@@ -73,7 +74,8 @@ class GameApp:
             archive_previous_best(source, new)
         self.view = ViewState(screen_size=self.screen.get_size())
         self.motion = MotionSmoother()
-        self.workers = None if read_only else WorkerPool(self.sim, self.autosaver)
+        self.workers = None if read_only else WorkerPool(
+            self.sim, self.autosaver, default_worker_count() if workers is None else workers)
 
     def _follow_brain_files(self):
         changed = dict(self.watcher.poll(time.perf_counter()))

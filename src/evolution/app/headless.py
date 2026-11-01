@@ -1,4 +1,4 @@
-"""The headless run loop: game_headless.py, the container, and game.py's island workers."""
+"""The headless run loop: game_headless.py, the container, and the island workers."""
 import os
 import signal
 import sys
@@ -11,6 +11,7 @@ from ..persistence.islands import IslandExchange, main_file
 from ..species import ALL_SPECIES, CARNIVORE, HERBIVORE
 from .bootstrap import archive_previous_best, start_simulation
 from .console import ExtinctionReporter
+from .workers import WorkerPool
 
 
 def status_line(sim, tps, prefix=""):
@@ -25,9 +26,10 @@ def status_line(sim, tps, prefix=""):
 
 class HeadlessRunner:
     """Island workers (worker_id set) start from the main sim's best brains, never touch the
-    brain history, save to their exchange files and import the main sim's published brains."""
+    brain history, save to their exchange files and import the main sim's published brains.
+    The main sim (worker_id None) runs `workers` of them beside itself."""
 
-    def __init__(self, source, *, new=False, worker_id=None, metrics=None):
+    def __init__(self, source, *, new=False, worker_id=None, metrics=None, workers=0):
         self.worker_id = worker_id
         self.metrics = metrics
         self.prefix = log_prefix(worker_id)
@@ -40,6 +42,10 @@ class HeadlessRunner:
         if worker_id is None:
             archive_previous_best(source, new)
         self.exchange = IslandExchange(self.sim) if worker_id is not None else None
+        self.pool = (WorkerPool(self.sim, self.autosaver, workers)
+                     if worker_id is None and workers > 0 else None)
+        if worker_id is not None and hasattr(os, "nice"):
+            os.nice(10)  # the UI and the main sim stay responsive
 
     def run(self):
         # SIGTERM (game.py stopping its workers, `podman stop`) runs the finally-block save too.
@@ -51,9 +57,13 @@ class HeadlessRunner:
         print(f"Headless simulation starting at Generation {sim.generation}... "
               "Press Ctrl+C to stop.")
         try:
+            if self.pool is not None:
+                self.pool.start()
             while True:
                 now = time.time()
                 sim.step()
+                if self.pool is not None:
+                    self.pool.sync_due()
                 if self.exchange is not None and sim.tick % WORKER_SYNC_INTERVAL == 0:
                     if os.getppid() != parent_pid:
                         print(f"\n{self.prefix}game.py is gone, exiting.")
@@ -67,6 +77,8 @@ class HeadlessRunner:
         except KeyboardInterrupt:
             print("\nSimulation stopped by user.")
         finally:
+            if self.pool is not None:
+                self.pool.stop()  # final sync first, so _save persists the islands' best
             self._save()
             print("Exiting.")
 

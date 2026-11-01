@@ -2,6 +2,10 @@ services:
   server:
     build:
       context: .
+    # WORKERS: island worker processes beside the main simulation, one core each.
+    command: ["python", "game_headless.py", "--workers", "${WORKERS:-0}"]
+    # Workers save on SIGTERM before the main sim's final sync and save.
+    stop_grace_period: 30s
     ports:
       - 8000:8000
     # Starts from and saves into the host's best_brain_*.json; don't run game.py on the same

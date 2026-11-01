@@ -6,11 +6,14 @@ from evolution.ui.app import GameApp
 
 
 def main():
-    args = cli.parse(cli.parser(watch_option=True))
+    args = cli.parse(cli.parser(
+        watch_option=True,
+        workers_help="island workers the B key starts (default: half the cores)"))
     # Watch mode runs beside the headless simulation, which already serves port 8000.
     if not args.watch:
         start_http_server(8000)
-    GameApp(start_source(args.new, args.load), new=args.new, read_only=args.watch).run()
+    GameApp(start_source(args.new, args.load), new=args.new, read_only=args.watch,
+            workers=args.workers).run()
 
 
 if __name__ == "__main__":

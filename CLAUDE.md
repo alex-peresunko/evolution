@@ -9,6 +9,7 @@ poetry install                                   # deps (Python >=3.12)
 make run ui                                      # game.py (ARGS="--new" passes flags)
 make run watch                                   # game.py --watch: read-only, follows a running headless sim
 make run headless                                # podman compose stack, opens Grafana; make logs / make stop
+                                                 # WORKERS=4 adds 4 island workers (one core each)
 make restart                                     # stop + rebuild + start the headless stack (picks up code changes)
 make clean-data                                  # stop the stack and delete the Prometheus + Grafana volumes
                                                  # both refuse to start while any simulation (local or container) runs
@@ -19,6 +20,7 @@ poetry run python game.py --list-brains          # list history snapshots (also 
 poetry run python game.py --watch                # read-only UI: repopulates when best_brain_*.json change (no port 8000, no saves/snapshots)
 poetry run python game.py --load 2               # start from snapshot #2 (1 = newest) or a folder name
 poetry run python game_headless.py               # headless, auto-loads saved brains, Prometheus on :8000
+poetry run python game_headless.py --workers 4   # plus 4 island worker processes (one core each)
 poetry run python pretrain.py                    # behavior-cloning pretrain -> history snapshot *-pretrained (--install: best_brain_*.json)
 
 poetry run pytest                                # all tests except the opt-in golden trace
@@ -37,8 +39,8 @@ poetry run python -m cProfile -s time <script.py>
 The shared library lives in `src/evolution/`, and the `game*.py` / `pretrain.py` entry scripts are thin wrappers around it. `config.py` is the single source of truth for every simulation constant. The packages are layered, and an import may only point down this chain:
 
 ```
-ui/           pygame only: GameApp, ViewState, key commands, HUD, renderer, island WorkerPool
-app/          startup shared by every entry script (bootstrap, cli), HeadlessRunner, metrics
+ui/           pygame only: GameApp, ViewState, key commands, HUD, renderer
+app/          startup shared by every entry script (bootstrap, cli), HeadlessRunner, island WorkerPool, metrics
 persistence/  brain JSON files, history snapshots, Hall of Fame autosave, island exchange
 sim/          Simulation (one tick = ordered phases), records, stats, breeding, populations
 world/        World and its entities, perception, terrain, spatial grids, geometry
@@ -137,15 +139,19 @@ World mechanics, all tuned through `config.py`:
 - After an extinction (`sim.extinctions`), `populations.repopulate` refills the species: young of random elite pairs (the best record if the pool is empty), plus `REPOPULATE_RANDOM_SHARE` random brains.
 - `sim.generation` is the deepest `Creature.generation` born (parents' max + 1). Creatures loaded from a brain file take the file's generation.
 
-### Island workers (game.py)
+### Island workers
 
-Pressing **B** (background mode) in `game.py` starts `ui.workers.WorkerPool`, which spawns `cpu_count()-1` subprocesses of `game_headless.py --worker-id N`. Each worker runs an independent world, skips the Prometheus server, and logs to `saved_brains/worker_N.log`. The brain exchange lives in `persistence/islands.py` (`IslandExchange`):
+`app.workers.WorkerPool` spawns `--workers N` subprocesses of `game_headless.py --worker-id N`:
+- in `game.py` when **B** (background mode) is pressed (default: half the cores);
+- in `game_headless.py` at startup (default 0, none; the container takes `WORKERS`).
+
+Workers run single-threaded numpy (`OMP_NUM_THREADS=1` and friends) at `nice` +10, so N workers use N cores. Each worker runs an independent world, skips the Prometheus server, and logs to `saved_brains/worker_N.log`. The brain exchange lives in `persistence/islands.py` (`IslandExchange`):
 - Workers save their Hall of Fame to `saved_brains/worker_N_{species}.json`.
 - Every `WORKER_SYNC_INTERVAL` main ticks, `WorkerPool.sync` imports any worker brain that beats the main Hall of Fame (`IslandExchange.import_if_better`). The brain and `ISLAND_IMMIGRANTS - 1` mutated copies replace the weakest creatures of that species, so the visible population evolves from it. The main autosave then persists it to `best_brain_*.json`.
 - The main sim publishes its Hall of Fame (the best across all islands) whenever it changes to `worker_main_{species}.json` (`IslandExchange.publish`), and every worker imports that in turn.
 - Starting background mode clears the old `worker_*.json` files.
 - Brain files are written atomically (`brain_store.write_json_atomic`: temp file plus `os.replace`), so a reader never sees half a file.
-- Stopping (B again, closing the window, Ctrl+C or a crash) SIGTERMs the workers. They save unsaved records on SIGTERM, then the main sim does a final sync and saves its Hall of Fame. A worker also exits by itself if its parent `game.py` dies.
+- Stopping (B again, closing the window, Ctrl+C, SIGTERM to the headless main, or a crash) SIGTERMs the workers. They save unsaved records on SIGTERM, then the main sim does a final sync and saves its Hall of Fame. A worker also exits by itself if its parent dies.
 - Only the main process writes `best_brain_*.json` while workers are running.
 
 Hall of Fame autosaves (`HallOfFameAutosaver`) happen at most once per `AUTOSAVE_INTERVAL` ticks. A record set inside that window is kept in `unsaved` and written by a later save.
