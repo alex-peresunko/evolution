@@ -2,6 +2,8 @@
 .PHONY: run ui watch headless stop logs test lint not-running
 
 GRAFANA := http://localhost:3000
+# Must match DASHBOARD_UID in monitoring/dashboard.py.
+DASHBOARD := $(GRAFANA)/api/dashboards/uid/6a418c28-cbeb-46f9-a1f4-af86d6e6d051
 # Brackets keep grep from matching the recipe shell's own command line. Watch mode never
 # writes saved_brains/, so it does not count as a running simulation.
 LOCAL_SIM := ps -Ao pid=,command= | grep -E '[g]ame(_headless)?\.py' | grep -v -- '--watch'
@@ -25,7 +27,9 @@ watch:
 headless: not-running
 	podman compose up --build -d
 	@echo "waiting for Grafana..."
-	@until curl -sf $(GRAFANA)/api/health >/dev/null; do sleep 1; done
+	@# /api/health answers before the data source and dashboard are provisioned.
+	@for i in $$(seq 120); do curl -sf $(DASHBOARD) >/dev/null && exit 0; sleep 1; done; \
+		echo "Grafana is not ready after 120s (podman compose logs grafana)"; exit 1
 	@open $(GRAFANA) 2>/dev/null || echo "Grafana: $(GRAFANA)"
 	@echo "make logs: follow the simulation · make stop: save and stop"
 
