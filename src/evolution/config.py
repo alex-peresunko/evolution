@@ -149,6 +149,7 @@ BITE_COOLDOWN_TICKS = 25
 BITE_HEALTH_TRANSFER = 0.25     # share of the damage the carnivore gains as health
 BITE_SCORE = 0.25               # per bite landed; a kill adds 1
 ADRENALINE_STAMINA = 300        # stamina a bitten herbivore gains, so it can escape
+HURT_FADE_TICKS = 30            # the hurt input falls from 1 to 0 this many ticks after a bite
 RETALIATION_DAMAGE = 600        # times (prey.size / carn.size - 1), capped at 3x
 
 # --- Carcasses ---
@@ -206,6 +207,7 @@ BRAIN_INPUTS = (
     + 2             # carcass smell angle/strength
     + 1             # in water
     + 1             # eating
+    + 1             # hurt
 )
 BRAIN_OUTPUTS = 4 + NUM_MEMORY  # rotation, speed, signal, memory, stop eating
 BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]

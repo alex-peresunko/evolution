@@ -199,6 +199,7 @@ def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasse
     inputs += [cc_smell_angle, cc_smell_strength]
     inputs.append(1.0 if any(lake.contains(self.pos.x, self.pos.y) for lake in lakes) else 0.0)
     inputs.append(self.eating_ticks / self.species.eat_ticks if self.eating_ticks else 0.0)
+    inputs.append(self.hurt)
     return inputs, whiskers, target_whiskers, nearest_target_dist, nearest_smell_strength
 
 

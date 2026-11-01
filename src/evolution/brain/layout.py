@@ -54,6 +54,7 @@ INPUTS = Layout([
     ("carcass_smell_strength", 1, "carcass_smell_str"),
     ("in_water", 1, "in_water"),
     ("eating", 1, "eating"),                          # share of the meal left; 0 = not eating
+    ("hurt", 1, "hurt"),                              # 1 just after a bite or retaliation, fading
 ])
 
 OUTPUTS = Layout([

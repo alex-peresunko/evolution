@@ -37,7 +37,7 @@ def teacher_actions(X, is_carnivore):
     carrion = carn & ~seen & ~carcass & ~tracking & (X[:, IN.carcass_smell_strength] > 0)
     rel = np.where(carrion, X[:, IN.carcass_smell_angle] * math.pi, rel)
 
-    fleeing = ~carn & (X[:, IN.smell_strength] > FLEE_SMELL)
+    fleeing = ~carn & ((X[:, IN.smell_strength] > FLEE_SMELL) | (X[:, IN.hurt] > 0))
     rel = np.where(fleeing, _wrap(X[:, IN.smell_angle] * math.pi + math.pi), rel)
 
     rotation = np.clip(rel / CREATURE_ROTATION_SPEED, -1, 1)

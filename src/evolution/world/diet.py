@@ -83,11 +83,15 @@ class PredatorDiet:
             prey.health -= damage
             prey.stamina = min(prey.max_stamina, prey.stamina + ADRENALINE_STAMINA)
             prey.last_hit_tick = tick
+            prey.hurt = 1.0
             prey.stop_eating()   # the rest of the interrupted meal is lost
             c.gain_meat(damage * BITE_HEALTH_TRANSFER)
             c.score += BITE_SCORE + (1 if prey.health <= 0 else 0)
             # Large prey fights back.
-            c.health -= RETALIATION_DAMAGE * min(3.0, max(0.0, 1 / ratio - 1))
+            retaliation = RETALIATION_DAMAGE * min(3.0, max(0.0, 1 / ratio - 1))
+            c.health -= retaliation
+            if retaliation > 0:
+                c.hurt = 1.0
             c.last_bite_tick = tick
             c.last_hit_tick = tick
             return True

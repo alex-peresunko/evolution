@@ -317,6 +317,7 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
         out[wet, IN.in_water] = 1.0
     out[:, IN.eating] = [c.eating_ticks / c.species.eat_ticks if c.eating_ticks else 0.0
                          for c in creatures]
+    out[:, IN.hurt] = [c.hurt for c in creatures]
 
     out[:, IN.health] = s[:, 3] / s[:, 4]
     out[:, IN.sin_angle] = np.sin(angle)

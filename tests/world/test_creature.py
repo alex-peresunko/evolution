@@ -115,6 +115,25 @@ def test_bite_cooldown_and_kill_bonus():
     assert carn.score == pytest.approx(2 * config.BITE_SCORE + 1)
 
 
+def test_bite_hurts_the_prey_and_the_hurt_fades():
+    carn = _adult_at(True, 500, 400, size=8)
+    prey = _adult_at(False, 505, 400, size=8)
+    _carnivore_step(carn, [prey], tick=1)
+    assert prey.hurt == 1.0 and carn.hurt == 0.0
+    _act(prey, [0.0, 0.0])
+    assert prey.hurt == pytest.approx(1 - 1 / config.HURT_FADE_TICKS)
+    for _ in range(config.HURT_FADE_TICKS):
+        _act(prey, [0.0, 0.0])
+    assert prey.hurt == 0.0
+
+
+def test_retaliation_hurts_the_carnivore():
+    carn = _adult_at(True, 500, 400, size=6)
+    prey = _adult_at(False, 510, 400, size=12)
+    _carnivore_step(carn, [prey], tick=1)
+    assert carn.hurt == 1.0
+
+
 def test_no_bite_from_behind():
     carn = _adult_at(True, 500, 400, angle=math.pi, size=8)
     prey = _adult_at(False, 505, 400, size=8)

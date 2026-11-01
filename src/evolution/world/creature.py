@@ -20,6 +20,7 @@ from ..config import (
     HEALTH_LOST_ON_HIT,
     HUNGER_HEALTH_PENALTY,
     HUNGER_MAX,
+    HURT_FADE_TICKS,
     JUVENILE_SIZE_FACTOR,
     KLEIBER_EXPONENT,
     MEAL_BREAK_THRESHOLD,
@@ -72,6 +73,7 @@ class Creature:
         self.respawn_immunity_ticks = 0
         self.last_bite_tick: int | None = None
         self.last_hit_tick: int | None = None
+        self.hurt = 0.0                     # 1 when bitten or hit back, fading to 0
         self.eating_ticks = 0               # > 0 while standing still to eat
         self.meal_health = 0.0              # grazer: health still to absorb from the meal
         self.meal_carcass = None            # predator: carcass being eaten
@@ -165,6 +167,7 @@ class Creature:
 
     def act(self, outputs, world):
         """Live one tick on the brain's `outputs`. The steps' order is part of the rules."""
+        self.hurt = max(0.0, self.hurt - 1 / HURT_FADE_TICKS)
         growth_factor = self._grow(world.lakes)
         if self.eating_ticks > 0 and outputs[OUT.stop_eating] > MEAL_BREAK_THRESHOLD:
             self.stop_eating()

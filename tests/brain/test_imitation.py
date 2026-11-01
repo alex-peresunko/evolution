@@ -68,6 +68,13 @@ def test_signal_and_memory_targets_are_zero():
     assert (np.abs(Y) < 1).all()
 
 
+def test_hurt_herbivore_flees_and_abandons_its_meal():
+    row = _row()
+    row[IN.hurt] = 0.5
+    Y = teacher_actions(np.array([row]), [False])
+    assert Y[0, OUT.speed] > 0.9 and Y[0, OUT.stop_eating] > 0.5
+
+
 def test_only_a_fleeing_herbivore_abandons_its_meal():
     row = _row()
     row[IN.smell_strength] = 0.9
