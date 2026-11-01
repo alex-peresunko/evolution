@@ -1,11 +1,11 @@
-"""Sprites for food, carcasses and the glow and bubble effects around creatures."""
+"""Sprites for food and the glow and bubble effects around creatures."""
 import math
 import random
 
 import pygame
 
-from .shapes import blur, ellipse, shaded_ellipse
-from .style import CARCASS_LEVELS, FOOD_DRAW_RADIUS, FOOD_LEVELS, PULSE_LEVELS, SS, mix
+from .shapes import blur, ellipse
+from .style import FOOD_DRAW_RADIUS, FOOD_LEVELS, PULSE_LEVELS, SS, mix
 
 
 def build_glow(sb, color, level):
@@ -32,35 +32,6 @@ def build_bubble(sb, level):
     pygame.draw.circle(big, (240, 248, 255, int(220 * a)),
                        (w * SS / 2 - r * SS * 0.45, w * SS / 2 - r * SS * 0.45), r * SS * 0.16)
     return pygame.transform.smoothscale(big, (w, w)).convert_alpha()
-
-
-def build_carcass(sb, carn, level):
-    """Meat with exposed ribs; `level` 0 is fresh, CARCASS_LEVELS - 1 nearly gone.
-    Returns (sprite, half width)."""
-    rnd = random.Random(sb * 31 + carn)
-    rot = 1 - level / (CARCASS_LEVELS - 1)
-    w = math.ceil(sb * 2.6) + 4
-    big = pygame.Surface((w * SS, w * SS), pygame.SRCALPHA)
-    c, u = w * SS / 2, sb * SS
-    meat = mix((96, 70, 52), (150, 34, 36) if not carn else (130, 40, 28), rot)
-    rim = mix(meat, (0, 0, 0), 0.45)
-    bone = mix((170, 160, 140), (236, 228, 210), rot)
-    shrink = 0.6 + 0.4 * rot
-    tilt = rnd.uniform(0, math.pi)
-    shaded_ellipse(big, rim, meat, c, c, 1.05 * u * shrink, 0.7 * u * shrink, tilt,
-                   hx=-0.2 * u, hy=-0.2 * u)
-    for i in range(4):
-        off = (i - 1.5) * 0.32 * u * shrink
-        dx, dy = math.cos(tilt) * off, math.sin(tilt) * off
-        nx, ny = -math.sin(tilt) * 0.55 * u, math.cos(tilt) * 0.55 * u
-        pygame.draw.line(big, bone, (c + dx - nx, c + dy - ny), (c + dx + nx, c + dy + ny),
-                         max(1, int(0.14 * u)))
-    pygame.draw.line(big, bone, (c - math.cos(tilt) * 0.8 * u, c - math.sin(tilt) * 0.8 * u),
-                     (c + math.cos(tilt) * 0.8 * u, c + math.sin(tilt) * 0.8 * u),
-                     max(1, int(0.2 * u)))
-    small = pygame.transform.smoothscale(big, (w, w))
-    small.fill((255, 255, 255, int(110 + 145 * rot)), special_flags=pygame.BLEND_RGBA_MULT)
-    return small.convert_alpha(), w / 2
 
 
 def build_food(variant, level, radius=FOOD_DRAW_RADIUS):

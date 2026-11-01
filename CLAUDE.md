@@ -158,7 +158,7 @@ Entities take their vector and rect types from a `world.geometry.Geometry(vec2, 
 - **Sprites** are drawn procedurally once (`ui/render/*_art.py`, 4× supersampled, then smoothscaled), pre-rotated into `config.SPRITE_ANGLE_STEPS` buckets with the drop shadow baked in, and cached in `SpriteCache` by `(is_carnivore, size, health level, walk frame, angle)`. A frame is mostly `screen.blits`.
 - **Obstacles** are static and baked into the background surface at startup. If obstacles ever move or change, the background must be rebuilt.
 - **Also drawn:**
-  - carcass sprites;
+  - carcasses (`carcass_art`): the dead creature's skeleton seen from above, lying at its death angle (`Carcass.angle`), with flesh and a blood stain that shrink as it's eaten;
   - a red glow on creatures hit within the last few ticks;
   - pulsing rings around creatures that are signalling;
   - a night overlay scaled by `world.light`, with food glowing through it.

@@ -85,15 +85,19 @@ class WorldRenderer:
                 food_blits.append((food_sprites[f.id % FOOD_VARIANTS][lvl], (x - fo, y - fo)))
         screen.blits(food_blits, doreturn=False)
 
+        steps = config.SPRITE_ANGLE_STEPS
+        angle_scale = steps / (2 * math.pi)
         carcass_blits = []
         for cc in world.carcasses:
             x, y = (cc.pos.x - cam_x) * z, (cc.pos.y - cam_y) * z
-            r = (cc.radius * 1.4 + 3) * z
+            r = (cc.radius * 2.6 + 3) * z
             if -r <= x <= sw + r and -r <= y <= sh + r:
                 lvl = min(CARCASS_LEVELS - 1, int((1 - cc.meat / cc.max_meat) * CARCASS_LEVELS))
-                spr, half = cache.carcass(max(2, int(cc.radius * z + 0.5)),
-                                          cc.species.is_predator, lvl)
-                carcass_blits.append((spr, (x - half, y - half)))
+                spr, ox, oy = cache.carcass(cc.species.is_predator,
+                                            max(2, int(cc.radius * z + 0.5)), lvl,
+                                            color_bucket(cc.color),
+                                            int(cc.angle * angle_scale + 0.5) % steps)
+                carcass_blits.append((spr, (x + ox, y + oy)))
         screen.blits(carcass_blits, doreturn=False)
 
         creatures = world.creatures()
@@ -112,8 +116,6 @@ class WorldRenderer:
 
         now = time.time()
         pulse = int((math.sin(self.frame * 0.08) + 1) * 0.5 * (PULSE_LEVELS - 0.01))
-        steps = config.SPRITE_ANGLE_STEPS
-        angle_scale = steps / (2 * math.pi)
         rit = config.RESPAWN_IMMUNITY_TICKS
         tick = world.tick
         rotated, phases = cache.rotated, self._phase

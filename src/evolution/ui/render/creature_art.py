@@ -55,7 +55,7 @@ def draw_herbivore(s, cx, cy, u, p, frame):
         ellipse(s, p["nose"], hx + 0.2 * u, hy + side * 0.05 * u, 0.025 * u, 0.02 * u)
 
 
-def _head_outline(cx, cy, u, k=1.0, dx=0.0):
+def head_outline(cx, cy, u, k=1.0, dx=0.0):
     """Top-down T-Rex skull outline, shrunk by k toward its centre and shifted by dx (in u)."""
     half = ((0.84, 0.32), (0.98, 0.43), (1.22, 0.41), (1.5, 0.32), (1.73, 0.23), (1.85, 0.12),
             (1.88, 0.0))
@@ -101,9 +101,9 @@ def draw_carnivore(s, cx, cy, u, p, frame):
                  rot=side * 0.5)
         for d in (-0.04, 0.04):
             ellipse(s, p["claw"], ax + 0.15 * u, ay + (side * 0.09 + d) * u, 0.035 * u, 0.028 * u)
-    pygame.draw.polygon(s, p["rim"], _head_outline(cx, cy, u))
-    pygame.draw.polygon(s, mix(p["rim"], p["core"], 0.6), _head_outline(cx, cy, u, 0.86))
-    pygame.draw.polygon(s, p["core"], _head_outline(cx, cy, u, 0.64, -0.03))
+    pygame.draw.polygon(s, p["rim"], head_outline(cx, cy, u))
+    pygame.draw.polygon(s, mix(p["rim"], p["core"], 0.6), head_outline(cx, cy, u, 0.86))
+    pygame.draw.polygon(s, p["core"], head_outline(cx, cy, u, 0.64, -0.03))
     ellipse(s, p["snout"], cx + 1.58 * u, cy, 0.24 * u, 0.15 * u)
     for side in (1, -1):
         for x, y in ((1.25, 0.39), (1.38, 0.36), (1.5, 0.32), (1.62, 0.275), (1.74, 0.22)):

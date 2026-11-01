@@ -49,6 +49,8 @@ class Carcass:
         self.pos = creature.geometry.vec2(creature.pos.x, creature.pos.y)
         self.radius = max(3.0, creature.size)
         self.species = creature.species
+        self.angle = creature.angle
+        self.color = creature.genes["color"]
         self.max_meat = CARCASS_MEAT_PER_SIZE * creature.size
         self.meat = self.max_meat
         self.age = 0
