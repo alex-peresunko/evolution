@@ -52,6 +52,24 @@ def test_zooming_back_snaps_to_one():
     assert view.zoom == 1.0
 
 
+def test_resize_past_the_world_zooms_in_and_keeps_the_camera_inside():
+    ww, wh = config.WORLD_WIDTH, config.WORLD_HEIGHT
+    view = ViewState(cam_x=ww - config.SCREEN_WIDTH, cam_y=wh - config.SCREEN_HEIGHT)
+    view.resize((ww * 2, wh))
+    assert view.zoom == pytest.approx(2.0)
+    vw, vh = view.view_size()
+    assert (vw, vh) == pytest.approx((ww, wh / 2))
+    assert 0 <= view.cam_x <= ww - vw and 0 <= view.cam_y <= wh - vh
+
+
+def test_zoom_out_is_limited_by_the_resized_window():
+    view = ViewState()
+    view.resize((config.WORLD_WIDTH, config.WORLD_HEIGHT))
+    view.zoom_by(-10, (0, 0))
+    assert view.zoom == 1.0
+    assert view.view_size() == (config.WORLD_WIDTH, config.WORLD_HEIGHT)
+
+
 def test_camera_moves_to_the_leader_after_a_repopulation():
     sim = bootstrap.start_simulation(None, world_bounds=(400, 300))
     view = ViewState(selected=sim.world.herbivores[3])

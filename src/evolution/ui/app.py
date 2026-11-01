@@ -46,7 +46,8 @@ class GameApp:
         as a headless run rewrites them."""
         _prefer_performance_cores()
         pygame.init()
-        self.screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
+        self.screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT),
+                                              pygame.RESIZABLE)
         self.read_only = read_only
         if read_only:
             pygame.display.set_caption("Evolution Sim (watching, read-only) | L to Load, "
@@ -70,7 +71,7 @@ class GameApp:
                                       world.lakes)
         if not read_only:
             archive_previous_best(source, new)
-        self.view = ViewState()
+        self.view = ViewState(screen_size=self.screen.get_size())
         self.motion = MotionSmoother()
         self.workers = None if read_only else WorkerPool(self.sim, self.autosaver)
 

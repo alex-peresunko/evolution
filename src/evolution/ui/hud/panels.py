@@ -4,7 +4,7 @@ import pygame
 from ... import config
 
 _PANELS = {}
-_FADE_LAYER = {}
+_fade_layer = None
 _FONTS = {}
 
 
@@ -31,10 +31,10 @@ def draw_panel(screen, rect):
 def draw_faded(screen, rect, alpha, draw, *args):
     """Run draw(surface, *args), which paints in screen coordinates inside rect, on a reusable
     transparent layer, then blit that rect at alpha, so panel, text and lines fade together."""
-    layer = _FADE_LAYER.get(screen.get_size())
-    if layer is None:
-        layer = _FADE_LAYER[screen.get_size()] = pygame.Surface(screen.get_size(),
-                                                                 pygame.SRCALPHA)
+    global _fade_layer
+    layer = _fade_layer
+    if layer is None or layer.get_size() != screen.get_size():
+        layer = _fade_layer = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
     layer.fill((0, 0, 0, 0), rect)
     layer.set_clip(rect)
     draw(layer, *args)

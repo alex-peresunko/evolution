@@ -140,6 +140,9 @@ def handle_events(app):
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             view.running = False
+        elif event.type == pygame.VIDEORESIZE:
+            app.screen = pygame.display.get_surface()
+            view.resize(app.screen.get_size())
         elif event.type == pygame.KEYDOWN:
             command = app.key_commands.get(event.key)
             if command:

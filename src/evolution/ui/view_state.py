@@ -2,10 +2,9 @@ from collections import deque
 from dataclasses import dataclass, field
 
 from .. import config
-from .camera import follow_target, min_zoom, viewport_origin, zoom_at
+from .camera import clamp_origin, follow_target, min_zoom, viewport_origin, zoom_at
 
 WORLD_SIZE = (config.WORLD_WIDTH, config.WORLD_HEIGHT)
-SCREEN_SIZE = (config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
 SPEEDS = (1 / 8, 1 / 4, 1 / 2, 1, 2, 4, 8, 16, 32)  # simulation ticks per drawn frame
 
 
@@ -27,6 +26,7 @@ class ViewState:
     cam_x: float = 0.0
     cam_y: float = 0.0
     zoom: float = 1.0
+    screen_size: tuple = (config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
     minimap_dragging: bool = False
     selected: object = None                  # the creature the camera follows
     tentative_pick: object = None            # selected, if picked while its species was tied
@@ -37,7 +37,7 @@ class ViewState:
 
     def view_size(self):
         """The camera's view in world units."""
-        return config.SCREEN_WIDTH / self.zoom, config.SCREEN_HEIGHT / self.zoom
+        return self.screen_size[0] / self.zoom, self.screen_size[1] / self.zoom
 
     def screen_to_world(self, pos):
         return self.cam_x + pos[0] / self.zoom, self.cam_y + pos[1] / self.zoom
@@ -47,13 +47,20 @@ class ViewState:
 
     def zoom_by(self, notches, anchor):
         """Zoom by ZOOM_STEP per wheel notch around the screen point anchor."""
-        new_zoom = min(config.ZOOM_MAX, max(min_zoom(WORLD_SIZE, SCREEN_SIZE),
+        new_zoom = min(config.ZOOM_MAX, max(min_zoom(WORLD_SIZE, self.screen_size),
                                             self.zoom * config.ZOOM_STEP ** notches))
         if abs(new_zoom - 1.0) < 1e-6:
             new_zoom = 1.0  # snap back to the renderer's direct, unscaled path
         self.cam_x, self.cam_y = zoom_at((self.cam_x, self.cam_y), self.zoom, new_zoom, anchor,
-                                         WORLD_SIZE, SCREEN_SIZE)
+                                         WORLD_SIZE, self.screen_size)
         self.zoom = new_zoom
+
+    def resize(self, size):
+        """Adopt a new window size, zooming in if the view would now reach past the world."""
+        self.screen_size = tuple(size)
+        self.zoom = max(self.zoom, min_zoom(WORLD_SIZE, self.screen_size))
+        self.cam_x, self.cam_y = clamp_origin(self.cam_x, self.cam_y, WORLD_SIZE,
+                                              self.view_size())
 
     # --- speed and charts --------------------------------------------------------------------
 

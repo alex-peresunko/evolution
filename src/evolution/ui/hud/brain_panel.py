@@ -28,13 +28,13 @@ def activation_color(v):
     return tuple(round(z + (e - z) * abs(v)) for z, e in zip(config.COLOR_BRAIN_ZERO, end))
 
 
-def panel_rect():
+def panel_rect(screen_height):
     w, h = config.BRAIN_PANEL_SIZE
-    return pygame.Rect(10, config.SCREEN_HEIGHT - h - 10, w, h)
+    return pygame.Rect(10, screen_height - h - 10, w, h)
 
 
 def draw_brain_panel(screen, c, history):
-    panel = panel_rect()
+    panel = panel_rect(screen.get_height())
     (x0, y0), (w, h) = panel.topleft, panel.size
     draw_panel(screen, panel)
     small = font(15)
