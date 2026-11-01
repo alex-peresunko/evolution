@@ -37,6 +37,7 @@ GENE_CHART_COLORS = {
 SCORE_SAMPLE_INTERVAL = 200
 CHART_HISTORY_SAVE_MAX = 500  # chart samples per series kept in a saved brain file
 WORKER_SYNC_INTERVAL = 300       # ticks between island brain exchanges (background mode)
+WATCH_POLL_SECONDS = 1.0         # how often watch mode (game.py --watch) checks brain files
 ISLAND_IMMIGRANTS = 4            # weakest creatures replaced by an imported better brain
 
 # --- Gene Defaults ---

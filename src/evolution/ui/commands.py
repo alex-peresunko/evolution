@@ -10,6 +10,9 @@ from .hud import minimap
 
 def save_living_best(app):
     """Save each species' best living creature over its best_brain file."""
+    if app.read_only:
+        print("Saving is disabled in watch mode.")
+        return
     sim = app.sim
     for species in ALL_SPECIES:
         best = max(sim.world.population(species), key=lambda c: c.score, default=None)
@@ -20,10 +23,10 @@ def save_living_best(app):
                        history=sim.stats[species].saved_history())
 
 
-def reload_best(app):
-    """Restart each species from its best_brain file."""
+def reload_species(app, species_list):
+    """Restart the given species from their best_brain files, logging each one."""
     generations = []
-    for species in ALL_SPECIES:
+    for species in species_list:
         progenitor = reload_population(app.sim, species)
         if progenitor is None:
             print(f"No {species.name} brain file found to load.")
@@ -33,6 +36,11 @@ def reload_best(app):
                   f"{progenitor.generation}.")
     if generations:
         app.sim.generation = max(generations)
+
+
+def reload_best(app):
+    """Restart each species from its best_brain file."""
+    reload_species(app, ALL_SPECIES)
 
 
 def toggle_pause(app):
@@ -74,6 +82,9 @@ def toggle_drawing(app):
 
 
 def toggle_background_mode(app):
+    if app.read_only:
+        print("Island workers are disabled in watch mode.")
+        return
     if app.workers.running:
         app.workers.stop()
         print("--- Island Workers Stopped ---")

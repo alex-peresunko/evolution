@@ -1,5 +1,5 @@
 # `make run ui` / `make run headless`: `run` only makes the pair read naturally.
-.PHONY: run ui headless stop logs test lint not-running
+.PHONY: run ui watch headless stop logs test lint not-running
 
 GRAFANA := http://localhost:3000
 # Brackets keep pgrep from matching the recipe shell's own command line.
@@ -9,13 +9,17 @@ CONTAINER_SIM := --filter label=io.podman.compose.project=evolution \
 
 run:
 ifeq ($(filter-out run,$(MAKECMDGOALS)),)
-	@echo "usage: make run ui | make run headless"; exit 2
+	@echo "usage: make run ui | make run watch | make run headless"; exit 2
 else
 	@:
 endif
 
 ui: not-running
 	poetry run python game.py $(ARGS)
+
+# Read-only: runs alongside a headless simulation, so no not-running guard.
+watch:
+	poetry run python game.py --watch $(ARGS)
 
 headless: not-running
 	podman compose up --build -d

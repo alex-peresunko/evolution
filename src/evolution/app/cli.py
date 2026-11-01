@@ -5,7 +5,7 @@ from ..persistence.brain_history import format_listing, resolve
 from ..persistence.brain_store import SAVE_DIR
 
 
-def parser(description=None, worker_option=False):
+def parser(description=None, worker_option=False, watch_option=False):
     p = argparse.ArgumentParser(description=description)
     if worker_option:
         p.add_argument("--worker-id", type=int, default=None)
@@ -16,6 +16,10 @@ def parser(description=None, worker_option=False):
                        help="start from a history snapshot: index (1 = newest) or folder name")
     group.add_argument("--list-brains", action="store_true",
                        help="list the history snapshots and exit")
+    if watch_option:
+        group.add_argument("--watch", action="store_true",
+                           help="read-only: show the saved best brains and repopulate whenever "
+                                "a running headless simulation saves new ones")
     return p
 
 

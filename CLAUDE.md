@@ -7,12 +7,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 poetry install                                   # deps (Python >=3.12)
 make run ui                                      # game.py (ARGS="--new" passes flags)
+make run watch                                   # game.py --watch: read-only, follows a running headless sim
 make run headless                                # podman compose stack, opens Grafana; make logs / make stop
                                                  # both refuse to start while any simulation (local or container) runs
 
 poetry run python game.py                        # graphical (requires display); continues from best_brain_*.json
 poetry run python game.py --new                  # random brains; current best brains move to history
 poetry run python game.py --list-brains          # list history snapshots (also game_headless.py)
+poetry run python game.py --watch                # read-only UI: repopulates when best_brain_*.json change (no port 8000, no saves/snapshots)
 poetry run python game.py --load 2               # start from snapshot #2 (1 = newest) or a folder name
 poetry run python game_headless.py               # headless, auto-loads saved brains, Prometheus on :8000
 poetry run python pretrain.py                    # behavior-cloning pretrain -> history snapshot *-pretrained (--install: best_brain_*.json)
