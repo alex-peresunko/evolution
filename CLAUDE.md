@@ -9,6 +9,7 @@ poetry install                                   # deps (Python >=3.12)
 make run ui                                      # game.py (ARGS="--new" passes flags)
 make run watch                                   # game.py --watch: read-only, follows a running headless sim
 make run headless                                # podman compose stack, opens Grafana; make logs / make stop
+make restart                                     # stop + rebuild + start the headless stack (picks up code changes)
 make clean-data                                  # stop the stack and delete the Prometheus + Grafana volumes
                                                  # both refuse to start while any simulation (local or container) runs
 

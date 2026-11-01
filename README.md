@@ -50,6 +50,7 @@ make run ui                  # the graphical simulation (ARGS="--new" passes fla
 make run headless            # headless simulation + Prometheus + Grafana in Podman
 make run watch               # read-only UI following the running headless simulation
 make logs / make stop        # follow / save and stop the headless simulation
+make restart                 # save, rebuild and restart it (picks up code changes)
 make clean-data              # stop it and delete the Prometheus and Grafana data
 ```
 

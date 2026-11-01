@@ -1,5 +1,5 @@
 # `make run ui` / `make run headless`: `run` only makes the pair read naturally.
-.PHONY: run ui watch headless stop clean-data logs test golden golden-record lint not-running
+.PHONY: run ui watch headless restart stop clean-data logs test golden golden-record lint not-running
 
 GRAFANA := http://localhost:3000
 # Must match DASHBOARD_UID in monitoring/dashboard.py.
@@ -42,6 +42,11 @@ not-running:
 
 stop:
 	podman compose down
+
+# Rebuilds the image, so code changes take effect; metrics history is kept.
+restart:
+	$(MAKE) stop
+	$(MAKE) headless
 
 # Stops the stack (the simulation saves its brains) and deletes the Prometheus and Grafana
 # volumes, so the next start has empty metrics history and a fresh Grafana database.
