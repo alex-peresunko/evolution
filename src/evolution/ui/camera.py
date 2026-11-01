@@ -1,16 +1,19 @@
 """Camera math: which creature to follow, and where the viewport goes."""
 
 
-def follow_target(world, creature):
-    """The creature to keep following: itself while it lives in the population, else the
-    highest-scoring creature of its species (None if there is none)."""
+def follow_target(world, creature, tentative=False):
+    """(creature to follow, tentative): itself while it lives in the population, else the
+    highest-scoring creature of its species (None if there is none). A pick is tentative while
+    the whole species is tied on score (just repopulated, so there is no best yet); a tentative
+    creature is re-picked on every call until one leads."""
     if creature is None:
-        return None
+        return None, False
     population = world.population(creature.species)
-    # Membership matters too: island immigrants replace creatures without killing them.
-    if creature.is_alive() and any(c is creature for c in population):
-        return creature
-    return max(population, key=lambda c: c.score, default=None)
+    # Membership matters too: island immigrants and reloads replace creatures without killing them.
+    if not tentative and creature.is_alive() and any(c is creature for c in population):
+        return creature, False
+    best = max(population, key=lambda c: c.score, default=None)
+    return best, best is not None and all(c.score == best.score for c in population)
 
 
 def clamp_origin(x, y, world_size, view_size):

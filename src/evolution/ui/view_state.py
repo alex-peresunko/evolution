@@ -29,6 +29,7 @@ class ViewState:
     zoom: float = 1.0
     minimap_dragging: bool = False
     selected: object = None                  # the creature the camera follows
+    tentative_pick: object = None            # selected, if picked while its species was tied
     brain_history: deque = field(default_factory=lambda: deque(maxlen=config.BRAIN_VIEW_HISTORY))
     brain_history_owner: object = None
 
@@ -81,7 +82,9 @@ class ViewState:
     def follow_selected(self, world):
         """Keep the camera on the selected creature; when it dies, switch to its species'
         best."""
-        c = self.selected = follow_target(world, self.selected)
+        tentative = self.selected is not None and self.selected is self.tentative_pick
+        c, tentative = follow_target(world, self.selected, tentative)
+        self.selected, self.tentative_pick = c, c if tentative else None
         if c is not None:
             pose = self.poses.get(c.id) if self.poses else None
             self.center_on(*(pose[:2] if pose else (c.pos.x, c.pos.y)))

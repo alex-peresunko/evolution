@@ -18,28 +18,42 @@ def _world():
 def test_follows_living_creature():
     world = _world()
     c = world.herbivores[1]
-    assert follow_target(world, c) is c
+    assert follow_target(world, c) == (c, False)
 
 
 def test_dead_creature_switches_to_best_of_its_species():
     world = _world()
     followed = world.herbivores[1]
     followed.health = 0
-    assert follow_target(world, followed) is world.herbivores[-1]  # not the higher-scoring carnivores
+    assert follow_target(world, followed)[0] is world.herbivores[-1]  # not the higher-scoring carnivores
 
 
 def test_removed_creature_switches_to_best():
     world = _world()
     followed = world.carnivores.pop(0)  # replaced by an immigrant, still alive
-    assert follow_target(world, followed) is world.carnivores[-1]
+    assert follow_target(world, followed)[0] is world.carnivores[-1]
 
 
 def test_nothing_to_follow():
     world = _world()
     followed = world.herbivores[0]
     world.populations[HERBIVORE] = []
-    assert follow_target(world, followed) is None
-    assert follow_target(world, None) is None
+    assert follow_target(world, followed) == (None, False)
+    assert follow_target(world, None) == (None, False)
+
+
+def test_pick_from_a_tied_species_is_tentative_until_one_leads():
+    world = _world()
+    followed = world.herbivores[0]
+    for c in world.herbivores:
+        c.score = 0.0  # a freshly repopulated species
+    world.herbivores.remove(followed)
+    pick, tentative = follow_target(world, followed)
+    assert tentative
+    world.herbivores[2].score = 0.5
+    assert follow_target(world, pick, tentative) == (world.herbivores[2], False)
+    world.herbivores[3].score = 1.0  # a settled pick sticks, as after a death
+    assert follow_target(world, world.herbivores[2]) == (world.herbivores[2], False)
 
 
 def test_viewport_origin_centers_and_clamps():

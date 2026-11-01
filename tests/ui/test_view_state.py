@@ -1,6 +1,9 @@
 import pytest
 
 from evolution import config
+from evolution.app import bootstrap
+from evolution.brain.network import NeuralNetwork
+from evolution.species import HERBIVORE
 from evolution.ui.view_state import SPEEDS, ViewState
 
 
@@ -47,3 +50,15 @@ def test_zooming_back_snaps_to_one():
     view.zoom_by(3, (0, 0))
     view.zoom_by(-3, (0, 0))
     assert view.zoom == 1.0
+
+
+def test_camera_moves_to_the_leader_after_a_repopulation():
+    sim = bootstrap.start_simulation(None, world_bounds=(400, 300))
+    view = ViewState(selected=sim.world.herbivores[3])
+    data = NeuralNetwork(config.BRAIN_TOPOLOGY).to_data()
+    bootstrap.reload_population(sim, HERBIVORE, data=data)  # every founder scores 0
+    view.follow_selected(sim.world)
+    assert view.tentative_pick is view.selected
+    sim.step()
+    view.follow_selected(sim.world)
+    assert view.selected.is_best and view.tentative_pick is None
