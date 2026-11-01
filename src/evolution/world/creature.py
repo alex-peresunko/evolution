@@ -43,7 +43,7 @@ from ..genetics import clamp_genes
 from .geometry import HEADLESS
 
 # attrition: upkeep, effort, signalling and wall or rock hits, with no other cause in effect.
-DEATH_CAUSES = ("bitten", "retaliation", "starved", "old_age", "attrition")
+DEATH_CAUSES = ("bitten", "retaliation", "impact", "starved", "old_age", "attrition")
 
 
 class Creature:
@@ -73,6 +73,8 @@ class Creature:
         self.respawn_immunity_ticks = 0
         self.last_bite_tick: int | None = None
         self.last_hit_tick: int | None = None
+        self.last_impact_tick: int | None = None
+        self.knock = geometry.vec2(0, 0)    # knockback velocity from collisions, px/tick
         self.hurt = 0.0                     # 1 when bitten or hit back, fading to 0
         self.recent_biters = {}             # prey: carnivore -> tick of its last bite
         self.eating_ticks = 0               # > 0 while standing still to eat
@@ -133,6 +135,8 @@ class Creature:
         """The most likely killer of a creature that died during `tick`, one of DEATH_CAUSES."""
         if self.last_hit_tick == tick:
             return "retaliation" if self.species.is_predator else "bitten"
+        if self.last_impact_tick == tick:
+            return "impact"
         if self.hunger > HUNGER_MAX:
             return "starved"
         if self.age > self.genes["lifespan"]:

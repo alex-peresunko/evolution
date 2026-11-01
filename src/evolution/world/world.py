@@ -75,7 +75,7 @@ class World:
                             self.obstacles, self.carcasses, self.light, self.season, self.lakes)
 
     def separate(self):
-        separate(self.creatures(), self.carcasses, self.obstacles)
+        separate(self.creatures(), self.carcasses, self.obstacles, self.tick)
 
     # --- food ------------------------------------------------------------------------------
 

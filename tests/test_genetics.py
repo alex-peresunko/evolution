@@ -14,7 +14,7 @@ def test_combine_genes_respects_constraints():
     g2 = config.DEFAULT_HERBIVORE_GENES.copy()
     for _ in range(50):
         child = combine_genes(g1, g2, HERBIVORE)
-        for key, (min_val, max_val) in config.GENE_MIN_MAX.items():
+        for key, (min_val, max_val) in config.HERBIVORE_GENE_MIN_MAX.items():
             assert min_val <= child[key] <= max_val, f"{key} out of range: {child[key]}"
 
 

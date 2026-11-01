@@ -143,7 +143,8 @@ ROWS = [
         "Life and death",
         *[timeseries(f"{s.title()} deaths by cause", "Deaths per minute, stacked by likely "
                      "cause. bitten: died in the tick a carnivore bit it. retaliation: a "
-                     "carnivore killed by large prey fighting back. starved: hunger past "
+                     "carnivore killed by large prey fighting back. impact: a hard collision "
+                     "with another body. starved: hunger past "
                      "HUNGER_MAX. old_age: older than its lifespan gene. attrition: everything "
                      "else (upkeep, running, signalling, hitting walls and rocks). A shift from "
                      "starved to old_age means the species learned to eat.",

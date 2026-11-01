@@ -43,10 +43,10 @@ def test_costly_traits_raise_upkeep():
 
 
 def test_body_upkeep_follows_kleiber_and_ignores_fat():
-    small, big = _adult(size=8), _adult(size=16)
+    small, big = _adult(size=12), _adult(size=24)
     body = config.UPKEEP_WEIGHTS["body"] * config.HEALTH_LOSS_PER_TICK
     assert big.upkeep() - small.upkeep() == pytest.approx(
-        body * (16 ** 0.75 - 8 ** 0.75) / config.DEFAULT_HERBIVORE_GENES["size"] ** 0.75)
+        body * (24 ** 0.75 - 12 ** 0.75) / config.DEFAULT_HERBIVORE_GENES["size"] ** 0.75)
     juvenile = Creature(HERBIVORE, WORLD_BOUNDS)
     assert juvenile.upkeep(config.JUVENILE_SIZE_FACTOR) < juvenile.upkeep()
 
@@ -82,11 +82,11 @@ def test_child_inherits_the_first_parents_lineage():
 
 
 def test_gene_history_sampled_per_species():
-    sim, p1, p2 = _breeding_sim(genes1={"size": 8}, genes2={"size": 12})
+    sim, p1, p2 = _breeding_sim(genes1={"size": 14}, genes2={"size": 18})
     sim.stats.sample(sim.world, sim.hall_of_fame)
     history = sim.stats[HERBIVORE].gene_history
     assert set(history) == set(config.DEFAULT_HERBIVORE_GENES)
-    assert list(history["size"]) == [pytest.approx(10)]
+    assert list(history["size"]) == [pytest.approx(16)]
     assert history["size"].maxlen == config.CHART_HISTORY_SAVE_MAX
     assert not sim.stats[CARNIVORE].gene_history["size"]  # no carnivores: no sample
     assert (sim.stats[HERBIVORE].lineages, sim.stats[CARNIVORE].lineages) == (2, 0)

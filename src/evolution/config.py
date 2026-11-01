@@ -48,12 +48,12 @@ _LIFE_HISTORY_GENES = {
     "lifespan": 3000, "litter_size": 1.0, "color": 0.5,
 }
 DEFAULT_HERBIVORE_GENES = {
-    "size": 10, "max_speed": 5, "sight_distance": 150,
+    "size": 16, "max_speed": 5, "sight_distance": 150,
     "sight_angle": math.radians(180), "max_stamina": 1000, "attractiveness": 10,
     **_LIFE_HISTORY_GENES,
 }
 DEFAULT_CARNIVORE_GENES = {
-    "size": 6, "max_speed": 10, "sight_distance": 600,
+    "size": 8, "max_speed": 10, "sight_distance": 600,
     "sight_angle": math.radians(120), "max_stamina": 1200, "attractiveness": 10,
     **_LIFE_HISTORY_GENES,
 }
@@ -72,7 +72,10 @@ GENE_MIN_MAX = {
     "litter_size": (1, 4),
     "color": (0, 1),
 }
-CARNIVORE_GENE_MIN_MAX = {**GENE_MIN_MAX, "max_speed": (2, 15)}
+# Size ranges don't overlap: herbivores are always the bigger species. GENE_MIN_MAX["size"][1]
+# normalises the size input and contact reach, so it must stay the largest size.
+HERBIVORE_GENE_MIN_MAX = {**GENE_MIN_MAX, "size": (12, 25)}
+CARNIVORE_GENE_MIN_MAX = {**GENE_MIN_MAX, "size": (5, 10), "max_speed": (2, 15)}
 
 # --- Food ---
 FOOD_MAX_LIFETIME = 1500
@@ -86,9 +89,14 @@ CARNIVORE_HEALTH_PER_FOOD = 1200
 CREATURE_ROTATION_SPEED = 0.25
 HEALTH_LOST_ON_HIT = 50
 # Solid bodies: after acting, creatures are pushed out of each other and out of carcasses.
-BODY_RADIUS_FACTOR = 0.8        # body radius = size * factor (< 1: bodies may overlap a little); 0 turns collisions off
+BODY_RADIUS_FACTOR = 0.9        # body radius = size * factor (< 1: bodies may overlap a little); 0 turns collisions off
 COLLISION_PASSES = 2
 CONTACT_REACH = 2.0             # bodies this close count as touching (bites, scavenging)
+RESTITUTION = 0.3               # collision bounce: 0 bodies stop dead, 1 billiard balls
+KNOCK_FRICTION = 0.6            # share of the knockback velocity kept each tick
+KNOCK_MIN = 0.05                # px/tick: smaller knockback stops
+IMPACT_DAMAGE_THRESHOLD = 4.0   # px/tick of velocity change from collisions in one tick
+IMPACT_DAMAGE = 50              # health per px/tick of velocity change above the threshold
 TOUCH_TOLERANCE = 4.0           # px: touch is felt from this gap; 0.5 at contact, 1 when this deep
 CARNIVORE_BITE_ANGLE = math.radians(60)
 HUNGER_MAX = 400
@@ -234,7 +242,7 @@ MUTATION_RATE = 0.08
 MUTATION_AMOUNT = 0.15
 GENE_MUTATION_AMOUNT = 0.10      # multiplicative, +-10% of the gene
 ADDITIVE_GENE_MUTATION = {"color": 0.03}  # genes mutated by +-amount instead
-# Speciation: mates must be within this RMS gene distance (each gene / its GENE_MIN_MAX range).
+# Speciation: mates must be within this RMS gene distance (each gene / its species' range).
 SPECIATION_DISTANCE = 0.12
 SURVIVAL_RATE = 0.15
 # Every ELITE_REINJECT_INTERVAL ticks the lowest-scoring ELITE_REINJECT_COUNT creatures of each

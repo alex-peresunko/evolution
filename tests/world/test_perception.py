@@ -210,7 +210,7 @@ def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasse
 
 
 def _random_creature(rnd, is_carnivore, obstacles):
-    lo_hi = config.CARNIVORE_GENE_MIN_MAX if is_carnivore else config.GENE_MIN_MAX
+    lo_hi = config.CARNIVORE_GENE_MIN_MAX if is_carnivore else config.HERBIVORE_GENE_MIN_MAX
     genes = {k: rnd.uniform(*lo_hi[k]) for k in lo_hi}
     c = Creature(CARNIVORE if is_carnivore else HERBIVORE, WORLD_BOUNDS, genes=genes)
     while any(o.rect.left <= c.pos.x <= o.rect.right and o.rect.top <= c.pos.y <= o.rect.bottom

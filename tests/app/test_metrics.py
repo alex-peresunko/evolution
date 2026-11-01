@@ -80,6 +80,7 @@ def test_death_causes():
     lifespan = HERBIVORE.default_genes["lifespan"]
     assert _dying(HERBIVORE, last_hit_tick=7, hunger=10_000).death_cause(7) == "bitten"
     assert _dying(CARNIVORE, last_hit_tick=7).death_cause(7) == "retaliation"
+    assert _dying(HERBIVORE, last_impact_tick=7, hunger=10_000).death_cause(7) == "impact"
     assert _dying(HERBIVORE, last_hit_tick=6, hunger=10_000).death_cause(7) == "starved"
     assert _dying(HERBIVORE, age=lifespan + 1).death_cause(7) == "old_age"
     assert _dying(HERBIVORE).death_cause(7) == "attrition"
