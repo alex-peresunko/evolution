@@ -8,6 +8,7 @@ from ..config import (
     GRID_CELL_SIZE,
 )
 from ..species import ALL_SPECIES, CARNIVORE, HERBIVORE
+from .collision import separate
 from .environment import FoodPatch, day_light, season
 from .food import Food
 from .geometry import HEADLESS
@@ -72,6 +73,9 @@ class World:
         """Brain input rows for creatures() (see perception.perceive_all)."""
         return perceive_all(self.creatures(), self.food, self.herbivores, self.carnivores,
                             self.obstacles, self.carcasses, self.light, self.season, self.lakes)
+
+    def separate(self):
+        separate(self.creatures(), self.carcasses, self.obstacles)
 
     # --- food ------------------------------------------------------------------------------
 

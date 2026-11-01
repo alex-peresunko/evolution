@@ -73,12 +73,13 @@ Code loops over `ALL_SPECIES` or keys dicts by `Species` instead of branching on
 3. carcasses
 4. reindex
 5. perceive / think / act
-6. retire the dead
-7. extinct species recovery
-8. elite reinjection
-9. fade / sample
-10. mark best
-11. breed
+6. separate (solid bodies)
+7. retire the dead
+8. extinct species recovery
+9. elite reinjection
+10. fade / sample
+11. mark best
+12. breed
 
 The simulation does no I/O itself. It notifies `SimulationListener`s (`sim/events.py`: `record_set`, `deaths_processed`, `extinction`). The app layer subscribes:
 - `persistence.autosave.HallOfFameAutosaver` writes brain files;
@@ -94,6 +95,7 @@ World mechanics, all tuned through `config.py`:
 - **Walls:** the world edges are walls, not a wrap. Crossing one costs `HEALTH_LOST_ON_HIT` and pushes the creature back, like an obstacle. Obstacle whiskers see the edges, and food patches bounce off them.
 - **Trees:** `world.worldgen.generate_obstacles` places `NUM_OBSTACLES` rocks and up to `NUM_TREES` `Tree`s (crowns inside the walls, off rocks, spaced apart). A `Tree` is an `Obstacle` whose `rect` is only the trunk (`TREE_TRUNK_FRACTION` of `TREE_CROWN_RADIUS_RANGE`), so collision and whiskers treat it like a small rock. The crown blocks sight but not movement: `perceive_all` hides vision-cone targets and target-whisker hits behind or under a crown, unless observer and target are under the same crown. Smell, kin, signals and obstacle whiskers ignore crowns. The renderer bakes the shadow and trunk into the background and draws the crown over creatures (`TREE_CROWN_ALPHA`), with creatures under it redrawn faintly on top.
 - **Lakes:** `generate_lakes` places `NUM_LAKES` lakes inside the walls and clear of obstacles. Each lake is 1..`LAKE_LOBES` overlapping `Lake` blobs, and `world.lakes` holds the flat list of blobs. A blob's shore radius is its mean radius (`LAKE_RADIUS_RANGE`) plus random angular harmonics (`random_shore`, `LAKE_SHORE_ROUGHNESS`, `LAKE_SHORE_HARMONICS`). Creatures swim through them: speed is multiplied by `WATER_SPEED_FACTOR`, and instead of regenerating, stamina drains by the species' `swim_stamina_cost` per tick (`c.in_water`). Food (initial and respawned) avoids lakes and obstacles (`World.spawn_food`). The renderer bakes lakes into the background.
+- **Bodies:** live creatures and carcasses are solid circles of radius `size × BODY_RADIUS_FACTOR` (below 1, sprites may overlap a little; 0 turns collisions off). After every creature has acted, `world.collision.separate` pushes overlapping creatures apart (`COLLISION_PASSES` relaxation passes over the overlapping pairs, split by mass `size²`) and out of carcasses, which never move. A push into a rock is undone, with no health cost. Food is not solid. Bites and scavenging count bodies within `CONTACT_REACH` as touching, because a separated pair sits exactly at the sum of the radii.
 - **Chases:** carnivores bite instead of killing on contact. A bite needs contact, the prey within `CARNIVORE_BITE_ANGLE` of the carnivore's heading, and `BITE_COOLDOWN_TICKS` since the last bite (`PredatorDiet._bite`). Bitten prey gets an adrenaline stamina boost. A bite, or retaliation that lands, sets the victim's `hurt` input to 1, fading to 0 over `HURT_FADE_TICKS`. Herbivores bigger than the carnivore deal retaliation damage, split between the carnivores touching the prey. Death is simply `health <= 0`.
   - **Herds:** a bite on prey with other herbivores within `CONFUSION_RADIUS` may miss (`CONFUSION_MAX_MISS`, scaled by herd size / `CONFUSION_HERD_NORM`); the cooldown is still spent (`world.tally.bites_confused`).
   - **Packs:** prey keeps `recent_biters`. A bite on prey another carnivore bit within `PACK_WINDOW_TICKS` does `PACK_BITE_BONUS` damage (`tally.pack_bites`), and a kill gives those earlier biters `PACK_ASSIST_SCORE`.

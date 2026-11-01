@@ -44,6 +44,7 @@ class Simulation:
         self._update_carcasses()
         self.world.reindex()
         self._think_and_act()
+        self.world.separate()
         self._retire_the_dead()
         self._recover_extinct_species()
         if ELITE_REINJECT_INTERVAL and self.tick % ELITE_REINJECT_INTERVAL == 0:

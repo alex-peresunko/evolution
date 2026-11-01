@@ -85,6 +85,10 @@ HERBIVORE_HEALTH_PER_FOOD = 600
 CARNIVORE_HEALTH_PER_FOOD = 1200
 CREATURE_ROTATION_SPEED = 0.25
 HEALTH_LOST_ON_HIT = 50
+# Solid bodies: after acting, creatures are pushed out of each other and out of carcasses.
+BODY_RADIUS_FACTOR = 0.8        # body radius = size * factor (< 1: bodies may overlap a little); 0 turns collisions off
+COLLISION_PASSES = 2
+CONTACT_REACH = 2.0             # bodies this close count as touching (bites, scavenging)
 CARNIVORE_BITE_ANGLE = math.radians(60)
 HUNGER_MAX = 400
 HUNGER_HEALTH_PENALTY = 5

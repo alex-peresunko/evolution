@@ -13,6 +13,7 @@ from ..config import (
     CONFUSION_HERD_NORM,
     CONFUSION_MAX_MISS,
     CONFUSION_RADIUS,
+    CONTACT_REACH,
     FOOD_RADIUS,
     GENE_MIN_MAX,
     PACK_ASSIST_SCORE,
@@ -27,7 +28,7 @@ _MAX_SIZE = GENE_MIN_MAX["size"][1]
 
 def _reach(c):
     """Query radius that finds everything the creature could touch."""
-    return c.size + _MAX_SIZE
+    return c.size + _MAX_SIZE + CONTACT_REACH
 
 
 class GrazingDiet:
@@ -74,7 +75,7 @@ def _attackers(c, prey, world):
     """Carnivores of c's species in contact with prey, c included."""
     others = sum(1 for other in world.index.of(c.species).query(prey.pos, _reach(prey))
                  if other is not c and other.health > 0
-                 and prey.pos.distance_to(other.pos) < other.size + prey.size)
+                 and prey.pos.distance_to(other.pos) < other.size + prey.size + CONTACT_REACH)
     return 1 + others
 
 
@@ -105,7 +106,8 @@ class PredatorDiet:
         """Bite the first live prey in contact and in front. Returns BITTEN, CONFUSED (the herd
         around the prey made the bite miss; the cooldown is still spent) or None."""
         for prey in world.index.of(self.prey).query(c.pos, _reach(c)):
-            if prey.health <= 0 or c.pos.distance_to(prey.pos) >= c.size + prey.size:
+            if (prey.health <= 0
+                    or c.pos.distance_to(prey.pos) >= c.size + prey.size + CONTACT_REACH):
                 continue
             vec = prey.pos - c.pos
             facing = (math.atan2(vec.y, vec.x) - c.angle + math.pi) % (2 * math.pi) - math.pi
@@ -147,7 +149,8 @@ class PredatorDiet:
 
     def _scavenge(self, c, nearby_carcasses):
         for carcass in nearby_carcasses:
-            if carcass.meat <= 0 or c.pos.distance_to(carcass.pos) >= c.size + carcass.radius:
+            if (carcass.meat <= 0
+                    or c.pos.distance_to(carcass.pos) >= c.size + carcass.radius + CONTACT_REACH):
                 continue
             self._eat_from(c, carcass)
             if c.species.eat_ticks > 0 and not carcass.is_gone() and not c.is_stuffed():

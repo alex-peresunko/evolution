@@ -230,7 +230,7 @@ class Creature:
         if self._outside_walls():
             self.health -= HEALTH_LOST_ON_HIT
             self.pos -= heading * speed * 3
-            self._clamp_to_walls()
+            self.clamp_to_walls()
         return speed
 
     def _metabolize(self, growth_factor, speed):
@@ -268,7 +268,7 @@ class Creature:
         return not (self.size <= self.pos.x <= w - self.size
                     and self.size <= self.pos.y <= h - self.size)
 
-    def _clamp_to_walls(self):
+    def clamp_to_walls(self):
         w, h = self.world_bounds
         self.pos.x = min(max(self.pos.x, self.size), w - self.size)
         self.pos.y = min(max(self.pos.y, self.size), h - self.size)

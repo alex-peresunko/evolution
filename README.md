@@ -20,7 +20,8 @@ are saved and carried over between runs.
   breed (speciation), and every trait costs upkeep.
 - **Life history:** young grow into adults, eating takes time, surplus food becomes fat (slower
   but a reserve), old age costs health, and every dead creature leaves a carcass.
-- **World:** walls at the edges, rocks, trees whose crowns hide what's under them, lakes to
+- **World:** solid bodies (creatures push each other aside and can't walk through carcasses),
+  walls at the edges, rocks, trees whose crowns hide what's under them, lakes to
   swim through (slow, and tiring), a day/night cycle that shortens sight, and seasons that
   change how much food grows.
 - **Records:** a Hall of Fame keeps each species' best brains (scores fade over time), refills
