@@ -1,14 +1,19 @@
-"""Bit-exact behaviour guard: the simulation, imitation and rendering must reproduce the
-committed golden trace (tests/golden/trace.json)."""
+"""Bit-exact refactoring guard, opt-in: `make golden-record` before a refactor, `make golden`
+after. The trace (tests/golden/trace.json) is local and git-ignored."""
 import json
+import os
 
 import pytest
 
 from tests.golden import record
 
+pytestmark = pytest.mark.golden
+
 
 @pytest.fixture(scope="module")
 def trace():
+    if not os.path.exists(record.TRACE):
+        pytest.skip("no golden trace recorded (make golden-record)")
     with open(record.TRACE) as f:
         return json.load(f)
 

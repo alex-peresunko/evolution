@@ -20,7 +20,8 @@ poetry run python game.py --load 2               # start from snapshot #2 (1 = n
 poetry run python game_headless.py               # headless, auto-loads saved brains, Prometheus on :8000
 poetry run python pretrain.py                    # behavior-cloning pretrain -> history snapshot *-pretrained (--install: best_brain_*.json)
 
-poetry run pytest                                # all tests (the render golden test skips without pygame)
+poetry run pytest                                # all tests except the opt-in golden trace
+make golden-record / make golden                 # golden trace: record before a refactor, check after
 poetry run pytest tests/test_genetics.py         # one file
 poetry run pytest tests/world/test_spatial.py::test_insert_and_query   # one test
 
@@ -46,9 +47,7 @@ species.py    Species (HERBIVORE, CARNIVORE); genetics.py; config.py
 
 Nothing outside `ui/` imports pygame. `tests/` mirrors the package layout.
 
-**Bit-exact golden trace.** `tests/test_golden.py` replays seeded runs (evolution, imitation and rendering) and compares them with `tests/golden/trace.json`, exactly:
-- A behaviour-preserving change must keep it green. Only the adapter `tests/golden/scenarios.py` may change when APIs move.
-- A deliberate rule change re-records the trace with `tests/golden/record.py`.
+**Bit-exact golden trace (opt-in).** `tests/test_golden.py` (marker `golden`, skipped by plain `pytest`) replays seeded runs (evolution, imitation and rendering) and compares them with `tests/golden/trace.json`, exactly. The trace is local and git-ignored: don't run or re-record it for feature work or rule changes. For a behaviour-preserving refactor, `make golden-record` before and `make golden` after; only the adapter `tests/golden/scenarios.py` may change when APIs move.
 - It breaks on any change to the order of `random` / `np.random` calls, to the creature iteration order (`ALL_SPECIES`: herbivores first), to float operand order, or to the global id counters.
 
 ### Species

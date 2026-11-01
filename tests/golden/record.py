@@ -1,6 +1,4 @@
-"""Record the golden trace of the current code: poetry run python -m tests.golden.record
-
-Only re-record when the simulation's behaviour is meant to change."""
+"""Record the golden trace of the current code (make golden-record)."""
 import json
 import os
 import platform

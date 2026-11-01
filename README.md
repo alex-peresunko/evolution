@@ -123,12 +123,12 @@ The raw metrics are at http://localhost:8000.
 
 ```bash
 make test        # poetry run pytest
+make golden-record && make golden   # bit-exact check around a refactor: record before, check after
 make lint        # poetry run ruff check .
 ```
 
 Every simulation constant lives in `src/evolution/config.py`. `tests/test_golden.py` replays
-seeded runs bit-exactly; after a deliberate rule change, re-record it with
-`poetry run python -m tests.golden.record`.
+seeded runs bit-exactly against a local trace; it is opt-in and only meant for refactors.
 
 ## Files
 

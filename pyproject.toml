@@ -29,7 +29,8 @@ packages = [{include = "evolution", from = "src"}]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--tb=short -q"
+addopts = "--tb=short -q -m 'not golden'"
+markers = ["golden: bit-exact trace check, opt-in (make golden)"]
 
 [tool.ruff]
 line-length = 100

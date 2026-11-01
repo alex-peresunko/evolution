@@ -1,5 +1,5 @@
 # `make run ui` / `make run headless`: `run` only makes the pair read naturally.
-.PHONY: run ui watch headless stop clean-data logs test lint not-running
+.PHONY: run ui watch headless stop clean-data logs test golden golden-record lint not-running
 
 GRAFANA := http://localhost:3000
 # Must match DASHBOARD_UID in monitoring/dashboard.py.
@@ -53,6 +53,12 @@ logs:
 
 test:
 	poetry run pytest
+
+golden:
+	poetry run pytest -m golden
+
+golden-record:
+	poetry run python -m tests.golden.record
 
 lint:
 	poetry run ruff check .
