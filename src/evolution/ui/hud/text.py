@@ -26,7 +26,7 @@ def stats_lines(sim, view, fps):
         f"Longest H: {stats[HERBIVORE].max_age} ticks",
         f"Longest C: {stats[CARNIVORE].max_age} ticks",
         f"FPS: {int(fps)} [{limit_status}]",
-        f"Speed: x{view.ticks_per_frame}  ({view.tps} ticks/s)",
+        f"Speed: {view.speed_label()}  ({view.tps} ticks/s)",
         f"Zoom: x{view.zoom:.2f}",
     ]
 

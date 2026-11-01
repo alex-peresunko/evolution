@@ -6,7 +6,7 @@ from .camera import follow_target, min_zoom, viewport_origin, zoom_at
 
 WORLD_SIZE = (config.WORLD_WIDTH, config.WORLD_HEIGHT)
 SCREEN_SIZE = (config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
-SPEEDS = (1, 2, 4, 8, 16, 32)  # simulation ticks per drawn frame
+SPEEDS = (1 / 8, 1 / 4, 1 / 2, 1, 2, 4, 8, 16, 32)  # simulation ticks per drawn frame
 
 
 @dataclass
@@ -19,7 +19,9 @@ class ViewState:
     drawing_enabled: bool = True
     show_brain: bool = True
     show_genes: bool = True
-    ticks_per_frame: int = 1
+    ticks_per_frame: float = 1
+    tick_carry: float = 0.0                  # unspent fraction of a tick (speeds below 1)
+    poses: dict | None = None                # {creature id: (x, y, angle)} drawn instead
     tps: int = 0
     chart_scale: float = config.CHART_SCALE_DEFAULT
     cam_x: float = 0.0
@@ -57,6 +59,18 @@ class ViewState:
     def change_speed(self, step):
         i = SPEEDS.index(self.ticks_per_frame) + step
         self.ticks_per_frame = SPEEDS[max(0, min(len(SPEEDS) - 1, i))]
+        self.tick_carry = 0.0
+
+    def ticks_due(self):
+        """Ticks to simulate this frame: ticks_per_frame on average, whole ticks only."""
+        self.tick_carry += self.ticks_per_frame
+        due = int(self.tick_carry)
+        self.tick_carry -= due
+        return due
+
+    def speed_label(self):
+        return (f"x{self.ticks_per_frame:g}" if self.ticks_per_frame >= 1
+                else f"x1/{round(1 / self.ticks_per_frame)}")
 
     def scale_charts(self, direction):
         self.chart_scale = max(config.CHART_SCALE_MIN, min(
@@ -69,7 +83,8 @@ class ViewState:
         best."""
         c = self.selected = follow_target(world, self.selected)
         if c is not None:
-            self.center_on(c.pos.x, c.pos.y)
+            pose = self.poses.get(c.id) if self.poses else None
+            self.center_on(*(pose[:2] if pose else (c.pos.x, c.pos.y)))
 
     def record_brain(self):
         """Append the selected creature's outputs to the sparkline history (reset on a new

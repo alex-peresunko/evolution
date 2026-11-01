@@ -6,11 +6,21 @@ from evolution.ui.view_state import SPEEDS, ViewState
 
 def test_speed_steps_through_the_presets_and_clamps():
     view = ViewState()
-    view.change_speed(-1)
-    assert view.ticks_per_frame == SPEEDS[0]
+    for _ in range(len(SPEEDS) + 2):
+        view.change_speed(-1)
+    assert view.ticks_per_frame == SPEEDS[0] < 1
     for _ in range(len(SPEEDS) + 2):
         view.change_speed(1)
     assert view.ticks_per_frame == SPEEDS[-1]
+
+
+@pytest.mark.parametrize("speed, label", [(1 / 8, "x1/8"), (1 / 2, "x1/2"), (1, "x1"), (32, "x32")])
+def test_ticks_due_averages_the_speed_in_whole_ticks(speed, label):
+    view = ViewState(ticks_per_frame=speed)
+    frames = [view.ticks_due() for _ in range(16)]
+    assert set(frames) <= {0, int(speed) or 1}
+    assert sum(frames) == 16 * speed
+    assert view.speed_label() == label
 
 
 def test_chart_scale_is_clamped():

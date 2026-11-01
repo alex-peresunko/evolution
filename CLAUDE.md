@@ -214,7 +214,7 @@ Each file also stores that species' chart `history` (score and longevity, capped
 
 ## game.py controls
 
-Space pause · +/- simulation speed (1–32 ticks per frame) · S save brains · L load brains · Enter toggle FPS cap · [ / ] shrink/grow the score charts · D toggle drawing · G toggle the gene-drift chart (species mean genes ÷ defaults, for the selected creature's species) · N toggle the brain panel of the selected creature (node activations, strongest weight×activation connections, top input drivers, output history) · B background mode + island workers · mouse wheel zoom (`ZOOM_STEP` per notch, up to `ZOOM_MAX`, around the cursor) · left-click: spawn food / select creature (the camera follows it; when it dies, it jumps to the best of that species; a minimap click stops following) · minimap drag to pan.
+Space pause · +/- simulation speed (1/8–32 ticks per frame; below 1 a tick runs every few frames) · S save brains · L load brains · Enter toggle FPS cap · [ / ] shrink/grow the score charts · D toggle drawing · G toggle the gene-drift chart (species mean genes ÷ defaults, for the selected creature's species) · N toggle the brain panel of the selected creature (node activations, strongest weight×activation connections, top input drivers, output history) · B background mode + island workers · mouse wheel zoom (`ZOOM_STEP` per notch, up to `ZOOM_MAX`, around the cursor) · left-click: spawn food / select creature (the camera follows it; when it dies, it jumps to the best of that species; a minimap click stops following) · minimap drag to pan.
 
 ## Metrics
 

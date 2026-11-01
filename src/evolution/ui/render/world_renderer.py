@@ -97,12 +97,18 @@ class WorldRenderer:
         screen.blits(carcass_blits, doreturn=False)
 
         creatures = world.creatures()
+        poses = view.poses
         visible = []
         for c in creatures:
-            x, y = (c.pos.x - cam_x) * z, (c.pos.y - cam_y) * z
+            pose = poses.get(c.id) if poses else None
+            if pose is None:
+                wx, wy, angle = c.pos.x, c.pos.y, c.angle
+            else:
+                wx, wy, angle = pose
+            x, y = (wx - cam_x) * z, (wy - cam_y) * z
             r = (c.size * 2.2 + 8) * z
             if -r <= x <= sw + r and -r <= y <= sh + r:
-                visible.append((c, x, y))
+                visible.append((c, x, y, angle))
 
         now = time.time()
         pulse = int((math.sin(self.frame * 0.08) + 1) * 0.5 * (PULSE_LEVELS - 0.01))
@@ -111,8 +117,9 @@ class WorldRenderer:
         rit = config.RESPAWN_IMMUNITY_TICKS
         tick = world.tick
         rotated, phases = cache.rotated, self._phase
+        slow_motion = view.ticks_per_frame < 1
         sprites, bubbles, signallers = [], [], []
-        for c, x, y in visible:
+        for c, x, y, angle in visible:
             sb = int(c.size * z + 0.5)
             if sb < 2:
                 sb = 2
@@ -123,13 +130,14 @@ class WorldRenderer:
             if sb > 3:
                 phase = phases.get(c.id, 0.0)
                 if c.current_speed > 0.3:
-                    phase += c.current_speed / (c.size * 0.5 + 2) * 0.35
+                    stride = c.current_speed / (c.size * 0.5 + 2) * 0.35
+                    phase += stride * view.ticks_per_frame if slow_motion else stride
                     phases[c.id] = phase
                 frame = int(phase) % WALK_FRAMES
 
             predator = c.species.is_predator
             key = (predator, sb, hl, frame, color_bucket(c.genes["color"]),
-                   int(c.angle * angle_scale + 0.5) % steps)
+                   int(angle * angle_scale + 0.5) % steps)
             entry = rotated.get(key)
             if entry is None:
                 entry = cache.creature(*key)
@@ -166,18 +174,18 @@ class WorldRenderer:
                                     (*color, int(220 * (1 - t) * c.signal)))
 
         self._draw_crowns(screen, cam_x, cam_y, z)
-        for (c, _, _), (spr, pos) in zip(visible, sprites):
+        for (c, _, _, _), (spr, pos) in zip(visible, sprites):
             if self._under_crown(c):
                 spr.set_alpha(CROWN_GHOST_ALPHA)
                 screen.blit(spr, pos)
                 spr.set_alpha(255)
         self._draw_night(screen, world.light, food_blits, fo, z)
 
-        for c, x, y in visible:
+        for c, x, y, angle in visible:
             if c is view.selected:
-                self._draw_selection(screen, c, x, y, z)
+                self._draw_selection(screen, c, x, y, angle, z)
             elif c.is_best:
-                self._draw_whiskers(screen, c, x, y, z)
+                self._draw_whiskers(screen, c, x, y, angle, z)
 
         if self.frame % 600 == 0:
             alive = {c.id for c in creatures}
@@ -224,30 +232,30 @@ class WorldRenderer:
             screen.blits([(g, (x + fo - gw, y + fo - gw), None, add) for _, (x, y) in food_blits],
                          doreturn=False)
 
-    def _draw_whiskers(self, screen, c, x, y, z):
+    def _draw_whiskers(self, screen, c, x, y, angle, z):
         color = (config.COLOR_CARNIVORE_WHISKER if c.species.is_predator
                  else config.COLOR_WHISKER)
         for i, a in enumerate(c.whisker_angles):
-            ex = x + math.cos(c.angle + a) * c.whiskers[i] * z
-            ey = y + math.sin(c.angle + a) * c.whiskers[i] * z
+            ex = x + math.cos(angle + a) * c.whiskers[i] * z
+            ey = y + math.sin(angle + a) * c.whiskers[i] * z
             pygame.draw.aaline(screen, color, (x, y), (ex, ey))
             pygame.draw.circle(screen, color, (ex, ey), 2)
             seen = c.target_whiskers[i]
             if seen is not None:  # food / prey on this ray
                 seen *= z
-                tx, ty = x + math.cos(c.angle + a) * seen, y + math.sin(c.angle + a) * seen
+                tx, ty = x + math.cos(angle + a) * seen, y + math.sin(angle + a) * seen
                 pygame.draw.circle(screen, config.COLOR_TARGET_WHISKER, (tx, ty), 3)
 
-    def _draw_selection(self, screen, c, x, y, z):
+    def _draw_selection(self, screen, c, x, y, angle, z):
         """Sight cone, whiskers and a rotating dashed ring."""
         sd, sa = (c.effective_sight or c.sight_distance) * z, c.sight_angle
         n = max(8, int(sa * 10))
-        arc = [(int(x + math.cos(c.angle - sa / 2 + sa * i / n) * sd),
-                int(y + math.sin(c.angle - sa / 2 + sa * i / n) * sd)) for i in range(n + 1)]
+        arc = [(int(x + math.cos(angle - sa / 2 + sa * i / n) * sd),
+                int(y + math.sin(angle - sa / 2 + sa * i / n) * sd)) for i in range(n + 1)]
         pts = arc if sa >= 2 * math.pi - 1e-3 else [(int(x), int(y))] + arc
         pygame.gfxdraw.filled_polygon(screen, pts, (255, 255, 255, 18))
         pygame.gfxdraw.aapolygon(screen, pts, (255, 255, 255, 70))
-        self._draw_whiskers(screen, c, x, y, z)
+        self._draw_whiskers(screen, c, x, y, angle, z)
         r = (c.size * 1.6 + 7) * z
         rect = pygame.Rect(0, 0, r * 2, r * 2)
         rect.center = (int(x), int(y))

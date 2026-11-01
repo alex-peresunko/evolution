@@ -15,6 +15,7 @@ from ..world.geometry import Geometry
 from .commands import KEY_COMMANDS, READ_ONLY_KEY_COMMANDS, handle_events, reload_species
 from .hud import draw_hud
 from .render import WorldRenderer
+from .render.motion import MotionSmoother
 from .view_state import ViewState
 from .workers import WorkerPool
 
@@ -70,6 +71,7 @@ class GameApp:
         if not read_only:
             archive_previous_best(source, new)
         self.view = ViewState()
+        self.motion = MotionSmoother()
         self.workers = None if read_only else WorkerPool(self.sim, self.autosaver)
 
     def _follow_brain_files(self):
@@ -90,12 +92,17 @@ class GameApp:
                 handle_events(self)
                 if self.watcher is not None:
                     self._follow_brain_files()
+                slow_motion = view.ticks_per_frame < 1
                 if not view.paused:
-                    for _ in range(view.ticks_per_frame):
+                    for _ in range(view.ticks_due()):
+                        if slow_motion:
+                            self.motion.before_tick(sim.world)
                         sim.step()
                         view.record_brain()
                         if self.workers is not None:
                             self.workers.sync_due()
+                view.poses = (self.motion.poses(sim.world, view.tick_carry) if slow_motion
+                              else None)
                 view.follow_selected(sim.world)
                 now = time.perf_counter()
                 if now - tps_window_start >= 1.0:
