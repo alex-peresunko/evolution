@@ -9,7 +9,8 @@ are saved and carried over between runs.
 
 - **Two species:** herbivores graze food that drifts around the map in patches; carnivores
   chase, bite and scavenge carcasses. Bites take time and aim, prey gets an adrenaline boost,
-  and big herbivores fight back.
+  and big herbivores fight back. Herds confuse attackers (bites miss more often), while packs
+  bite harder and share the credit for a kill.
 - **Neural brains:** every creature has a `[37, 16, 8, 6]` tanh network. It sees through
   whiskers, a vision cone and smell, hears kin signals, and feels its health, stamina, fat,
   water, the season, a bite (`hurt`) and how much of its meal is left. It steers, sets its
@@ -111,7 +112,7 @@ under its (i):
   extinctions
 - **Diversity:** live lineages, genetic diversity against the speciation distance
 - **Predators and prey:** populations with food, season and daylight, hunt success, bites,
-  carcass and food fate
+  group hunting (confused and pack bites), herd density, carcass and food fate
 - **Genes:** population-mean gene drift; the best creature's genes (collapsed)
 - **Lifestyle:** health, stamina and fat; swimming, eating and winded shares; meals abandoned;
   signalling

@@ -7,8 +7,15 @@ import numpy as np
 from prometheus_client import REGISTRY, start_http_server
 from prometheus_client.core import CounterMetricFamily, GaugeMetricFamily
 
+from ..brain.layout import INPUTS
 from ..config import BRAIN_TOPOLOGY, FAT_MAX, SPECIATION_DISTANCE
 from ..species import ALL_SPECIES
+
+
+def _herd_density(population):
+    """Newborns have no perception yet and are left out."""
+    seen = [c.brain_inputs[INPUTS.kin_density] for c in population if c.brain_inputs is not None]
+    return float(np.mean(seen)) if seen else 0.0
 
 
 def genetic_diversity(population, species):
@@ -73,7 +80,11 @@ class GameMetrics:
                 ("gauge", "food", "Food items in the world", len(world.food)),
                 ("gauge", "season", "Season: -1 midwinter .. 1 midsummer", world.season),
                 ("gauge", "daylight", "Daylight: 0 night .. 1 day", world.light),
-                ("counter", "bites", "Carnivore bites that landed", tally.bites)):
+                ("counter", "bites", "Carnivore bites that landed", tally.bites),
+                ("counter", "bites_confused", "Bites missed because of the herd around the prey",
+                 tally.bites_confused),
+                ("counter", "pack_bites", "Bites on prey another carnivore bit recently",
+                 tally.pack_bites)):
             family = _family(kind, name, doc)
             family.add_metric([], value)
             yield family
@@ -102,7 +113,8 @@ class GameMetrics:
             ("in_water_share", "Share of creatures swimming"),
             ("eating_share", "Share of creatures standing still to eat"),
             ("winded_share", "Share of creatures out of stamina"),
-            ("signal_mean", "Mean signal output"))}
+            ("signal_mean", "Mean signal output"),
+            ("herd_density", "Mean kin_density input: 0 alone .. 1 in a dense group"))}
         counters = {name: _family("counter", name, doc, sp) for name, doc in (
             ("births", "Creatures born"),
             ("extinctions", "Times the species died out and was repopulated"),
@@ -139,7 +151,8 @@ class GameMetrics:
                     ("in_water_share", mean(c.in_water for c in population)),
                     ("eating_share", mean(c.eating_ticks > 0 for c in population)),
                     ("winded_share", mean(c.winded for c in population)),
-                    ("signal_mean", mean(c.signal for c in population))):
+                    ("signal_mean", mean(c.signal for c in population)),
+                    ("herd_density", _herd_density(population))):
                 gauges[key].add_metric([name], value)
             counters["births"].add_metric([name], stats.births)
             counters["extinctions"].add_metric([name], stats.extinctions)

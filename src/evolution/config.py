@@ -150,7 +150,18 @@ BITE_HEALTH_TRANSFER = 0.25     # share of the damage the carnivore gains as hea
 BITE_SCORE = 0.25               # per bite landed; a kill adds 1
 ADRENALINE_STAMINA = 300        # stamina a bitten herbivore gains, so it can escape
 HURT_FADE_TICKS = 30            # the hurt input falls from 1 to 0 this many ticks after a bite
-RETALIATION_DAMAGE = 600        # times (prey.size / carn.size - 1), capped at 3x
+RETALIATION_DAMAGE = 600        # times (prey.size / carn.size - 1), capped at 3x; split
+                                # between the carnivores touching the prey
+# Herd defence: a bite misses with chance CONFUSION_MAX_MISS * min(1, herd / CONFUSION_HERD_NORM),
+# herd = other herbivores within CONFUSION_RADIUS of the prey. 0 disables it.
+CONFUSION_RADIUS = 120
+CONFUSION_HERD_NORM = 6
+CONFUSION_MAX_MISS = 0.6
+# Pack hunting: a bite on prey another carnivore bit within PACK_WINDOW_TICKS does
+# PACK_BITE_BONUS x damage, and a kill gives those other biters PACK_ASSIST_SCORE.
+PACK_WINDOW_TICKS = 60
+PACK_BITE_BONUS = 1.3
+PACK_ASSIST_SCORE = 0.5
 
 # --- Carcasses ---
 CARCASS_MEAT_PER_SIZE = 120

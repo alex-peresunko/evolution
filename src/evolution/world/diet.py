@@ -1,5 +1,6 @@
 """How each species feeds during its tick: the strategy a Species plugs into Creature.act."""
 import math
+import random
 
 from ..config import (
     ADRENALINE_STAMINA,
@@ -9,8 +10,14 @@ from ..config import (
     BITE_SCORE,
     CARCASS_EAT_RATE,
     CARNIVORE_BITE_ANGLE,
+    CONFUSION_HERD_NORM,
+    CONFUSION_MAX_MISS,
+    CONFUSION_RADIUS,
     FOOD_RADIUS,
     GENE_MIN_MAX,
+    PACK_ASSIST_SCORE,
+    PACK_BITE_BONUS,
+    PACK_WINDOW_TICKS,
     RETALIATION_DAMAGE,
     SCAVENGE_SCORE_FACTOR,
 )
@@ -48,6 +55,29 @@ class GrazingDiet:
                 return
 
 
+BITTEN, CONFUSED = "bitten", "confused"
+
+
+def _confused(prey, world):
+    """Whether the herd around prey makes the bite miss."""
+    if CONFUSION_MAX_MISS <= 0:
+        return False
+    herd = sum(1 for other in world.index.of(prey.species).query(prey.pos, CONFUSION_RADIUS)
+               if other is not prey and other.health > 0
+               and prey.pos.distance_to(other.pos) < CONFUSION_RADIUS)
+    if herd == 0:
+        return False
+    return random.random() < CONFUSION_MAX_MISS * min(1.0, herd / CONFUSION_HERD_NORM)
+
+
+def _attackers(c, prey, world):
+    """Carnivores of c's species in contact with prey, c included."""
+    others = sum(1 for other in world.index.of(c.species).query(prey.pos, _reach(prey))
+                 if other is not c and other.health > 0
+                 and prey.pos.distance_to(other.pos) < other.size + prey.size)
+    return 1 + others
+
+
 class PredatorDiet:
     """Bites live `prey`; when no bite lands, scavenges a carcass, eating for eat_ticks."""
 
@@ -61,41 +91,59 @@ class PredatorDiet:
             self._continue_meal(c)
         elif c.respawn_immunity_ticks == 0:
             tick = world.tick
-            bit = ((c.last_bite_tick is None or tick - c.last_bite_tick >= BITE_COOLDOWN_TICKS)
-                   and self._bite(c, world.index.of(self.prey).query(c.pos, _reach(c)), tick))
-            if bit:
+            outcome = None
+            if c.last_bite_tick is None or tick - c.last_bite_tick >= BITE_COOLDOWN_TICKS:
+                outcome = self._bite(c, world, tick)
+            if outcome == BITTEN:
                 world.tally.bites += 1
+            elif outcome == CONFUSED:
+                world.tally.bites_confused += 1
             else:
                 self._scavenge(c, world.index.carcasses.query(c.pos, _reach(c)))
 
-    @staticmethod
-    def _bite(c, nearby_prey, tick):
-        """Bite the first live prey in contact and in front; returns whether a bite landed."""
-        for prey in nearby_prey:
+    def _bite(self, c, world, tick):
+        """Bite the first live prey in contact and in front. Returns BITTEN, CONFUSED (the herd
+        around the prey made the bite miss; the cooldown is still spent) or None."""
+        for prey in world.index.of(self.prey).query(c.pos, _reach(c)):
             if prey.health <= 0 or c.pos.distance_to(prey.pos) >= c.size + prey.size:
                 continue
             vec = prey.pos - c.pos
             facing = (math.atan2(vec.y, vec.x) - c.angle + math.pi) % (2 * math.pi) - math.pi
             if abs(facing) > CARNIVORE_BITE_ANGLE / 2:
                 continue
+            c.last_bite_tick = tick
+            if _confused(prey, world):
+                return CONFUSED
+            biters = prey.recent_biters
+            for biter, t in list(biters.items()):
+                if tick - t > PACK_WINDOW_TICKS:
+                    del biters[biter]
             ratio = c.size / prey.size if prey.size > 0 else 2.0
             damage = BITE_DAMAGE * min(2.0, max(0.5, ratio))
+            if any(biter is not c for biter in biters):
+                damage *= PACK_BITE_BONUS
+                world.tally.pack_bites += 1
+            biters[c] = tick
             prey.health -= damage
             prey.stamina = min(prey.max_stamina, prey.stamina + ADRENALINE_STAMINA)
             prey.last_hit_tick = tick
             prey.hurt = 1.0
             prey.stop_eating()   # the rest of the interrupted meal is lost
             c.gain_meat(damage * BITE_HEALTH_TRANSFER)
-            c.score += BITE_SCORE + (1 if prey.health <= 0 else 0)
-            # Large prey fights back.
+            c.score += BITE_SCORE
+            if prey.health <= 0:
+                c.score += 1
+                for biter in biters:
+                    if biter is not c and biter.health > 0:
+                        biter.score += PACK_ASSIST_SCORE
+            # Large prey fights back, against everyone attacking it.
             retaliation = RETALIATION_DAMAGE * min(3.0, max(0.0, 1 / ratio - 1))
-            c.health -= retaliation
             if retaliation > 0:
+                c.health -= retaliation / _attackers(c, prey, world)
                 c.hurt = 1.0
-            c.last_bite_tick = tick
             c.last_hit_tick = tick
-            return True
-        return False
+            return BITTEN
+        return None
 
     def _scavenge(self, c, nearby_carcasses):
         for carcass in nearby_carcasses:

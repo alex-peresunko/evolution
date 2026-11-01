@@ -74,6 +74,7 @@ class Creature:
         self.last_bite_tick: int | None = None
         self.last_hit_tick: int | None = None
         self.hurt = 0.0                     # 1 when bitten or hit back, fading to 0
+        self.recent_biters = {}             # prey: carnivore -> tick of its last bite
         self.eating_ticks = 0               # > 0 while standing still to eat
         self.meal_health = 0.0              # grazer: health still to absorb from the meal
         self.meal_carcass = None            # predator: carcass being eaten

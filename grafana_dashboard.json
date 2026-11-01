@@ -2281,8 +2281,8 @@
     },
     {
       "type": "timeseries",
-      "title": "Carcasses",
-      "description": "Carcasses removed per minute: eaten to the bone by scavenging carnivores, or rotted away untouched.",
+      "title": "Group hunting",
+      "description": "Share of attempted bites that a herd around the prey made miss (confusion), and share of landed bites on prey another carnivore bit recently (pack bites, which do extra damage). Rising shares mean herds and packs are forming.",
       "datasource": {
         "type": "prometheus",
         "uid": "fev2gbax7os8we"
@@ -2292,6 +2292,206 @@
         "h": 8,
         "x": 12,
         "y": 57
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*confused.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*pack bites.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fev2gbax7os8we"
+          },
+          "expr": "sum(rate(evolution_bites_confused_total{job=\"evolution\"}[5m])) / (sum(rate(evolution_bites_confused_total{job=\"evolution\"}[5m])) + sum(rate(evolution_bites_total{job=\"evolution\"}[5m])))",
+          "legendFormat": "confused",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fev2gbax7os8we"
+          },
+          "expr": "sum(rate(evolution_pack_bites_total{job=\"evolution\"}[5m])) / sum(rate(evolution_bites_total{job=\"evolution\"}[5m]))",
+          "legendFormat": "pack bites",
+          "range": true
+        }
+      ],
+      "id": 27
+    },
+    {
+      "type": "timeseries",
+      "title": "Herd density",
+      "description": "Mean kin_density brain input per species: 0 when no kin is near, 1 in a dense group. Herds and packs push it up.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "fev2gbax7os8we"
+      },
+      "gridPos": {
+        "w": 6,
+        "h": 8,
+        "x": 18,
+        "y": 57
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*herbivore.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*carnivore.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fev2gbax7os8we"
+          },
+          "expr": "evolution_herd_density{job=\"evolution\",species=\"herbivore\"}",
+          "legendFormat": "herbivore",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fev2gbax7os8we"
+          },
+          "expr": "evolution_herd_density{job=\"evolution\",species=\"carnivore\"}",
+          "legendFormat": "carnivore",
+          "range": true
+        }
+      ],
+      "id": 28
+    },
+    {
+      "type": "timeseries",
+      "title": "Carcasses",
+      "description": "Carcasses removed per minute: eaten to the bone by scavenging carnivores, or rotted away untouched.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "fev2gbax7os8we"
+      },
+      "gridPos": {
+        "w": 6,
+        "h": 8,
+        "x": 0,
+        "y": 65
       },
       "fieldConfig": {
         "defaults": {
@@ -2367,7 +2567,7 @@
           "range": true
         }
       ],
-      "id": 27
+      "id": 29
     },
     {
       "type": "timeseries",
@@ -2380,8 +2580,8 @@
       "gridPos": {
         "w": 6,
         "h": 8,
-        "x": 18,
-        "y": 57
+        "x": 6,
+        "y": 65
       },
       "fieldConfig": {
         "defaults": {
@@ -2457,18 +2657,18 @@
           "range": true
         }
       ],
-      "id": 28
+      "id": 30
     },
     {
       "type": "row",
       "title": "Genes",
       "collapsed": false,
-      "id": 29,
+      "id": 31,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 65
+        "y": 73
       },
       "panels": []
     },
@@ -2484,7 +2684,7 @@
         "w": 12,
         "h": 9,
         "x": 0,
-        "y": 66
+        "y": 74
       },
       "fieldConfig": {
         "defaults": {
@@ -2528,7 +2728,7 @@
           "range": true
         }
       ],
-      "id": 30
+      "id": 32
     },
     {
       "type": "timeseries",
@@ -2542,7 +2742,7 @@
         "w": 12,
         "h": 9,
         "x": 12,
-        "y": 66
+        "y": 74
       },
       "fieldConfig": {
         "defaults": {
@@ -2586,18 +2786,18 @@
           "range": true
         }
       ],
-      "id": 31
+      "id": 33
     },
     {
       "type": "row",
       "title": "Best creature genes",
       "collapsed": true,
-      "id": 32,
+      "id": 34,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 75
+        "y": 83
       },
       "panels": [
         {
@@ -2612,7 +2812,7 @@
             "w": 12,
             "h": 8,
             "x": 0,
-            "y": 76
+            "y": 84
           },
           "fieldConfig": {
             "defaults": {
@@ -2656,7 +2856,7 @@
               "range": true
             }
           ],
-          "id": 33
+          "id": 35
         },
         {
           "type": "timeseries",
@@ -2670,7 +2870,7 @@
             "w": 12,
             "h": 8,
             "x": 12,
-            "y": 76
+            "y": 84
           },
           "fieldConfig": {
             "defaults": {
@@ -2714,7 +2914,7 @@
               "range": true
             }
           ],
-          "id": 34
+          "id": 36
         }
       ]
     },
@@ -2722,12 +2922,12 @@
       "type": "row",
       "title": "Lifestyle",
       "collapsed": false,
-      "id": 35,
+      "id": 37,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 76
+        "y": 84
       },
       "panels": []
     },
@@ -2743,7 +2943,7 @@
         "w": 6,
         "h": 8,
         "x": 0,
-        "y": 77
+        "y": 85
       },
       "fieldConfig": {
         "defaults": {
@@ -2869,7 +3069,7 @@
           "range": true
         }
       ],
-      "id": 36
+      "id": 38
     },
     {
       "type": "timeseries",
@@ -2883,7 +3083,7 @@
         "w": 6,
         "h": 8,
         "x": 6,
-        "y": 77
+        "y": 85
       },
       "fieldConfig": {
         "defaults": {
@@ -3009,7 +3209,7 @@
           "range": true
         }
       ],
-      "id": 37
+      "id": 39
     },
     {
       "type": "timeseries",
@@ -3023,7 +3223,7 @@
         "w": 6,
         "h": 8,
         "x": 12,
-        "y": 77
+        "y": 85
       },
       "fieldConfig": {
         "defaults": {
@@ -3109,7 +3309,7 @@
           "range": true
         }
       ],
-      "id": 38
+      "id": 40
     },
     {
       "type": "timeseries",
@@ -3123,7 +3323,7 @@
         "w": 6,
         "h": 8,
         "x": 18,
-        "y": 77
+        "y": 85
       },
       "fieldConfig": {
         "defaults": {
@@ -3199,18 +3399,18 @@
           "range": true
         }
       ],
-      "id": 39
+      "id": 41
     },
     {
       "type": "row",
       "title": "Run health",
       "collapsed": false,
-      "id": 40,
+      "id": 42,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 85
+        "y": 93
       },
       "panels": []
     },
@@ -3226,7 +3426,7 @@
         "w": 6,
         "h": 8,
         "x": 0,
-        "y": 86
+        "y": 94
       },
       "fieldConfig": {
         "defaults": {
@@ -3287,7 +3487,7 @@
           "range": true
         }
       ],
-      "id": 41
+      "id": 43
     },
     {
       "type": "timeseries",
@@ -3301,7 +3501,7 @@
         "w": 6,
         "h": 8,
         "x": 6,
-        "y": 86
+        "y": 94
       },
       "fieldConfig": {
         "defaults": {
@@ -3377,7 +3577,7 @@
           "range": true
         }
       ],
-      "id": 42
+      "id": 44
     },
     {
       "type": "timeseries",
@@ -3391,7 +3591,7 @@
         "w": 4,
         "h": 8,
         "x": 12,
-        "y": 86
+        "y": 94
       },
       "fieldConfig": {
         "defaults": {
@@ -3452,7 +3652,7 @@
           "range": true
         }
       ],
-      "id": 43
+      "id": 45
     },
     {
       "type": "timeseries",
@@ -3466,7 +3666,7 @@
         "w": 4,
         "h": 8,
         "x": 16,
-        "y": 86
+        "y": 94
       },
       "fieldConfig": {
         "defaults": {
@@ -3527,7 +3727,7 @@
           "range": true
         }
       ],
-      "id": 44
+      "id": 46
     },
     {
       "type": "stat",
@@ -3541,7 +3741,7 @@
         "w": 4,
         "h": 8,
         "x": 20,
-        "y": 86
+        "y": 94
       },
       "fieldConfig": {
         "defaults": {
@@ -3609,7 +3809,7 @@
           "range": true
         }
       ],
-      "id": 45
+      "id": 47
     }
   ]
 }

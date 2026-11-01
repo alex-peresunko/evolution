@@ -93,3 +93,16 @@ def test_world_tally_sorts_carcasses_by_fate(sim):
     sim._update_carcasses()
     tally = sim.world.tally
     assert (tally.carcasses_eaten, tally.carcasses_rotted) == (1, 1)
+
+
+def test_group_hunting_metrics_follow_the_tally(sim, tmp_path):
+    metrics = GameMetrics()
+    metrics.watch(sim, HallOfFameAutosaver(save_dir=tmp_path))
+    for _ in range(50):
+        sim.step()
+    sim.world.tally.bites_confused, sim.world.tally.pack_bites = 3, 2
+    s = _samples(metrics)
+    assert s[("evolution_bites_confused_total", ())] == 3
+    assert s[("evolution_pack_bites_total", ())] == 2
+    for species in ALL_SPECIES:
+        assert 0 <= s[("evolution_herd_density", (("species", species.name),))] <= 1

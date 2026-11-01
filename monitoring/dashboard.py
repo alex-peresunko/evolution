@@ -199,6 +199,20 @@ ROWS = [
         timeseries("Bites", "Carnivore bites that landed, per minute.",
                    q(per_minute(m("bites_total")), "bites / min"), colors={"bites": "red"},
                    unit="short", min_=0, w=6),
+        timeseries("Group hunting", "Share of attempted bites that a herd around the prey made "
+                   "miss (confusion), and share of landed bites on prey another carnivore bit "
+                   "recently (pack bites, which do extra damage). Rising shares mean herds and "
+                   "packs are forming.",
+                   q(f"sum(rate({m('bites_confused_total')}[5m])) / (sum(rate("
+                     f"{m('bites_confused_total')}[5m])) + sum(rate({m('bites_total')}[5m])))",
+                     "confused"),
+                   q(f"sum(rate({m('pack_bites_total')}[5m])) / sum(rate({m('bites_total')}[5m]))",
+                     "pack bites"),
+                   colors={"confused": "green", "pack bites": "red"}, unit="percentunit",
+                   min_=0, w=6),
+        timeseries("Herd density", "Mean kin_density brain input per species: 0 when no kin "
+                   "is near, 1 in a dense group. Herds and packs push it up.",
+                   *by_species("herd_density"), unit="percentunit", min_=0, w=6),
         timeseries("Carcasses", "Carcasses removed per minute: eaten to the bone by scavenging "
                    "carnivores, or rotted away untouched.",
                    q(per_minute(m("carcasses_removed_total")), "{{fate}}"),
