@@ -89,6 +89,7 @@ HEALTH_LOST_ON_HIT = 50
 BODY_RADIUS_FACTOR = 0.8        # body radius = size * factor (< 1: bodies may overlap a little); 0 turns collisions off
 COLLISION_PASSES = 2
 CONTACT_REACH = 2.0             # bodies this close count as touching (bites, scavenging)
+TOUCH_TOLERANCE = 4.0           # px: touch is felt from this gap; 0.5 at contact, 1 when this deep
 CARNIVORE_BITE_ANGLE = math.radians(60)
 HUNGER_MAX = 400
 HUNGER_HEALTH_PENALTY = 5
@@ -223,6 +224,7 @@ BRAIN_INPUTS = (
     + 1             # in water
     + 1             # eating
     + 1             # hurt
+    + 4             # touch by kin / the other species: strength, angle
 )
 BRAIN_OUTPUTS = 4 + NUM_MEMORY  # rotation, speed, signal, memory, stop eating
 BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]

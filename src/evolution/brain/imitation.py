@@ -14,6 +14,7 @@ CRUISE_SPEED = 0.55      # below STAMINA_EFFORT_THRESHOLD, so cruising is free
 SPRINT_MIN_STAMINA = 0.2
 WANDER_TURN = 0.05
 TARGET_LIMIT = 0.95      # tanh outputs never reach +-1
+CROWDED = 0.5            # kin touch strength (bodies in contact) that makes a wanderer step aside
 
 
 def _wrap(a):
@@ -37,8 +38,14 @@ def teacher_actions(X, is_carnivore):
     carrion = carn & ~seen & ~carcass & ~tracking & (X[:, IN.carcass_smell_strength] > 0)
     rel = np.where(carrion, X[:, IN.carcass_smell_angle] * math.pi, rel)
 
-    fleeing = ~carn & ((X[:, IN.smell_strength] > FLEE_SMELL) | (X[:, IN.hurt] > 0))
+    wandering = ~seen & ~carcass & ~tracking & ~carrion
+    crowded = wandering & (X[:, IN.touch_kin] >= CROWDED)
+    rel = np.where(crowded, _wrap(X[:, IN.touch_kin_angle] * math.pi + math.pi), rel)
+
+    touched = ~carn & (X[:, IN.touch_other] > 0)
+    fleeing = ~carn & ((X[:, IN.smell_strength] > FLEE_SMELL) | (X[:, IN.hurt] > 0) | touched)
     rel = np.where(fleeing, _wrap(X[:, IN.smell_angle] * math.pi + math.pi), rel)
+    rel = np.where(touched, _wrap(X[:, IN.touch_other_angle] * math.pi + math.pi), rel)
 
     rotation = np.clip(rel / CREATURE_ROTATION_SPEED, -1, 1)
     whiskers = X[:, IN.obstacle_whiskers]

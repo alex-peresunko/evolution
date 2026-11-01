@@ -55,6 +55,11 @@ INPUTS = Layout([
     ("in_water", 1, "in_water"),
     ("eating", 1, "eating"),                          # share of the meal left; 0 = not eating
     ("hurt", 1, "hurt"),                              # 1 just after a bite or retaliation, fading
+    # the closest-pressing body of the own / the other species (world.perception._touch)
+    ("touch_kin", 1, "touch_kin"),
+    ("touch_kin_angle", 1, "touch_kin_ang"),
+    ("touch_other", 1, "touch_other"),
+    ("touch_other_angle", 1, "touch_other_ang"),
 ])
 
 OUTPUTS = Layout([

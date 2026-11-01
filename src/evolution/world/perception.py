@@ -10,6 +10,7 @@ import numpy as np
 
 from ..brain.layout import INPUTS as IN
 from ..config import (
+    BODY_RADIUS_FACTOR,
     GENE_MIN_MAX,
     HUNGER_MAX,
     KIN_DENSITY_NORM,
@@ -19,6 +20,7 @@ from ..config import (
     NUM_WHISKERS,
     SIGNAL_RADIUS,
     SMELL_DISTANCE,
+    TOUCH_TOLERANCE,
     WHISKER_TARGET_WIDTH,
 )
 
@@ -164,6 +166,22 @@ def _social(rel, signals):
     return kin_angle, kin_dist, density, sig_angle, strength
 
 
+def _touch(rel, size, targets):
+    """Strength and angle of the body pressing hardest. With gap = distance minus the body radii,
+    strength is 0.5 at contact and grows linearly to 1 at TOUCH_TOLERANCE deep, from 0 at
+    TOUCH_TOLERANCE apart."""
+    n = rel.dist.shape[0]
+    if rel.dist.shape[1] == 0:
+        return np.zeros(n), np.zeros(n)
+    target_size = np.array([t.size for t in targets], dtype=np.float64)
+    gap = rel.dist - (size[:, None] + target_size[None, :]) * BODY_RADIUS_FACTOR
+    press = np.where(rel.not_self, np.clip((TOUCH_TOLERANCE - gap) / (2 * TOUCH_TOLERANCE), 0, 1),
+                     0.0)
+    idx = press.argmax(axis=1)
+    strength = press[np.arange(n), idx]
+    return strength, np.where(strength > 0, rel.angle_to(idx) / math.pi, 0.0)
+
+
 def _edge_distance(xy, a, world_bounds):
     """Distance along rays at angles a (N, W) from xy to the world edge."""
     w, h = world_bounds
@@ -295,6 +313,12 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
             for column, values in zip((IN.kin_angle, IN.kin_dist, IN.kin_density,
                                        IN.signal_angle, IN.signal_strength), social):
                 out[gi, column] = values
+    for gi, kin, other in ((ci, carnivores, herbivores), (hi, herbivores, carnivores)):
+        if len(gi):
+            for targets, strength_col, angle_col in ((kin, IN.touch_kin, IN.touch_kin_angle),
+                                                     (other, IN.touch_other, IN.touch_other_angle)):
+                rel = _Relative(xy[gi], angle[gi], ids[gi], targets)
+                out[gi, strength_col], out[gi, angle_col] = _touch(rel, s[gi, 5], targets)
     crown_occ = _crown_occlusion(xy, angle, whisker_angles, crowns)
     if len(ci) and carcasses:
         _, _, (cc_angle, cc_dist) = _vision(_Relative(xy[ci], angle[ci], ids[ci], carcasses),

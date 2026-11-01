@@ -11,7 +11,7 @@ def test_groups_are_slices_and_scalars_are_columns():
     assert INPUTS.obstacle_whiskers == slice(0, config.NUM_WHISKERS)
     assert INPUTS.labels[INPUTS.target_whiskers] == [
         f"food_w{i}" for i in range(config.NUM_WHISKERS)]
-    assert INPUTS.hurt == INPUTS.width - 1
+    assert INPUTS.touch_other_angle == INPUTS.width - 1
     assert (OUTPUTS.rotation, OUTPUTS.speed, OUTPUTS.signal) == (0, 1, 2)
     assert OUTPUTS.memory == slice(3, 3 + config.NUM_MEMORY)
     assert OUTPUTS.stop_eating == OUTPUTS.width - 1

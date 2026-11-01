@@ -75,6 +75,28 @@ def test_hurt_herbivore_flees_and_abandons_its_meal():
     assert Y[0, OUT.speed] > 0.9 and Y[0, OUT.stop_eating] > 0.5
 
 
+def test_herbivore_touched_by_a_predator_bolts_away_from_it():
+    row = _row()
+    row[IN.smell_strength], row[IN.smell_angle] = 0.9, -0.9   # smell says behind-right
+    row[IN.touch_other], row[IN.touch_other_angle] = 0.5, 0.9  # touch says behind-left
+    Y = teacher_actions(np.array([row]), [False])
+    assert Y[0, OUT.rotation] < 0 and Y[0, OUT.speed] > 0.9 and Y[0, OUT.stop_eating] > 0.5
+
+
+def test_carnivore_ignores_touching_prey():
+    row = _row()
+    row[IN.touch_other], row[IN.touch_other_angle] = 0.5, 0.9
+    np.testing.assert_allclose(_act(row, carnivore=True), _act(_row(), carnivore=True))
+
+
+def test_wanderer_steps_away_from_pressing_kin_but_a_target_wins():
+    row = _row()
+    row[IN.touch_kin], row[IN.touch_kin_angle] = 0.7, 0.3   # kin front-left
+    assert _act(row)[OUT.rotation] < 0
+    row[IN.target_dist], row[IN.target_angle] = 0.3, 0.2
+    assert _act(row)[OUT.rotation] > 0
+
+
 def test_only_a_fleeing_herbivore_abandons_its_meal():
     row = _row()
     row[IN.smell_strength] = 0.9

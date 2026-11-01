@@ -11,9 +11,10 @@ are saved and carried over between runs.
   chase, bite and scavenge carcasses. Bites take time and aim, prey gets an adrenaline boost,
   and big herbivores fight back. Herds confuse attackers (bites miss more often), while packs
   bite harder and share the credit for a kill.
-- **Neural brains:** every creature has a `[37, 16, 8, 6]` tanh network. It sees through
-  whiskers, a vision cone and smell, hears kin signals, and feels its health, stamina, fat,
-  water, the season, a bite (`hurt`) and how much of its meal is left. It steers, sets its
+- **Neural brains:** every creature has a `[41, 16, 8, 6]` tanh network. It sees through
+  whiskers, a vision cone and smell, hears kin signals, feels bodies touching it (kin or the
+  other species, and from which side), and feels its health, stamina, fat, water, the season,
+  a bite (`hurt`) and how much of its meal is left. It steers, sets its
   speed, signals, keeps two memory values and can break off a meal to escape.
 - **Genetics:** size, speed, sight, stamina, attractiveness, lifespan, litter size, colour and
   even the brain's own mutation rate are inherited and mutate. Only genetically close pairs

@@ -200,6 +200,12 @@ def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasse
     inputs.append(1.0 if any(lake.contains(self.pos.x, self.pos.y) for lake in lakes) else 0.0)
     inputs.append(self.eating_ticks / self.species.eat_ticks if self.eating_ticks else 0.0)
     inputs.append(self.hurt)
+    for group in ((carnivores, herbivores) if self.is_carnivore else (herbivores, carnivores)):
+        pressing = [(min(1.0, max(0.0, (config.TOUCH_TOLERANCE - (
+            self.pos.distance_to(k.pos) - (self.size + k.size) * config.BODY_RADIUS_FACTOR))
+            / (2 * config.TOUCH_TOLERANCE))), k) for k in group if k.id != self.id]
+        strength, closest = max(pressing, key=lambda p: p[0], default=(0.0, None))
+        inputs += [strength, rel_angle(closest) / math.pi if strength > 0 else 0.0]
     return inputs, whiskers, target_whiskers, nearest_target_dist, nearest_smell_strength
 
 
@@ -342,3 +348,29 @@ def test_crown_occludes_target_whiskers_but_not_obstacle_whiskers():
     assert all(d is None for d in carn.target_whiskers)
     trunk_left = tree.rect.left - 500
     assert all(math.isclose(d, min(trunk_left, carn.sight_distance)) for d in carn.whiskers)
+
+
+
+def _sized(is_carnivore, x, y, size):
+    c = _facing(is_carnivore, x, y)
+    c.size = size
+    return c
+
+
+def test_touch_feels_the_body_pressing_from_behind():
+    f = config.BODY_RADIUS_FACTOR
+    herb = _sized(False, 500, 400, 10)
+    kin = _sized(False, 500, 400 + 20 * f, 10)       # on the right, just touching
+    carn = _sized(True, 500 - 16 * f + 2, 400, 6)     # behind, 2 px into the body
+    row = perceive_all([herb], [], [herb, kin], [carn], [])[0]
+    assert row[INPUTS.touch_kin] == pytest.approx(0.5)
+    assert row[INPUTS.touch_kin_angle] == pytest.approx(0.5)
+    assert row[INPUTS.touch_other] == pytest.approx(0.5 + 2 / (2 * config.TOUCH_TOLERANCE))
+    assert abs(row[INPUTS.touch_other_angle]) == pytest.approx(1.0)
+
+
+def test_no_touch_beyond_the_tolerance():
+    herb = _sized(False, 500, 400, 10)
+    kin = _sized(False, 500 + 20 * config.BODY_RADIUS_FACTOR + config.TOUCH_TOLERANCE, 400, 10)
+    row = perceive_all([herb], [], [herb, kin], [], [])[0]
+    assert row[INPUTS.touch_kin] == 0 and row[INPUTS.touch_kin_angle] == 0
