@@ -21,7 +21,8 @@ def _wrap(a):
 
 
 def teacher_actions(X, is_carnivore):
-    """(N, OUTPUTS.width) target outputs for perception rows X; signal and memory targets are 0."""
+    """(N, OUTPUTS.width) target outputs for perception rows X; signal and memory targets are 0.
+    A fleeing herbivore abandons its meal; nothing else does."""
     X = np.asarray(X, dtype=np.float64)
     carn = np.asarray(is_carnivore, dtype=bool)
     half = X[:, IN.sight_angle] * math.pi
@@ -52,6 +53,7 @@ def teacher_actions(X, is_carnivore):
 
     Y = np.zeros((len(X), OUT.width))
     Y[:, OUT.rotation], Y[:, OUT.speed] = rotation, speed
+    Y[:, OUT.stop_eating] = np.where(fleeing, 1.0, -1.0)
     return np.clip(Y, -TARGET_LIMIT, TARGET_LIMIT)
 
 

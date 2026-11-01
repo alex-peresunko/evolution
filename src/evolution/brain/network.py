@@ -44,7 +44,9 @@ class NeuralNetwork:
 
     @staticmethod
     def from_data(data, target_topology):
-        """Brain from a saved file's parsed JSON, copied into target_topology."""
+        """Brain from a saved file's parsed JSON, copied into target_topology. Weights and
+        biases the file lacks are zero, so new inputs and outputs start disconnected and the
+        brain behaves as it did; layers beyond the saved ones stay random."""
         saved_weights = [np.array(w) for w in data["weights"]]
         saved_biases = [np.array(b) for b in data["biases"]]
         nn = NeuralNetwork(target_topology)
@@ -55,6 +57,8 @@ class NeuralNetwork:
                 rows_w = min(tw[0], sw[0])
                 cols_w = min(tw[1], sw[1])
                 cols_b = min(tb[1], sb[1])
+                nn.weights[i][:] = 0.0
+                nn.biases[i][:] = 0.0
                 nn.weights[i][:rows_w, :cols_w] = saved_weights[i][:rows_w, :cols_w]
                 nn.biases[i][:, :cols_b] = saved_biases[i][:, :cols_b]
         return nn

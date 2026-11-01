@@ -97,7 +97,7 @@ World mechanics, all tuned through `config.py`:
 - **Lakes:** `generate_lakes` places `NUM_LAKES` lakes inside the walls and clear of obstacles. Each lake is 1..`LAKE_LOBES` overlapping `Lake` blobs, and `world.lakes` holds the flat list of blobs. A blob's shore radius is its mean radius (`LAKE_RADIUS_RANGE`) plus random angular harmonics (`random_shore`, `LAKE_SHORE_ROUGHNESS`, `LAKE_SHORE_HARMONICS`). Creatures swim through them: speed is multiplied by `WATER_SPEED_FACTOR`, and instead of regenerating, stamina drains by the species' `swim_stamina_cost` per tick (`c.in_water`). Respawned food avoids lakes (`World.spawn_food`). The renderer bakes lakes into the background.
 - **Chases:** carnivores bite instead of killing on contact. A bite needs contact, the prey within `CARNIVORE_BITE_ANGLE` of the carnivore's heading, and `BITE_COOLDOWN_TICKS` since the last bite (`PredatorDiet._bite`). Bitten prey gets an adrenaline stamina boost. Herbivores bigger than the carnivore deal retaliation damage. Death is simply `health <= 0`.
 - **Carcasses:** every dead creature leaves a `Carcass` in `world.carcasses`. Carnivores scavenge it (`PredatorDiet._scavenge`) until it's eaten or rots.
-- **Meals:** eating makes a creature stand still for the species' `eat_ticks` (`c.eating_ticks`; brain outputs are ignored meanwhile). Herbivores absorb a food item's health gradually (`Creature.digest`); carnivores keep eating from `meal_carcass` until the meal ends, the carcass is gone, or health is full. A bite interrupts a herbivore's meal and forfeits the rest. Setting a duration to 0 restores instant eating.
+- **Meals:** eating makes a creature stand still for the species' `eat_ticks` (`c.eating_ticks`). The brain keeps running and sees the share of the meal left (`INPUTS.eating`). A `stop_eating` output above `MEAL_BREAK_THRESHOLD` abandons the meal, losing the rest, and the creature moves that tick (counted in `world.tally.meals_abandoned`). Herbivores absorb a food item's health gradually (`Creature.digest`); carnivores keep eating from `meal_carcass` until the meal ends, the carcass is gone, or health is full. A bite interrupts a herbivore's meal and forfeits the rest. Setting a duration to 0 restores instant eating.
 - **Weight:** food eaten at full health is stored as `c.fat` (`Creature.absorb`, `FAT_STORE_EFFICIENCY`, capped at `FAT_MAX`). Fat grows the body (`c.size`, `FAT_SIZE_FACTOR`) and lowers speed (`FAT_SPEED_PENALTY`). It burns slowly (`FAT_BURN_PER_TICK`) and pays the starvation penalty before health does. Carnivore meals continue past full health until the carnivore is stuffed (`Creature.is_stuffed`).
 - **Food patches:** `world.food_patches` (`FoodPatch`) drift around the map, and most respawned food lands near one.
 - **Day/night:** `day_light(tick)` goes into `world.light`. At night vision cones and target whiskers shrink (`NIGHT_SIGHT_FACTOR`), while obstacle whiskers and smell don't.
@@ -167,14 +167,14 @@ Entities take their vector and rect types from a `world.geometry.Geometry(vec2, 
 
 ### Neural network
 
-Topology is `config.BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]` = `[35, 16, 8, 5]`, tanh on all layers. `NeuralNetwork` (`brain/network.py`) is pure math; `to_data` / `from_data` convert it for `persistence.brain_store`.
+Topology is `config.BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]` = `[36, 16, 8, 6]`, tanh on all layers. `NeuralNetwork` (`brain/network.py`) is pure math; `to_data` / `from_data` convert it for `persistence.brain_store`.
 
 `brain/layout.py` names every column: `INPUTS.target_whiskers`, `OUTPUTS.speed` and so on (an int for scalars, a slice for groups), plus `labels` for the brain panel.
 - `perceive_all`, `imitation`, the simulation and the brain panel all index through it.
 - To add an input, write it in `perceive_all`, append a field to `INPUTS`, and update the `BRAIN_INPUTS` formula. A module-level assert checks the widths.
-- New inputs and outputs go at the end: `NeuralNetwork.from_data` copies the overlapping top-left block, so saved brains keep their existing wiring.
+- New inputs and outputs go at the end: `NeuralNetwork.from_data` copies the overlapping top-left block and zeroes the rest, so saved brains keep their existing wiring and behave as before until mutation connects the new columns.
 
-Outputs: `[rotation, speed, signal, memory...]`. `sim.breeding.mate_seeking_drive` may override the first two for adults.
+Outputs: `[rotation, speed, signal, memory..., stop_eating]`. `sim.breeding.mate_seeking_drive` may override the first two for adults.
 
 ### Genes
 

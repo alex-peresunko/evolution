@@ -6,6 +6,7 @@ import pytest
 from evolution import config
 from evolution.brain.imitation import _gradients, loss, teacher_actions, train_brain
 from evolution.brain.layout import INPUTS as IN
+from evolution.brain.layout import OUTPUTS as OUT
 from evolution.brain.network import NeuralNetwork
 
 
@@ -63,7 +64,16 @@ def test_signal_and_memory_targets_are_zero():
     rng = np.random.default_rng(0)
     Y = teacher_actions(rng.uniform(-1, 1, (20, config.BRAIN_INPUTS)), [False] * 20)
     assert Y.shape == (20, config.BRAIN_OUTPUTS)
-    assert (Y[:, 2:] == 0).all() and (np.abs(Y) < 1).all()
+    assert (Y[:, OUT.signal] == 0).all() and (Y[:, OUT.memory] == 0).all()
+    assert (np.abs(Y) < 1).all()
+
+
+def test_only_a_fleeing_herbivore_abandons_its_meal():
+    row = _row()
+    row[IN.smell_strength] = 0.9
+    X = np.array([row, row, _row()])
+    Y = teacher_actions(X, [False, True, False])
+    assert Y[0, OUT.stop_eating] > 0.5 and (Y[1:, OUT.stop_eating] < 0).all()
 
 
 def test_gradients_match_finite_differences():

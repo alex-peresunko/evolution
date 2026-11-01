@@ -106,7 +106,8 @@ class GameMetrics:
         counters = {name: _family("counter", name, doc, sp) for name, doc in (
             ("births", "Creatures born"),
             ("extinctions", "Times the species died out and was repopulated"),
-            ("death_age_ticks", "Sum of ages at death; divide by deaths for mean lifespan"))}
+            ("death_age_ticks", "Sum of ages at death; divide by deaths for mean lifespan"),
+            ("meals_abandoned", "Meals broken off by the brain's stop_eating output"))}
         score = _family("gauge", "score", "Score of living creatures", ["species", "stat"])
         deaths = _family("counter", "deaths", "Deaths, by likely cause", ["species", "cause"])
         gene_mean = _family("gauge", "gene_mean", "Population mean gene value",
@@ -143,6 +144,7 @@ class GameMetrics:
             counters["births"].add_metric([name], stats.births)
             counters["extinctions"].add_metric([name], stats.extinctions)
             counters["death_age_ticks"].add_metric([name], stats.death_age_total)
+            counters["meals_abandoned"].add_metric([name], sim.world.tally.meals_abandoned[name])
             for cause, count in stats.deaths.items():
                 deaths.add_metric([name, cause], count)
 

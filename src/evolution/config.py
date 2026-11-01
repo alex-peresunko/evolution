@@ -160,6 +160,7 @@ SCAVENGE_SCORE_FACTOR = 0.5
 # --- Meals (creatures stand still while eating; 0 = instant eating on the move) ---
 HERBIVORE_EAT_TICKS = 45        # food's health is absorbed gradually over the meal
 CARNIVORE_EAT_TICKS = 60        # ticks spent at a carcass, eating CARCASS_EAT_RATE per tick
+MEAL_BREAK_THRESHOLD = 0.5      # stop_eating output above which a meal is abandoned, rest lost
 
 # --- Weight (food eaten at full health is stored as fat) ---
 FAT_MAX = 3000                  # fat cap, in health units
@@ -204,8 +205,9 @@ BRAIN_INPUTS = (
     + 1             # season
     + 2             # carcass smell angle/strength
     + 1             # in water
+    + 1             # eating
 )
-BRAIN_OUTPUTS = 3 + NUM_MEMORY  # rotation, speed, signal, memory
+BRAIN_OUTPUTS = 4 + NUM_MEMORY  # rotation, speed, signal, memory, stop eating
 BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]
 
 # --- Evolution ---

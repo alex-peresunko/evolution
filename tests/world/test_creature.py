@@ -3,6 +3,7 @@ import math
 import pytest
 
 from evolution import config
+from evolution.brain.layout import INPUTS, OUTPUTS
 from evolution.species import CARNIVORE, HERBIVORE
 from evolution.world.creature import Creature
 from evolution.world.food import Carcass, Food
@@ -20,7 +21,7 @@ def _act(c, outputs, *, food=(), herbivores=(), carcasses=(), obstacles=(), lake
     world.carcasses = list(carcasses)
     world.tick = tick
     world.reindex()
-    c.act(outputs, world)
+    c.act(list(outputs) + [0.0] * (config.BRAIN_OUTPUTS - len(outputs)), world)
 
 
 def test_creature_initial_state():
@@ -186,6 +187,33 @@ def test_herbivore_stops_to_eat_and_digests_gradually():
     assert herb.health == pytest.approx(start + meal - decay)
     _herbivore_step(herb, [], speed=1.0)
     assert herb.current_speed > 0
+
+
+def test_stop_eating_output_breaks_off_the_meal():
+    herb = _adult_at(False, 500, 400)
+    herb.health = 1000
+    _herbivore_step(herb, [Food(WORLD_BOUNDS, pos=(500, 400))], speed=0.0)
+    stop = [0.0] * config.BRAIN_OUTPUTS
+    stop[OUTPUTS.speed] = 1.0
+    stop[OUTPUTS.stop_eating] = config.MEAL_BREAK_THRESHOLD - 0.01
+    _act(herb, stop, herbivores=[herb])
+    assert herb.eating_ticks == config.HERBIVORE_EAT_TICKS - 1 and herb.current_speed == 0
+    stop[OUTPUTS.stop_eating] = config.MEAL_BREAK_THRESHOLD + 0.01
+    world = World(WORLD_BOUNDS, {HERBIVORE: [herb]}, [], [], ())
+    world.reindex()
+    herb.act(stop, world)
+    assert herb.eating_ticks == 0 and herb.meal_health == 0
+    assert herb.current_speed > 0
+    assert world.tally.meals_abandoned[HERBIVORE.name] == 1
+
+
+def test_eating_input_is_the_share_of_the_meal_left():
+    herb = _adult_at(False, 500, 400)
+    herb.eating_ticks = config.HERBIVORE_EAT_TICKS // 3
+    idle = _adult_at(False, 300, 300)
+    inputs = perceive_all([herb, idle], [], [herb, idle], [], [])
+    assert inputs[0, INPUTS.eating] == pytest.approx(herb.eating_ticks / config.HERBIVORE_EAT_TICKS)
+    assert inputs[1, INPUTS.eating] == 0.0
 
 
 def test_bite_interrupts_meal():

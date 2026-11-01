@@ -1,5 +1,6 @@
 """Running counts of world events, read by the metrics."""
-from dataclasses import dataclass
+from collections import Counter
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -9,3 +10,4 @@ class WorldTally:
     food_rotted: int = 0
     carcasses_eaten: int = 0
     carcasses_rotted: int = 0
+    meals_abandoned: Counter = field(default_factory=Counter)  # by species name

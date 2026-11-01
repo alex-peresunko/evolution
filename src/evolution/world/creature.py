@@ -22,6 +22,7 @@ from ..config import (
     HUNGER_MAX,
     JUVENILE_SIZE_FACTOR,
     KLEIBER_EXPONENT,
+    MEAL_BREAK_THRESHOLD,
     NUM_MEMORY,
     NUM_WHISKERS,
     SENESCENCE_RATE,
@@ -165,6 +166,9 @@ class Creature:
     def act(self, outputs, world):
         """Live one tick on the brain's `outputs`. The steps' order is part of the rules."""
         growth_factor = self._grow(world.lakes)
+        if self.eating_ticks > 0 and outputs[OUT.stop_eating] > MEAL_BREAK_THRESHOLD:
+            self.stop_eating()
+            world.tally.meals_abandoned[self.species.name] += 1
         speed = self._move(outputs)
         self._metabolize(growth_factor, speed)
         self.current_speed = speed

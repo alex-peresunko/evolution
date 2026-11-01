@@ -2740,7 +2740,7 @@
         "uid": "fev2gbax7os8we"
       },
       "gridPos": {
-        "w": 8,
+        "w": 6,
         "h": 8,
         "x": 0,
         "y": 77
@@ -2880,9 +2880,9 @@
         "uid": "fev2gbax7os8we"
       },
       "gridPos": {
-        "w": 8,
+        "w": 6,
         "h": 8,
-        "x": 8,
+        "x": 6,
         "y": 77
       },
       "fieldConfig": {
@@ -3013,6 +3013,106 @@
     },
     {
       "type": "timeseries",
+      "title": "Meals abandoned",
+      "description": "Meals broken off per minute by the brain's stop_eating output; the rest of the meal is lost. Herbivores that learn to escape a carnivore mid-meal raise this.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "fev2gbax7os8we"
+      },
+      "gridPos": {
+        "w": 6,
+        "h": 8,
+        "x": 12,
+        "y": 77
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*herbivore.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*carnivore.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fev2gbax7os8we"
+          },
+          "expr": "rate(evolution_meals_abandoned_total{job=\"evolution\",species=\"herbivore\"}[2m]) * 60",
+          "legendFormat": "herbivore",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fev2gbax7os8we"
+          },
+          "expr": "rate(evolution_meals_abandoned_total{job=\"evolution\",species=\"carnivore\"}[2m]) * 60",
+          "legendFormat": "carnivore",
+          "range": true
+        }
+      ],
+      "id": 38
+    },
+    {
+      "type": "timeseries",
       "title": "Signalling",
       "description": "Mean signal output (0 to 1). Kin within SIGNAL_RADIUS hear it, and it costs health, so a rising signal means it pays off: they evolved to communicate.",
       "datasource": {
@@ -3020,9 +3120,9 @@
         "uid": "fev2gbax7os8we"
       },
       "gridPos": {
-        "w": 8,
+        "w": 6,
         "h": 8,
-        "x": 16,
+        "x": 18,
         "y": 77
       },
       "fieldConfig": {
@@ -3099,13 +3199,13 @@
           "range": true
         }
       ],
-      "id": 38
+      "id": 39
     },
     {
       "type": "row",
       "title": "Run health",
       "collapsed": false,
-      "id": 39,
+      "id": 40,
       "gridPos": {
         "h": 1,
         "w": 24,
@@ -3187,7 +3287,7 @@
           "range": true
         }
       ],
-      "id": 40
+      "id": 41
     },
     {
       "type": "timeseries",
@@ -3277,7 +3377,7 @@
           "range": true
         }
       ],
-      "id": 41
+      "id": 42
     },
     {
       "type": "timeseries",
@@ -3352,7 +3452,7 @@
           "range": true
         }
       ],
-      "id": 42
+      "id": 43
     },
     {
       "type": "timeseries",
@@ -3427,7 +3527,7 @@
           "range": true
         }
       ],
-      "id": 43
+      "id": 44
     },
     {
       "type": "stat",
@@ -3509,7 +3609,7 @@
           "range": true
         }
       ],
-      "id": 44
+      "id": 45
     }
   ]
 }

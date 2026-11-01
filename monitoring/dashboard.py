@@ -233,17 +233,22 @@ ROWS = [
                    "of its maximum. Fat is stored from food eaten at full health.",
                    *[q(m(f"{k}_ratio", species=s), f"{s} {k}")
                      for s in SPECIES_COLORS for k in ("health", "stamina", "fat")],
-                   unit="percentunit", min_=0, w=8),
+                   unit="percentunit", min_=0, w=6),
         timeseries("Activity", "Share of each species that is swimming in a lake, standing "
                    "still to eat, or winded (out of stamina and slowed down). A rising swim "
                    "share in herbivores can mean they use lakes as a refuge.",
                    *[q(m(f"{k}_share", species=s), f"{s} {k.replace('in_', '')}")
                      for s in SPECIES_COLORS for k in ("in_water", "eating", "winded")],
-                   unit="percentunit", min_=0, w=8),
+                   unit="percentunit", min_=0, w=6),
+        timeseries("Meals abandoned", "Meals broken off per minute by the brain's stop_eating "
+                   "output; the rest of the meal is lost. Herbivores that learn to escape a "
+                   "carnivore mid-meal raise this.",
+                   *[q(per_minute(m("meals_abandoned_total", species=s)), s)
+                     for s in SPECIES_COLORS], unit="short", min_=0, w=6),
         timeseries("Signalling", "Mean signal output (0 to 1). Kin within SIGNAL_RADIUS hear "
                    "it, and it costs health, so a rising signal means it pays off: they "
                    "evolved to communicate.",
-                   q(m("signal_mean"), "{{species}}"), min_=0, w=8),
+                   q(m("signal_mean"), "{{species}}"), min_=0, w=6),
     ),
     row(
         "Run health",

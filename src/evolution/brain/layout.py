@@ -53,6 +53,7 @@ INPUTS = Layout([
     ("carcass_smell_angle", 1, "carcass_smell_ang"),  # carnivore only
     ("carcass_smell_strength", 1, "carcass_smell_str"),
     ("in_water", 1, "in_water"),
+    ("eating", 1, "eating"),                          # share of the meal left; 0 = not eating
 ])
 
 OUTPUTS = Layout([
@@ -60,6 +61,7 @@ OUTPUTS = Layout([
     ("speed", 1, "speed"),
     ("signal", 1, "signal"),
     ("memory", NUM_MEMORY, "mem{}"),
+    ("stop_eating", 1, "stop_eat"),                   # > MEAL_BREAK_THRESHOLD abandons a meal
 ])
 
 assert INPUTS.width == BRAIN_INPUTS and OUTPUTS.width == BRAIN_OUTPUTS, \

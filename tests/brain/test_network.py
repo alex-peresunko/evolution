@@ -57,6 +57,16 @@ def test_load_topology_mismatch_no_crash():
     assert len(out) == 2
 
 
+def test_added_inputs_and_outputs_start_disconnected():
+    np.random.seed(4)
+    nn = NeuralNetwork([4, 3, 2])
+    nn2 = NeuralNetwork.from_data(nn.to_data(), [6, 3, 3])
+    x = np.random.uniform(-1, 1, 4)
+    out = nn2.forward(list(x) + [0.7, -0.4])
+    assert np.allclose(out[:2], nn.forward(x))
+    assert out[2] == 0.0
+
+
 def test_random_brains_behave_differently():
     np.random.seed(11)
     x = np.random.uniform(-1, 1, 32)

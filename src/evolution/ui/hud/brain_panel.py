@@ -87,7 +87,7 @@ def draw_brain_panel(screen, c, history):
             screen.blit(value, (nx + 14 + name.get_width(), ny - 5))
 
     y = net_bottom + 6
-    badge = ("EATING (brain ignored)" if c.eating_ticks > 0
+    badge = ("EATING (stop_eat breaks off)" if c.eating_ticks > 0
              else "MATE-SEEKING (steering blended)" if c.mate_override else None)
     if badge:
         screen.blit(small.render(badge, True, config.COLOR_BEST_CREATURE), (x0 + 8, y))
