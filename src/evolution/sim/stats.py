@@ -18,11 +18,13 @@ class SpeciesStats:
         self.extinctions = 0
         self.deaths = dict.fromkeys(DEATH_CAUSES, 0)
         self.death_age_total = 0
+        self.death_litters_total = 0
 
     def note_death(self, c, cause):
         self.max_age = max(self.max_age, c.age)
         self.deaths[cause] += 1
         self.death_age_total += c.age
+        self.death_litters_total += c.reproductions
 
     def sample(self, best_score):
         self.score_history.append(best_score)

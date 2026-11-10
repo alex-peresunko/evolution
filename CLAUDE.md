@@ -22,6 +22,7 @@ poetry run python game.py --load 2               # start from snapshot #2 (1 = n
 poetry run python game_headless.py               # headless, auto-loads saved brains, Prometheus on :8000
 poetry run python game_headless.py --workers 4   # plus 4 island worker processes (one core each)
 poetry run python pretrain.py                    # behavior-cloning pretrain -> history snapshot *-pretrained (--install: best_brain_*.json)
+poetry run python benchmark.py best random 2     # compare brain sources (best, random, snapshot) in seeded worlds; writes nothing
 
 poetry run pytest                                # all tests except the opt-in golden trace
 make golden-record / make golden                 # golden trace: record before a refactor, check after
