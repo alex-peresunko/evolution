@@ -45,6 +45,8 @@ from ..config import (
     THIRST_MAX,
     UPKEEP_WEIGHTS,
     WATER_SPEED_FACTOR,
+    WINTER_COLD_COST,
+    WINTER_FAT_INSULATION,
 )
 from ..genetics import clamp_genes
 from .geometry import HEADLESS
@@ -214,6 +216,11 @@ class Creature:
         lifespan = self.genes["lifespan"]
         return SENESCENCE_RATE * max(0.0, self.age - lifespan) / lifespan
 
+    def cold(self, season):
+        """Extra per-tick health loss of winter (season < 0); fat insulates against it."""
+        return (WINTER_COLD_COST * max(0.0, -season)
+                * (1 - WINTER_FAT_INSULATION * self.fat / FAT_MAX))
+
     # --- one tick ----------------------------------------------------------------------------
 
     def act(self, outputs, world):
@@ -227,7 +234,7 @@ class Creature:
             self.stop_eating()
             world.tally.meals_abandoned[self.species.name] += 1
         speed = self._move(outputs)
-        self._metabolize(growth_factor, speed)
+        self._metabolize(growth_factor, speed, world.season)
         self.current_speed = speed
         self.species.diet.feed(self, world)
         self._collide(world.obstacles if self.size > world.terrain.reach
@@ -299,7 +306,7 @@ class Creature:
             self.clamp_to_walls()
         return speed
 
-    def _metabolize(self, growth_factor, speed):
+    def _metabolize(self, growth_factor, speed, season):
         self.hunger += 1
         hunger_penalty = (
             HUNGER_HEALTH_PENALTY * min(1.0, max(0.0, (self.hunger - HUNGER_MAX) / HUNGER_MAX))
@@ -310,7 +317,7 @@ class Creature:
         self.fat -= from_fat
         hunger_penalty -= from_fat
         dehydration = THIRST_HEALTH_PENALTY * min(1.0, max(0.0, self.thirst / THIRST_MAX - 1))
-        self.health -= (self.upkeep(growth_factor) + self.senescence()
+        self.health -= (self.upkeep(growth_factor) + self.senescence() + self.cold(season)
                         + (speed * HEALTH_LOSS_SPEED_FACTOR) + hunger_penalty + dehydration
                         + self.signal * SIGNAL_HEALTH_COST)
 

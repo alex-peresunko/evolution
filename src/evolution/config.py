@@ -247,8 +247,10 @@ DAY_LENGTH_TICKS = 3600
 NIGHT_SIGHT_FACTOR = 0.35       # share of sight distance left at midnight
 
 # --- Seasons ---
-SEASON_LENGTH_TICKS = 8 * DAY_LENGTH_TICKS   # one year; a run starts in spring
-SEASON_FOOD_AMPLITUDE = 0.6     # food cap x (1 + 0.6 * season): summer 1.6x, winter 0.4x
+SEASON_LENGTH_TICKS = 2 * DAY_LENGTH_TICKS   # one year; a run starts in spring
+SEASON_FOOD_AMPLITUDE = 0.65    # food cap x (1 + 0.65 * season): summer 1.65x, winter 0.35x
+WINTER_COLD_COST = 0.3          # extra health loss per tick at midwinter, lean
+WINTER_FAT_INSULATION = 0.8     # share of the cold cost that full fat stores take away
 
 # --- Neural Network ---
 NUM_WHISKERS = 3

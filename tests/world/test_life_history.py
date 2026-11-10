@@ -12,8 +12,9 @@ from evolution.world.world import World
 WORLD_BOUNDS = (config.WORLD_WIDTH, config.WORLD_HEIGHT)
 
 
-def _act(c):
+def _act(c, season=0.0):
     world = World(WORLD_BOUNDS, {c.species: [c]}, [])
+    world.season = season
     world.reindex()
     c.act([0.0, 0.0], world)
 
@@ -57,6 +58,19 @@ def test_act_charges_upkeep():
     health = c.health
     _act(c)
     assert c.health == pytest.approx(health - c.upkeep())
+
+
+def test_winter_cold_costs_health_and_fat_insulates():
+    lean, fat = _adult(), _adult()
+    fat.fat = config.FAT_MAX
+    assert lean.cold(0.5) == lean.cold(1) == 0
+    assert lean.cold(-1) == pytest.approx(config.WINTER_COLD_COST)
+    assert lean.cold(-0.5) == pytest.approx(config.WINTER_COLD_COST / 2)
+    assert fat.cold(-1) == pytest.approx(
+        config.WINTER_COLD_COST * (1 - config.WINTER_FAT_INSULATION))
+    health = lean.health
+    _act(lean, season=-1)
+    assert lean.health == pytest.approx(health - lean.upkeep() - config.WINTER_COLD_COST)
 
 
 def _breeding_sim(genes1=None, genes2=None, is_carnivore=False):
