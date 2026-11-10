@@ -152,12 +152,17 @@ STAMINA_EXHAUSTION_PENALTY = 0.2
 STAMINA_RECOVERY_SHARE = 0.2    # a winded creature runs again at this share of max stamina
 
 # --- Lakes (swimmable: slow and tiring) ---
-NUM_LAKES = 4
+NUM_LAKES = 8
 LAKE_RADIUS_RANGE = (80, 200)          # mean shore radius
 LAKE_LOBES = (1, 4)                    # overlapping blobs merged into one lake
 LAKE_SHORE_ROUGHNESS = 0.45            # blob shore radius varies within (1 +- this) * mean
 LAKE_SHORE_HARMONICS = 10              # bays and headlands per blob, coarse to fine
 WATER_SPEED_FACTOR = 0.35
+# Thirst: ticks since the last drink. A creature drinks while its body reaches a lake.
+THIRST_MAX = 600                # past this, dehydration costs health
+THIRST_HEALTH_PENALTY = 3       # per tick at 2 x THIRST_MAX and beyond, linear from THIRST_MAX
+DRINK_RATE = 20                 # thirst quenched per tick at the water
+WATER_SENSE_RADIUS = 1500       # px to the nearest shore at which a creature knows the way
 HERBIVORE_SWIM_STAMINA_COST = 3.0   # per tick in water, replaces regen
 CARNIVORE_SWIM_STAMINA_COST = 8.0
 
@@ -258,6 +263,7 @@ BRAIN_INPUTS = (
     + 1             # hurt
     + 4             # touch by kin / the other species: strength, angle
     + 3             # nearest fertile kin angle/dist, own fertility
+    + 3             # thirst, nearest water angle/dist
 )
 BRAIN_OUTPUTS = 5 + NUM_MEMORY  # rotation, speed, signal, memory, stop eating, mate
 BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]

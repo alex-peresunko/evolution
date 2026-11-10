@@ -215,6 +215,16 @@ def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasse
     else:
         inputs += [0.0, 1.0]
     inputs.append(1.0 if self.fertile(tick) else 0.0)
+    inputs.append(min(1.0, self.thirst / config.THIRST_MAX))
+    shores = [(float(lake.shore_gap(np.array([self.pos.x]), np.array([self.pos.y]))[0]), lake)
+              for lake in lakes]
+    gap, lake = min(shores, key=lambda s: s[0], default=(math.inf, None))
+    if gap < config.WATER_SENSE_RADIUS:
+        to_water = (math.atan2(lake.y - self.pos.y, lake.x - self.pos.x)
+                    - self.angle + math.pi) % (2 * math.pi) - math.pi
+        inputs += [to_water / math.pi, max(gap, 0.0) / config.WATER_SENSE_RADIUS]
+    else:
+        inputs += [0.0, 1.0]
     return inputs, whiskers, target_whiskers, nearest_target_dist, nearest_smell_strength
 
 
@@ -234,6 +244,7 @@ def _random_creature(rnd, is_carnivore, obstacles):
     c.signal = rnd.choice([0.0, rnd.uniform(0, 1)])
     c.memory = [rnd.uniform(-1, 1) for _ in range(config.NUM_MEMORY)]
     c.is_adult = rnd.random() < 0.7
+    c.thirst = rnd.randint(0, 2 * config.THIRST_MAX)
     c.last_reproduction_tick = rnd.choice([None, 0, 900])
     return c
 

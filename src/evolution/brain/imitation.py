@@ -14,6 +14,7 @@ CRUISE_SPEED = 0.55      # below STAMINA_EFFORT_THRESHOLD, so cruising is free
 SPRINT_MIN_STAMINA = 0.2
 WANDER_TURN = 0.05
 TARGET_LIMIT = 0.95      # tanh outputs never reach +-1
+THIRSTY = 0.6            # thirst input that sends a creature to the water it senses
 CROWDED = 0.5            # kin touch strength (bodies in contact) that makes a wanderer step aside
 
 
@@ -24,7 +25,8 @@ def _wrap(a):
 def teacher_actions(X, is_carnivore):
     """(N, OUTPUTS.width) target outputs for perception rows X; signal and memory targets are 0.
     A fleeing herbivore abandons its meal; nothing else does. Every creature is willing to mate,
-    and a fertile one with nothing to pursue walks to the nearest fertile kin."""
+    and a fertile one with nothing to pursue walks to the nearest fertile kin. A thirsty creature
+    that senses water goes there before anything but fleeing."""
     X = np.asarray(X, dtype=np.float64)
     carn = np.asarray(is_carnivore, dtype=bool)
     half = X[:, IN.sight_angle] * math.pi
@@ -45,6 +47,9 @@ def teacher_actions(X, is_carnivore):
     crowded = wandering & ~courting & (X[:, IN.touch_kin] >= CROWDED)
     rel = np.where(crowded, _wrap(X[:, IN.touch_kin_angle] * math.pi + math.pi), rel)
 
+    thirsty = (X[:, IN.thirst] > THIRSTY) & (X[:, IN.water_dist] < 1)
+    rel = np.where(thirsty, X[:, IN.water_angle] * math.pi, rel)
+
     touched = ~carn & (X[:, IN.touch_other] > 0)
     fleeing = ~carn & ((X[:, IN.smell_strength] > FLEE_SMELL) | (X[:, IN.hurt] > 0) | touched)
     rel = np.where(fleeing, _wrap(X[:, IN.smell_angle] * math.pi + math.pi), rel)
@@ -58,7 +63,7 @@ def teacher_actions(X, is_carnivore):
     away = np.where(np.abs(left - right) > 0.05, np.sign(left - right), 1.0)
     rotation = np.where(blocked, away, rotation)
 
-    sprint = (fleeing | (carn & seen)) & (X[:, IN.stamina] > SPRINT_MIN_STAMINA)
+    sprint = (fleeing | (carn & seen & ~thirsty)) & (X[:, IN.stamina] > SPRINT_MIN_STAMINA)
     speed = np.where(sprint, 1.0, CRUISE_SPEED)
 
     Y = np.zeros((len(X), OUT.width))

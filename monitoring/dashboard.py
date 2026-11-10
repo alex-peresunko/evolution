@@ -12,7 +12,7 @@ JOB = 'job="evolution"'
 
 SPECIES_COLORS = {"herbivore": "green", "carnivore": "red"}
 CAUSE_COLORS = {"bitten": "red", "retaliation": "orange", "trampled": "green", "starved": "yellow",
-                "old_age": "blue", "attrition": "purple"}
+                "thirst": "light-blue", "old_age": "blue", "attrition": "purple"}
 
 
 def m(name, *matchers, **labels):
@@ -146,7 +146,7 @@ ROWS = [
                      "carnivore killed by large prey fighting back. trampled: a carnivore killed by a "
                      "charging herbivore. impact: a hard collision "
                      "with another body. starved: hunger past "
-                     "HUNGER_MAX. old_age: older than its lifespan gene. attrition: everything "
+                     "HUNGER_MAX. thirst: thirst past THIRST_MAX. old_age: older than its lifespan gene. attrition: everything "
                      "else (upkeep, running, signalling, hitting walls and rocks). A shift from "
                      "starved to old_age means the species learned to eat.",
                      q(f"sum by (cause) ({per_minute(m('deaths_total', species=s))})",

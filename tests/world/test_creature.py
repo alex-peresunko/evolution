@@ -383,3 +383,32 @@ def test_adopt_takes_the_genes_traits_and_keeps_the_life_state():
     assert ((c.pos.x, c.pos.y), c.id, c.age, c.fat, c.health) == (pos, cid, 5000, 600.0, 80.0)
     assert c.stamina == c.max_stamina
     assert c.size == 13 * (1 + 600.0 / config.FAT_MAX * config.FAT_SIZE_FACTOR)
+
+
+def test_thirst_grows_on_land_and_is_quenched_at_the_shore():
+    c = Creature(HERBIVORE, WORLD_BOUNDS)
+    c.pos = c.geometry.vec2(1000, 1000)
+    lake = Lake(1000 + 100 + c.size, 1000, 100)       # the body just reaches the shore
+    dry, wet = World(WORLD_BOUNDS, {HERBIVORE: [c]}, []), World(
+        WORLD_BOUNDS, {HERBIVORE: [c]}, [], lakes=[lake])
+    still = [0.0] * config.BRAIN_OUTPUTS
+    for world in (dry, wet):
+        world.reindex()
+    c.act(still, dry)
+    assert c.thirst == 1
+    c.thirst = 100
+    c.act(still, wet)
+    assert c.thirst == 100 - config.DRINK_RATE and not c.in_water
+
+
+def test_dehydration_costs_health_past_thirst_max():
+    quenched, parched = Creature(HERBIVORE, WORLD_BOUNDS), Creature(HERBIVORE, WORLD_BOUNDS)
+    parched.thirst = 2 * config.THIRST_MAX
+    still = [0.0] * config.BRAIN_OUTPUTS
+    for c in (quenched, parched):
+        world = World(WORLD_BOUNDS, {HERBIVORE: [c]}, [])
+        world.reindex()
+        c.act(still, world)
+    assert (quenched.health - parched.health) == pytest.approx(config.THIRST_HEALTH_PENALTY)
+    parched.health = -1
+    assert parched.death_cause(5) == "thirst"

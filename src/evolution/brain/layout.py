@@ -64,6 +64,10 @@ INPUTS = Layout([
     ("mate_angle", 1, "mate_ang"),
     ("mate_dist", 1, "mate_dist"),
     ("fertile", 1, "fertile"),                        # 1 when the creature itself could breed now
+    ("thirst", 1, "thirst"),                          # 1 = dehydrating (THIRST_MAX)
+    # the nearest lake blob's centre and shore, within WATER_SENSE_RADIUS; dist 0 = in the water
+    ("water_angle", 1, "water_ang"),
+    ("water_dist", 1, "water_dist"),
 ])
 
 OUTPUTS = Layout([

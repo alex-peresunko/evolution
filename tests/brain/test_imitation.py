@@ -12,7 +12,7 @@ from evolution.brain.network import NeuralNetwork
 
 def _row():
     x = np.zeros(config.BRAIN_INPUTS)
-    x[IN.target_dist] = x[IN.carcass_dist] = x[IN.mate_dist] = 1.0  # nothing seen
+    x[IN.target_dist] = x[IN.carcass_dist] = x[IN.mate_dist] = x[IN.water_dist] = 1.0  # nothing
     x[IN.sight_angle] = 0.5                    # 180 degree cone
     x[IN.stamina] = 1.0
     return x
@@ -147,4 +147,15 @@ def test_fertile_wanderer_courts_but_food_comes_first():
     assert _act(row)[OUT.rotation] < 0
     assert _act(row)[OUT.mate] > 0.9
     row[IN.target_dist], row[IN.target_angle] = 0.3, 0.2
+    assert _act(row)[OUT.rotation] > 0
+
+
+def test_thirsty_creature_leaves_food_for_water_but_still_flees():
+    row = _row()
+    row[IN.target_dist], row[IN.target_angle] = 0.3, 0.2
+    row[IN.water_dist], row[IN.water_angle] = 0.4, -0.5
+    assert _act(row)[OUT.rotation] > 0          # not thirsty: the food
+    row[IN.thirst] = 0.9
+    assert _act(row)[OUT.rotation] < 0
+    row[IN.smell_strength], row[IN.smell_angle] = 0.9, -0.5   # predator on the water's side
     assert _act(row)[OUT.rotation] > 0

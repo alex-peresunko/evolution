@@ -21,7 +21,9 @@ from ..config import (
     NUM_WHISKERS,
     SIGNAL_RADIUS,
     SMELL_DISTANCE,
+    THIRST_MAX,
     TOUCH_TOLERANCE,
+    WATER_SENSE_RADIUS,
     WHISKER_TARGET_WIDTH,
 )
 
@@ -272,6 +274,7 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
     whiskers, smell or the kin/signal senses.
     `season` (-1 = midwinter, 1 = midsummer) is passed through as an input.
     `tick` decides who is fertile (Creature.fertile).
+    Water is the lake blob in `lakes` whose shore is nearest.
     """
     n = len(creatures)
     out = np.zeros((n, IN.width))
@@ -379,9 +382,18 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
     out[:, IN.target_whiskers] = np.where(np.isfinite(target_whisker_dist),
                                             1.0 - target_whisker_dist / eye[:, None], 0.0)
     out[:, IN.season] = season
-    for lake in lakes:
-        wet = lake.shore_gap(xy[:, 0], xy[:, 1]) < 0
-        out[wet, IN.in_water] = 1.0
+    out[:, IN.water_dist] = 1.0    # when none is sensed
+    if lakes:
+        gaps = np.array([lake.shore_gap(xy[:, 0], xy[:, 1]) for lake in lakes])
+        nearest = gaps.argmin(axis=0)
+        gap = gaps[nearest, np.arange(n)]
+        out[gap < 0, IN.in_water] = 1.0
+        centre = np.array([(lake.x, lake.y) for lake in lakes], dtype=np.float64)[nearest]
+        sensed = gap < WATER_SENSE_RADIUS
+        to_water = _wrap(np.arctan2(centre[:, 1] - xy[:, 1], centre[:, 0] - xy[:, 0]) - angle)
+        out[:, IN.water_angle] = np.where(sensed, to_water / math.pi, 0.0)
+        out[:, IN.water_dist] = np.where(sensed, np.maximum(gap, 0.0) / WATER_SENSE_RADIUS, 1.0)
+    out[:, IN.thirst] = [min(1.0, c.thirst / THIRST_MAX) for c in creatures]
     out[:, IN.eating] = [c.eating_ticks / c.species.eat_ticks if c.eating_ticks else 0.0
                          for c in creatures]
     out[:, IN.hurt] = [c.hurt for c in creatures]

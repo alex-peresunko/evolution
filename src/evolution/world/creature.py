@@ -8,7 +8,9 @@ from ..brain.network import NeuralNetwork
 from ..config import (
     ADULTHOOD_AGE,
     BRAIN_TOPOLOGY,
+    CONTACT_REACH,
     CREATURE_ROTATION_SPEED,
+    DRINK_RATE,
     FAT_BURN_PER_TICK,
     FAT_MAX,
     FAT_SIZE_FACTOR,
@@ -39,6 +41,8 @@ from ..config import (
     STAMINA_EXHAUSTION_PENALTY,
     STAMINA_RECOVERY_SHARE,
     STAMINA_REGEN_RATE,
+    THIRST_HEALTH_PENALTY,
+    THIRST_MAX,
     UPKEEP_WEIGHTS,
     WATER_SPEED_FACTOR,
 )
@@ -46,7 +50,8 @@ from ..genetics import clamp_genes
 from .geometry import HEADLESS
 
 # attrition: upkeep, effort, signalling and wall or rock hits, with no other cause in effect.
-DEATH_CAUSES = ("bitten", "retaliation", "trampled", "impact", "starved", "old_age", "attrition")
+DEATH_CAUSES = ("bitten", "retaliation", "trampled", "impact", "starved", "thirst", "old_age",
+                "attrition")
 
 
 class Creature:
@@ -68,6 +73,7 @@ class Creature:
         self.last_reproduction_tick: int | None = None
         self.current_speed = 0.0
         self.hunger = 0
+        self.thirst = 0                     # ticks since the last drink, less what it drank
         self.fat = 0.0                      # surplus food; slows the creature, burned when starving
         self.winded = False                 # out of stamina: slow, recovering whatever it asks
         self.in_water = False
@@ -177,6 +183,8 @@ class Creature:
             return "impact"
         if self.hunger > HUNGER_MAX:
             return "starved"
+        if self.thirst > THIRST_MAX:
+            return "thirst"
         if self.age > self.genes["lifespan"]:
             return "old_age"
         return "attrition"
@@ -212,7 +220,9 @@ class Creature:
         """Live one tick on the brain's `outputs`. The steps' order is part of the rules."""
         self.hurt = max(0.0, self.hurt - 1 / HURT_FADE_TICKS)
         self.stunned_ticks = max(0, self.stunned_ticks - 1)
-        growth_factor = self._grow(world.terrain.near(self.pos.x, self.pos.y)[1])
+        lakes = world.terrain.near(self.pos.x, self.pos.y)[1]
+        growth_factor = self._grow(lakes)
+        self._drink(lakes)
         if self.eating_ticks > 0 and outputs[OUT.stop_eating] > MEAL_BREAK_THRESHOLD:
             self.stop_eating()
             world.tally.meals_abandoned[self.species.name] += 1
@@ -234,6 +244,13 @@ class Creature:
         growth_factor = self._growth_factor()
         self._shape_body(growth_factor)
         return growth_factor
+
+    def _drink(self, lakes):
+        reach = self.size + CONTACT_REACH
+        if self.in_water or any(lake.reaches(self.pos.x, self.pos.y, reach) for lake in lakes):
+            self.thirst = max(0, self.thirst - DRINK_RATE)
+        else:
+            self.thirst += 1
 
     def _growth_factor(self):
         if self.is_adult:
@@ -292,8 +309,9 @@ class Creature:
         from_fat = min(self.fat, hunger_penalty)   # starvation is paid from fat first
         self.fat -= from_fat
         hunger_penalty -= from_fat
+        dehydration = THIRST_HEALTH_PENALTY * min(1.0, max(0.0, self.thirst / THIRST_MAX - 1))
         self.health -= (self.upkeep(growth_factor) + self.senescence()
-                        + (speed * HEALTH_LOSS_SPEED_FACTOR) + hunger_penalty
+                        + (speed * HEALTH_LOSS_SPEED_FACTOR) + hunger_penalty + dehydration
                         + self.signal * SIGNAL_HEALTH_COST)
 
     def _collide(self, obstacles):

@@ -38,6 +38,12 @@ class Lake:
         d2 = dx * dx + dy * dy
         return d2 < self.max_radius ** 2 and d2 < self.shore(math.atan2(dy, dx)) ** 2
 
+    def reaches(self, x, y, margin):
+        """Whether the point is in the water or within `margin` of the shore."""
+        dx, dy = x - self.x, y - self.y
+        d = math.hypot(dx, dy)
+        return d < self.max_radius + margin and d - self.shore(math.atan2(dy, dx)) < margin
+
     def shore_gap(self, xs, ys):
         """Distance past the shore along the ray from the centre (< 0 = in water), for arrays."""
         dx, dy = xs - self.x, ys - self.y
@@ -52,7 +58,7 @@ def circle_hits_rect(x, y, r, rect):
 
 class TerrainGrid:
     """Per grid cell, the obstacles and lake blobs a creature in that cell can touch, in their
-    original order. Obstacle candidates hold only for bodies of size <= `reach`. Cells on the
+    original order. The candidates hold only for bodies of size <= `reach`. Cells on the
     border extend to infinity, so positions outside the world are covered too."""
 
     def __init__(self, world_bounds, obstacles, lakes, cell_size, reach):
@@ -73,7 +79,7 @@ class TerrainGrid:
                     and o.rect.top - reach <= y1 and o.rect.bottom + reach >= y0)
                 near_lakes = tuple(
                     lake for lake in lakes
-                    if _box_distance(lake.x, lake.y, x0, x1, y0, y1) <= lake.max_radius + 1)
+                    if _box_distance(lake.x, lake.y, x0, x1, y0, y1) <= lake.max_radius + reach)
                 self.cells[cx, cy] = (near_obstacles, near_lakes)
 
     def near(self, x, y):

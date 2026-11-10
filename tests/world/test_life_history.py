@@ -64,6 +64,9 @@ def _breeding_sim(genes1=None, genes2=None, is_carnivore=False):
     p1, p2 = _adult(is_carnivore, **(genes1 or {})), _adult(is_carnivore, **(genes2 or {}))
     vec2 = p1.geometry.vec2
     p1.pos, p2.pos = vec2(500, 400), vec2(505, 400)
+    for p in (p1, p2):   # all outputs 0: stands still, silent, willing to mate
+        for layer in p.brain.weights + p.brain.biases:
+            layer[:] = 0.0
     return Simulation(World(WORLD_BOUNDS, {p1.species: [p1, p2]}, [])), p1, p2
 
 
@@ -166,8 +169,6 @@ def test_mate_seeking_ignores_incompatible_partners():
 
 def test_unwilling_parent_does_not_breed():
     sim, p1, p2 = _breeding_sim()
-    for layer in p1.brain.weights + p1.brain.biases:
-        layer[:] = 0.0
     p1.brain.biases[-1][0, OUTPUTS.mate] = -5.0
     sim.step()
     assert not p1.willing and p2.willing

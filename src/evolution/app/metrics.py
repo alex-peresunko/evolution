@@ -8,7 +8,7 @@ from prometheus_client import REGISTRY, start_http_server
 from prometheus_client.core import CounterMetricFamily, GaugeMetricFamily
 
 from ..brain.layout import INPUTS
-from ..config import BRAIN_TOPOLOGY, FAT_MAX, SPECIATION_DISTANCE
+from ..config import BRAIN_TOPOLOGY, FAT_MAX, SPECIATION_DISTANCE, THIRST_MAX
 from ..species import ALL_SPECIES
 
 
@@ -114,6 +114,7 @@ class GameMetrics:
             ("health_ratio", "Mean health / max health"),
             ("stamina_ratio", "Mean stamina / max stamina"),
             ("fat_ratio", "Mean fat / FAT_MAX"),
+            ("thirst_ratio", "Mean thirst / THIRST_MAX, capped at 1"),
             ("in_water_share", "Share of creatures swimming"),
             ("eating_share", "Share of creatures standing still to eat"),
             ("winded_share", "Share of creatures out of stamina"),
@@ -154,6 +155,7 @@ class GameMetrics:
                     ("health_ratio", mean(c.health / c.max_health for c in population)),
                     ("stamina_ratio", mean(c.stamina / c.max_stamina for c in population)),
                     ("fat_ratio", mean(c.fat / FAT_MAX for c in population)),
+                    ("thirst_ratio", mean(min(1.0, c.thirst / THIRST_MAX) for c in population)),
                     ("in_water_share", mean(c.in_water for c in population)),
                     ("eating_share", mean(c.eating_ticks > 0 for c in population)),
                     ("winded_share", mean(c.winded for c in population)),

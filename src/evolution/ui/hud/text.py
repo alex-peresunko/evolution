@@ -40,6 +40,7 @@ def creature_info(c):
         "Health": int(c.health),
         "Stamina": f"{int(c.stamina)}/{int(c.max_stamina)}" + (" winded" if c.winded else ""),
         "Swimming": c.in_water,
+        "Thirst": f"{int(c.thirst)}/{config.THIRST_MAX}",
         "Score": round(c.score, 2),
         "Eating": c.eating_ticks,
         "Fat": f"{int(c.fat)}/{config.FAT_MAX}",
