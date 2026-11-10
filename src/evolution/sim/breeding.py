@@ -8,7 +8,6 @@ import numpy as np
 from ..brain.layout import OUTPUTS as OUT
 from ..config import (
     HUNGER_MAX,
-    LITTER_ENDOWMENT,
     LITTER_SPREAD,
     MATE_ATTRACTION_RADIUS,
     MATE_SCORE_WEIGHT,
@@ -18,6 +17,7 @@ from ..config import (
     MATE_SEEK_MIN_SPEED,
     MATE_SELECTION_RADIUS,
     MAX_REPRODUCTIONS,
+    PARENTAL_INVESTMENT,
     REPRODUCTION_COOLDOWN_TICKS,
     REPRODUCTION_HEALTH_THRESHOLD,
     REPRODUCTION_POP_CAP_FACTOR,
@@ -90,6 +90,7 @@ def _can_breed(p, species, tick):
 
 def breed(world):
     """Pair up nearby ready adults of each species and return their young (not yet added).
+    Each parent gives PARENTAL_INVESTMENT of its health, and the litter splits the sum.
 
     The population cap counts every young born this tick, of either species."""
     offspring = []
@@ -116,17 +117,20 @@ def breed(world):
             p2 = max(mates, key=mate_preference(mates, species))
             litter = min(stochastic_round((p1.genes["litter_size"] + p2.genes["litter_size"]) / 2),
                          pop_cap - len(group) - len(offspring))
-            for _ in range(litter):
-                offspring.append(_child(p1, p2, litter, now))
+            invested = 0.0
             for parent in (p1, p2):
-                parent.health *= 0.7
+                gift = parent.health * PARENTAL_INVESTMENT
+                parent.health -= gift
+                invested += gift
                 parent.reproductions += 1
                 parent.last_reproduction_tick = world.tick
+            for _ in range(litter):
+                offspring.append(_child(p1, p2, litter, invested / litter, now))
             paired.update((p1.id, p2.id))
     return offspring
 
 
-def _child(p1, p2, litter, birth_time):
+def _child(p1, p2, litter, health, birth_time):
     genes = combine_genes(p1.genes, p2.genes, p1.species)
     brain = combine_brains(p1.brain, p2.brain)
     mutate_brain(brain, genes)
@@ -135,7 +139,7 @@ def _child(p1, p2, litter, birth_time):
     if litter > 1:
         a = random.uniform(0, 2 * math.pi)
         child.pos += child.geometry.vec2(math.cos(a), math.sin(a)) * LITTER_SPREAD
-    child.health = child.max_health * min(1.0, LITTER_ENDOWMENT / litter)
+    child.health = min(child.max_health, health)
     child.lineage = p1.lineage
     child.parent_ids = (p1.id, p2.id)
     child.descent = max(p1.descent, p2.descent) + 1

@@ -118,7 +118,7 @@ World mechanics, all tuned through `config.py`:
   - attractiveness.
 
   A creature with default genes pays exactly `HEALTH_LOSS_PER_TICK`, and every other trait has a cost.
-- **Life history:** past its `lifespan` gene, a creature loses an extra `Creature.senescence()` per tick. A pair has a litter of `stochastic_round(mean litter_size)` young, which split `LITTER_ENDOWMENT` of max health between them.
+- **Life history:** past its `lifespan` gene, a creature loses an extra `Creature.senescence()` per tick. A pair has a litter of `stochastic_round(mean litter_size)` young. Each parent gives `PARENTAL_INVESTMENT` of its health and the litter splits the sum, so breeding creates no health and a newborn has to eat before it can breed. Food limits the populations; `REPRODUCTION_POP_CAP_FACTOR` only bounds the cost of a tick.
 - **Speciation:** only pairs within `SPECIATION_DISTANCE` (`genetics.genetic_distance`, the RMS of gene differences scaled by the species' `gene_bounds`) breed or seek each other (`genetics.compatible`). The neutral `color` gene hue-shifts the sprite (`COLOR_BUCKETS`, `COLOR_HUE_RANGE`).
 - **Seasons:** `season(tick)` runs over `SEASON_LENGTH_TICKS` and goes into `world.season` (-1 is midwinter, 1 is midsummer). It scales the food cap (`food_cap`, `SEASON_FOOD_AMPLITUDE`) and is a brain input.
 - **Lineage:** a child inherits `lineage` (the founder id) from its first parent and gets `parent_ids` and `descent`. At each score sample, `Statistics.sample` records each species' mean genes in `sim.stats[species].gene_history` and its number of live lineages in `.lineages`.

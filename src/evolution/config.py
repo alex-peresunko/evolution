@@ -3,8 +3,8 @@ import math
 # --- Display / World ---
 SCREEN_WIDTH = 1400
 SCREEN_HEIGHT = 900
-WORLD_WIDTH = 3000
-WORLD_HEIGHT = 2000
+WORLD_WIDTH = 6000
+WORLD_HEIGHT = 4000
 MINIMAP_WIDTH = 200
 MINIMAP_HEIGHT = int(WORLD_HEIGHT / WORLD_WIDTH * MINIMAP_WIDTH)
 MINIMAP_X, MINIMAP_Y = 10, 10
@@ -116,7 +116,8 @@ UPKEEP_WEIGHTS = {
 }
 KLEIBER_EXPONENT = 0.75
 REPRODUCTION_COOLDOWN_TICKS = 180   # 3 s at 60 TPS
-REPRODUCTION_POP_CAP_FACTOR = 2.5
+# Food limits the populations; this cap (x start count) only bounds the cost of a tick.
+REPRODUCTION_POP_CAP_FACTOR = 4
 MATE_SELECTION_RADIUS = 60
 MATE_ATTRACTION_RADIUS = 500
 MATE_SEEK_HUNGER_THRESHOLD = 0.5
@@ -135,7 +136,7 @@ SIZE_STAMINA_FACTOR = 80
 # --- Life Stage ---
 ADULTHOOD_AGE = 200
 SENESCENCE_RATE = 3             # extra health loss per tick at twice the lifespan gene, linear
-LITTER_ENDOWMENT = 1.0          # share of max health split among a litter's young
+PARENTAL_INVESTMENT = 0.3       # share of its health each parent gives; the litter splits the sum
 LITTER_SPREAD = 6               # px; littermates are placed around the parents' midpoint
 JUVENILE_SIZE_FACTOR = 0.2
 

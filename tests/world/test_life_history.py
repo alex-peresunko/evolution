@@ -112,20 +112,25 @@ def test_old_creature_loses_more_health():
 
 
 @pytest.mark.parametrize("is_carnivore", [False, True])
-def test_litter_splits_the_endowment(is_carnivore):
+def test_litter_splits_what_the_parents_give(is_carnivore):
     sim, p1, p2 = _breeding_sim({"litter_size": 3}, {"litter_size": 3}, is_carnivore)
+    p2.health = p2.max_health * 0.8
+    before = p1.health + p2.health
     sim.step()
     young = _offspring(sim, (p1.id, p2.id))
     assert len(young) == 3
     for c in young:
-        assert c.health == pytest.approx(c.max_health * config.LITTER_ENDOWMENT / 3)
+        # The parents pay one tick of upkeep before they breed.
+        assert c.health == pytest.approx(before * config.PARENTAL_INVESTMENT / 3, rel=1e-3)
 
 
-def test_single_young_gets_full_health():
+def test_breeding_creates_no_health():
     sim, p1, p2 = _breeding_sim()
+    before = p1.health + p2.health
     sim.step()
     (child,) = _offspring(sim, (p1.id, p2.id))
-    assert child.health == child.max_health
+    upkeep = 2 * config.HEALTH_LOSS_PER_TICK
+    assert child.health + p1.health + p2.health == pytest.approx(before - upkeep, abs=1.0)
 
 
 def test_stochastic_round_hits_the_mean():
