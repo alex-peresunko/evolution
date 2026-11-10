@@ -11,14 +11,11 @@ from ..config import (
     LITTER_SPREAD,
     MATE_ATTRACTION_RADIUS,
     MATE_SCORE_WEIGHT,
-    MATE_SEEK_BLEND,
     MATE_SEEK_DANGER_THRESHOLD,
     MATE_SEEK_HUNGER_THRESHOLD,
     MATE_SEEK_MIN_SPEED,
     MATE_SELECTION_RADIUS,
-    MAX_REPRODUCTIONS,
     PARENTAL_INVESTMENT,
-    REPRODUCTION_COOLDOWN_TICKS,
     REPRODUCTION_HEALTH_THRESHOLD,
     REPRODUCTION_POP_CAP_FACTOR,
 )
@@ -44,7 +41,11 @@ def _compatible(a, b):
 
 def mate_seeking_drive(c, outputs, kin_grid):
     """outputs with steering blended toward the nearest compatible, ready adult of c's species
-    (within MATE_ATTRACTION_RADIUS) while c is a fed, healthy adult out of danger."""
+    (within MATE_ATTRACTION_RADIUS) while c is a fed, healthy, willing adult out of danger. The
+    blend is c's mate_instinct gene; at 0 the brain steers alone."""
+    blend = c.genes["mate_instinct"]
+    if blend <= 0 or not c.willing:
+        return outputs
     if not c.is_adult or c.hunger >= HUNGER_MAX * MATE_SEEK_HUNGER_THRESHOLD:
         return outputs
     if not c.species.is_predator and c.nearest_smell_strength >= MATE_SEEK_DANGER_THRESHOLD:
@@ -63,8 +64,8 @@ def mate_seeking_drive(c, outputs, kin_grid):
     vec = nearest.pos - c.pos
     angle_diff = (math.atan2(vec.y, vec.x) - c.angle + math.pi) % (2 * math.pi) - math.pi
     turn = outputs[OUT.rotation]
-    outputs[OUT.rotation] = turn * (1 - MATE_SEEK_BLEND) + angle_diff / math.pi * MATE_SEEK_BLEND
-    outputs[OUT.speed] = max(outputs[OUT.speed], MATE_SEEK_MIN_SPEED)
+    outputs[OUT.rotation] = turn * (1 - blend) + angle_diff / math.pi * blend
+    outputs[OUT.speed] = max(outputs[OUT.speed], MATE_SEEK_MIN_SPEED * blend)
     return outputs
 
 
@@ -80,14 +81,6 @@ def mate_preference(mates, species):
                       + MATE_SCORE_WEIGHT * m.score / top_score)
 
 
-def _can_breed(p, species, tick):
-    return (p.is_adult
-            and p.health > species.max_health * REPRODUCTION_HEALTH_THRESHOLD
-            and p.reproductions < MAX_REPRODUCTIONS
-            and (p.last_reproduction_tick is None
-                 or tick - p.last_reproduction_tick > REPRODUCTION_COOLDOWN_TICKS))
-
-
 def breed(world):
     """Pair up nearby ready adults of each species and return their young (not yet added).
     Each parent gives PARENTAL_INVESTMENT of its health, and the litter splits the sum.
@@ -100,7 +93,7 @@ def breed(world):
         group = world.population(species)
         pop_cap = int(species.start_count * REPRODUCTION_POP_CAP_FACTOR)
         # Readiness only changes for creatures that pair this tick, which `paired` excludes.
-        ready = [p for p in group if _can_breed(p, species, world.tick)]
+        ready = [p for p in group if p.willing and p.fertile(world.tick)]
         if len(ready) < 2:
             continue
         xy = np.array([(p.pos.x, p.pos.y) for p in ready])

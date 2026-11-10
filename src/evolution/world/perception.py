@@ -15,6 +15,7 @@ from ..config import (
     HUNGER_MAX,
     KIN_DENSITY_NORM,
     KIN_SENSE_RADIUS,
+    MATE_ATTRACTION_RADIUS,
     MAX_NORMALIZED_SIGHT_DISTANCE,
     NIGHT_SIGHT_FACTOR,
     NUM_WHISKERS,
@@ -171,6 +172,18 @@ def _social(rel, signals):
     return kin_angle, kin_dist, density, sig_angle, strength
 
 
+def _mate(rel, fertile):
+    """Angle and distance of the nearest fertile kin within MATE_ATTRACTION_RADIUS; (0, 1) when
+    there is none."""
+    n = rel.dist.shape[0]
+    if rel.dist.shape[1] == 0:
+        return np.zeros(n), np.ones(n)
+    idx, found = _nearest(rel.dist,
+                          rel.not_self & fertile[None, :] & (rel.dist < MATE_ATTRACTION_RADIUS))
+    return (np.where(found, rel.angle_to(idx) / math.pi, 0.0),
+            np.where(found, rel.dist[np.arange(n), idx] / MATE_ATTRACTION_RADIUS, 1.0))
+
+
 def _touch(rel, size, targets):
     """Strength and angle of the body pressing hardest. With gap = distance minus the body radii,
     strength is 0.5 at contact and grows linearly to 1 at TOUCH_TOLERANCE deep, from 0 at
@@ -249,7 +262,7 @@ def _target_whiskers(xy, angle, length, whisker_angles, targets_xy, occlusion, d
 
 
 def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carcasses=(),
-                 light=1.0, season=0.0, lakes=()):
+                 light=1.0, season=0.0, lakes=(), tick=0):
     """Brain inputs for `creatures` (any mix of species) as an (N, INPUTS.width) array.
 
     Carnivores look at and smell `herbivores` and `carcasses`; herbivores look at
@@ -258,6 +271,7 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
     Tree crowns among `obstacles` block sight (cones and target whiskers), not obstacle
     whiskers, smell or the kin/signal senses.
     `season` (-1 = midwinter, 1 = midsummer) is passed through as an input.
+    `tick` decides who is fertile (Creature.fertile).
     """
     n = len(creatures)
     out = np.zeros((n, IN.width))
@@ -289,6 +303,7 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
     carn = s[:, 11].astype(bool)
     out[:, IN.kin_dist] = 1.0      # when there is none
     out[:, IN.carcass_dist] = 1.0  # when there is none (and for herbivores)
+    out[:, IN.mate_dist] = 1.0     # when there is none
 
     at_herbivores, at_carnivores = _positions(herbivores), _positions(carnivores)
     at_food, at_carcasses = _positions(food_items), _positions(carcasses)
@@ -332,6 +347,8 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
             for column, values in zip((IN.kin_angle, IN.kin_dist, IN.kin_density,
                                        IN.signal_angle, IN.signal_strength), social):
                 out[gi, column] = values
+            out[gi, IN.mate_angle], out[gi, IN.mate_dist] = _mate(
+                rel, np.array([k.fertile(tick) for k in kin], dtype=bool))
     for gi, kin, other, to_other in ((ci, carnivores, herbivores, to_prey),
                                      (hi, herbivores, carnivores, to_preds)):
         if len(gi):
@@ -368,6 +385,7 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
     out[:, IN.eating] = [c.eating_ticks / c.species.eat_ticks if c.eating_ticks else 0.0
                          for c in creatures]
     out[:, IN.hurt] = [c.hurt for c in creatures]
+    out[:, IN.fertile] = [c.fertile(tick) for c in creatures]
 
     out[:, IN.health] = s[:, 3] / s[:, 4]
     out[:, IN.sin_angle] = np.sin(angle)

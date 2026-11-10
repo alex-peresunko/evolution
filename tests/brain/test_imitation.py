@@ -12,7 +12,7 @@ from evolution.brain.network import NeuralNetwork
 
 def _row():
     x = np.zeros(config.BRAIN_INPUTS)
-    x[IN.target_dist] = x[IN.carcass_dist] = 1.0  # nothing seen
+    x[IN.target_dist] = x[IN.carcass_dist] = x[IN.mate_dist] = 1.0  # nothing seen
     x[IN.sight_angle] = 0.5                    # 180 degree cone
     x[IN.stamina] = 1.0
     return x
@@ -137,3 +137,14 @@ def test_trained_brain_imitates_teacher():
     left[0, IN.target_angle], right[0, IN.target_angle] = -0.6, 0.6
     assert brain.forward(left[0])[0] < 0 < brain.forward(right[0])[0]
     assert math.isfinite(after)
+
+
+def test_fertile_wanderer_courts_but_food_comes_first():
+    row = _row()
+    row[IN.mate_dist], row[IN.mate_angle] = 0.5, -0.3
+    assert _act(row)[OUT.rotation] > 0          # not fertile: keeps wandering
+    row[IN.fertile] = 1.0
+    assert _act(row)[OUT.rotation] < 0
+    assert _act(row)[OUT.mate] > 0.9
+    row[IN.target_dist], row[IN.target_angle] = 0.3, 0.2
+    assert _act(row)[OUT.rotation] > 0

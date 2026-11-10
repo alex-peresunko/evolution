@@ -56,7 +56,7 @@ def _reference_crown_occlusion(p, ux, uy, trees):
 
 
 def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasses=(), light=1.0,
-                   season=0.0, lakes=()):
+                   season=0.0, lakes=(), tick=0):
     """The original per-creature, pure-Python Creature.see(), plus scalar versions of the
     later inputs (kin, signal, carcass, light, memory); perceive_all must match it."""
     eye = self.sight_distance * (config.NIGHT_SIGHT_FACTOR + (1 - config.NIGHT_SIGHT_FACTOR) * light)
@@ -206,6 +206,15 @@ def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasse
             / (2 * config.TOUCH_TOLERANCE))), k) for k in group if k.id != self.id]
         strength, closest = max(pressing, key=lambda p: p[0], default=(0.0, None))
         inputs += [strength, rel_angle(closest) / math.pi if strength > 0 else 0.0]
+    mates = [k for k in kin if k.fertile(tick)
+             and self.pos.distance_to(k.pos) < config.MATE_ATTRACTION_RADIUS]
+    if mates:
+        closest = min(mates, key=lambda k: self.pos.distance_to(k.pos))
+        inputs += [rel_angle(closest) / math.pi,
+                   self.pos.distance_to(closest.pos) / config.MATE_ATTRACTION_RADIUS]
+    else:
+        inputs += [0.0, 1.0]
+    inputs.append(1.0 if self.fertile(tick) else 0.0)
     return inputs, whiskers, target_whiskers, nearest_target_dist, nearest_smell_strength
 
 
@@ -224,6 +233,8 @@ def _random_creature(rnd, is_carnivore, obstacles):
     c.hunger = rnd.randint(0, 2 * config.HUNGER_MAX)
     c.signal = rnd.choice([0.0, rnd.uniform(0, 1)])
     c.memory = [rnd.uniform(-1, 1) for _ in range(config.NUM_MEMORY)]
+    c.is_adult = rnd.random() < 0.7
+    c.last_reproduction_tick = rnd.choice([None, 0, 900])
     return c
 
 
@@ -247,11 +258,14 @@ def test_perceive_all_matches_reference(seed, n_herb, n_carn, n_food, light):
     lakes = [Lake(rnd.uniform(0, WORLD_BOUNDS[0]), rnd.uniform(0, WORLD_BOUNDS[1]),
                   rnd.uniform(100, 300)) for _ in range(seed)]
     season = light - 0.5
-    got = perceive_all(everyone, food, herbs, carns, obstacles, carcasses, light, season, lakes)
+    tick = 1000
+    got = perceive_all(everyone, food, herbs, carns, obstacles, carcasses, light, season, lakes,
+                       tick)
     assert got.shape == (len(everyone), config.BRAIN_TOPOLOGY[0])
     for row, c in zip(got, everyone):
         inputs, whiskers, target_whiskers, target_dist, smell = _reference_see(c, food, obstacles, herbs, carns,
-                                                              carcasses, light, season, lakes)
+                                                              carcasses, light, season, lakes,
+                                                              tick)
         np.testing.assert_allclose(row, inputs, atol=1e-9)
         np.testing.assert_allclose(c.whiskers, whiskers, atol=1e-9)
         assert [d is None for d in c.target_whiskers] == [d is None for d in target_whiskers]
@@ -374,3 +388,17 @@ def test_no_touch_beyond_the_tolerance():
     kin = _sized(False, 500 + 20 * config.BODY_RADIUS_FACTOR + config.TOUCH_TOLERANCE, 400, 10)
     row = perceive_all([herb], [], [herb, kin], [], [])[0]
     assert row[INPUTS.touch_kin] == 0 and row[INPUTS.touch_kin_angle] == 0
+
+
+def test_mate_inputs_point_at_the_nearest_fertile_kin():
+    me, juvenile, mate = (Creature(HERBIVORE, WORLD_BOUNDS) for _ in range(3))
+    me.pos, me.angle = me.geometry.vec2(1000, 1000), 0.0
+    juvenile.pos, mate.pos = me.geometry.vec2(1050, 1000), me.geometry.vec2(1000, 1200)
+    me.is_adult = mate.is_adult = True
+    row = perceive_all([me], [], [me, juvenile, mate], [], [])[0]
+    assert row[INPUTS.fertile] == 1.0
+    assert row[INPUTS.mate_angle] == pytest.approx(0.5)
+    assert row[INPUTS.mate_dist] == pytest.approx(200 / config.MATE_ATTRACTION_RADIUS)
+    mate.last_reproduction_tick = 0   # still in its cooldown at tick 10
+    row = perceive_all([me], [], [me, juvenile, mate], [], [], tick=10)[0]
+    assert (row[INPUTS.mate_angle], row[INPUTS.mate_dist]) == (0.0, 1.0)

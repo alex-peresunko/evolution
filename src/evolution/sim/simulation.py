@@ -9,6 +9,7 @@ from ..config import (
     ELITE_REINJECT_INTERVAL,
     FOOD_RESPAWN_RATE,
     HOF_SCORE_HALF_LIFE,
+    MATE_REFUSE_THRESHOLD,
     SCORE_SAMPLE_INTERVAL,
 )
 from ..species import ALL_SPECIES
@@ -101,6 +102,7 @@ class Simulation:
         rows = outputs.tolist() if len(outputs) else []
         for c, row in zip(creatures, rows):
             rotation, speed = row[OUT.rotation], row[OUT.speed]
+            c.willing = row[OUT.mate] >= MATE_REFUSE_THRESHOLD
             steered = mate_seeking_drive(c, row, world.index.of(c.species))
             c.mate_override = steered[OUT.rotation] != rotation or steered[OUT.speed] != speed
             c.act(steered, world)

@@ -118,6 +118,7 @@ class GameMetrics:
             ("eating_share", "Share of creatures standing still to eat"),
             ("winded_share", "Share of creatures out of stamina"),
             ("signal_mean", "Mean signal output"),
+            ("willing_share", "Share of creatures whose mate output is not refusing"),
             ("herd_density", "Mean kin_density input: 0 alone .. 1 in a dense group"))}
         counters = {name: _family("counter", name, doc, sp) for name, doc in (
             ("births", "Creatures born"),
@@ -157,6 +158,7 @@ class GameMetrics:
                     ("eating_share", mean(c.eating_ticks > 0 for c in population)),
                     ("winded_share", mean(c.winded for c in population)),
                     ("signal_mean", mean(c.signal for c in population)),
+                    ("willing_share", mean(c.willing for c in population)),
                     ("herd_density", _herd_density(population))):
                 gauges[key].add_metric([name], value)
             counters["births"].add_metric([name], stats.births)

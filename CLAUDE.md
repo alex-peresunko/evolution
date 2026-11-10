@@ -180,31 +180,33 @@ Entities take their vector and rect types from a `world.geometry.Geometry(vec2, 
 
 ### Neural network
 
-Topology is `config.BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]` = `[41, 16, 8, 6]`, tanh on all layers. `NeuralNetwork` (`brain/network.py`) is pure math; `to_data` / `from_data` convert it for `persistence.brain_store`.
+Topology is `config.BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]` = `[44, 16, 8, 7]`, tanh on all layers. `NeuralNetwork` (`brain/network.py`) is pure math; `to_data` / `from_data` convert it for `persistence.brain_store`.
 
 `brain/layout.py` names every column: `INPUTS.target_whiskers`, `OUTPUTS.speed` and so on (an int for scalars, a slice for groups), plus `labels` for the brain panel.
 - `perceive_all`, `imitation`, the simulation and the brain panel all index through it.
 - To add an input, write it in `perceive_all`, append a field to `INPUTS`, and update the `BRAIN_INPUTS` formula. A module-level assert checks the widths.
 - New inputs and outputs go at the end: `NeuralNetwork.from_data` copies the overlapping top-left block and zeroes the rest, so saved brains keep their existing wiring and behave as before until mutation connects the new columns.
 
-Outputs: `[rotation, speed, signal, memory..., stop_eating]`. `sim.breeding.mate_seeking_drive` may override the first two for adults.
+Outputs: `[rotation, speed, signal, memory..., stop_eating, mate]`.
+
+**Mating.** A creature breeds when it is fertile (`Creature.fertile`: adult, healthy, off cooldown) and willing (`c.willing`: its `mate` output is not below `MATE_REFUSE_THRESHOLD`). The brain sees the nearest fertile kin (`INPUTS.mate_angle` / `mate_dist`) and its own fertility. `sim.breeding.mate_seeking_drive` still blends a ready adult's steering toward the nearest mate, by the creature's heritable `mate_instinct` gene: at 0 the brain steers alone.
 
 ### Genes
 
 Genes:
 - traits: `size`, `max_speed`, `sight_distance`, `sight_angle`, `max_stamina`, `attractiveness`;
-- life history (shared by both species, `_LIFE_HISTORY_GENES`): `mutation_rate` and `mutation_amount` (the offspring's brain mutation, applied via `genetics.mutate_brain`), `lifespan`, `litter_size` and `color`.
+- life history (shared by both species, `_LIFE_HISTORY_GENES`): `mutation_rate` and `mutation_amount` (the offspring's brain mutation, applied via `genetics.mutate_brain`), `lifespan`, `litter_size`, `color` and `mate_instinct`.
 
 Details:
 - All genes are clamped by the species' `gene_bounds` (`genetics.clamp_genes`). The size ranges don't overlap (`HERBIVORE_GENE_MIN_MAX`, `CARNIVORE_GENE_MIN_MAX`), so herbivores are always the bigger species (defaults 16 vs 8). Saved brains' genes are clamped on load.
-- Genes mutate multiplicatively (±`GENE_MUTATION_AMOUNT`), except those listed in `ADDITIVE_GENE_MUTATION` (`color`).
+- Genes mutate multiplicatively (±`GENE_MUTATION_AMOUNT`), except those listed in `ADDITIVE_GENE_MUTATION` (`color`, `mate_instinct`).
 - `Creature` fills in missing genes from the species defaults, so older saves load.
 - Larger size reduces speed, and stamina adds to effective size.
 - Never call `brain.mutate(MUTATION_RATE, ...)` directly for offspring or copies. Use `mutate_brain(brain, genes)` so the heritable rate applies.
 
 ### Pretraining (brain/imitation.py)
 
-`imitation.teacher_actions` is a hand-written policy over perception rows (columns via `INPUTS`): seek the target, follow carcasses and smell (carnivores), flee strong predator smell or a predator's touch (herbivores), step away from kin pressing against a wanderer, and steer off near obstacles. `train_brain` fits a brain to it with numpy backprop (Adam, MSE). `pretrain.py` collects rows DAgger-style (round 1 uses random brains, later rounds the current student) and runs its worlds without listeners, so nothing autosaves.
+`imitation.teacher_actions` is a hand-written policy over perception rows (columns via `INPUTS`): seek the target, follow carcasses and smell (carnivores), walk to a fertile mate when fertile with nothing else to pursue, flee strong predator smell or a predator's touch (herbivores), step away from kin pressing against a wanderer, and steer off near obstacles. `train_brain` fits a brain to it with numpy backprop (Adam, MSE). `pretrain.py` collects rows DAgger-style (round 1 uses random brains, later rounds the current student) and runs its worlds without listeners, so nothing autosaves.
 
 ### Saved brains
 

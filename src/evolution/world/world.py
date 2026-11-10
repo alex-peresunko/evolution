@@ -103,7 +103,8 @@ class World:
     def perceive(self):
         """Brain input rows for creatures() (see perception.perceive_all)."""
         return perceive_all(self.creatures(), self.food, self.herbivores, self.carnivores,
-                            self.obstacles, self.carcasses, self.light, self.season, self.lakes)
+                            self.obstacles, self.carcasses, self.light, self.season, self.lakes,
+                            self.tick)
 
     def separate(self):
         separate(self.creatures(), self.carcasses, self.obstacles, self.tick, self.terrain)

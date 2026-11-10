@@ -23,7 +23,8 @@ def _wrap(a):
 
 def teacher_actions(X, is_carnivore):
     """(N, OUTPUTS.width) target outputs for perception rows X; signal and memory targets are 0.
-    A fleeing herbivore abandons its meal; nothing else does."""
+    A fleeing herbivore abandons its meal; nothing else does. Every creature is willing to mate,
+    and a fertile one with nothing to pursue walks to the nearest fertile kin."""
     X = np.asarray(X, dtype=np.float64)
     carn = np.asarray(is_carnivore, dtype=bool)
     half = X[:, IN.sight_angle] * math.pi
@@ -39,7 +40,9 @@ def teacher_actions(X, is_carnivore):
     rel = np.where(carrion, X[:, IN.carcass_smell_angle] * math.pi, rel)
 
     wandering = ~seen & ~carcass & ~tracking & ~carrion
-    crowded = wandering & (X[:, IN.touch_kin] >= CROWDED)
+    courting = wandering & (X[:, IN.fertile] > 0.5) & (X[:, IN.mate_dist] < 1)
+    rel = np.where(courting, X[:, IN.mate_angle] * math.pi, rel)
+    crowded = wandering & ~courting & (X[:, IN.touch_kin] >= CROWDED)
     rel = np.where(crowded, _wrap(X[:, IN.touch_kin_angle] * math.pi + math.pi), rel)
 
     touched = ~carn & (X[:, IN.touch_other] > 0)
@@ -61,6 +64,7 @@ def teacher_actions(X, is_carnivore):
     Y = np.zeros((len(X), OUT.width))
     Y[:, OUT.rotation], Y[:, OUT.speed] = rotation, speed
     Y[:, OUT.stop_eating] = np.where(fleeing, 1.0, -1.0)
+    Y[:, OUT.mate] = 1.0
     return np.clip(Y, -TARGET_LIMIT, TARGET_LIMIT)
 
 

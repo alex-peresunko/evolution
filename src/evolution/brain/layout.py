@@ -60,6 +60,10 @@ INPUTS = Layout([
     ("touch_kin_angle", 1, "touch_kin_ang"),
     ("touch_other", 1, "touch_other"),
     ("touch_other_angle", 1, "touch_other_ang"),
+    # the nearest fertile kin within MATE_ATTRACTION_RADIUS (Creature.fertile)
+    ("mate_angle", 1, "mate_ang"),
+    ("mate_dist", 1, "mate_dist"),
+    ("fertile", 1, "fertile"),                        # 1 when the creature itself could breed now
 ])
 
 OUTPUTS = Layout([
@@ -68,6 +72,7 @@ OUTPUTS = Layout([
     ("signal", 1, "signal"),
     ("memory", NUM_MEMORY, "mem{}"),
     ("stop_eating", 1, "stop_eat"),                   # > MEAL_BREAK_THRESHOLD abandons a meal
+    ("mate", 1, "mate"),                              # < MATE_REFUSE_THRESHOLD refuses to breed
 ])
 
 assert INPUTS.width == BRAIN_INPUTS and OUTPUTS.width == BRAIN_OUTPUTS, \

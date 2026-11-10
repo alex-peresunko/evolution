@@ -31,6 +31,7 @@ GENE_CHART_COLORS = {
     "size": (120, 200, 255), "max_speed": (255, 210, 80), "sight_distance": (160, 255, 140),
     "sight_angle": (80, 220, 200), "max_stamina": (255, 150, 90), "attractiveness": (255, 120, 200),
     "mutation_rate": (200, 160, 255), "lifespan": (230, 230, 230), "litter_size": (255, 90, 90),
+    "mate_instinct": (255, 255, 120),
 }
 
 # --- Score / Worker sync ---
@@ -41,11 +42,13 @@ WATCH_POLL_SECONDS = 1.0         # how often watch mode (game.py --watch) checks
 ISLAND_IMMIGRANTS = 4            # weakest creatures replaced by an imported better brain
 
 # --- Gene Defaults ---
-# Shared by both species: brain mutation of the offspring, aging, litter size and a neutral
-# colour marker (drawn as a hue shift, used for speciation).
+# Shared by both species: brain mutation of the offspring, aging, litter size, a neutral
+# colour marker (drawn as a hue shift, used for speciation) and mate_instinct, the share of a
+# ready adult's steering that turns it toward the nearest mate whatever its brain says.
 _LIFE_HISTORY_GENES = {
     "mutation_rate": 0.08, "mutation_amount": 0.15,
     "lifespan": 3000, "litter_size": 1.0, "color": 0.5,
+    "mate_instinct": 0.75,
 }
 DEFAULT_HERBIVORE_GENES = {
     "size": 16, "max_speed": 5, "sight_distance": 150,
@@ -71,6 +74,7 @@ GENE_MIN_MAX = {
     "lifespan": (1000, 20000),
     "litter_size": (1, 4),
     "color": (0, 1),
+    "mate_instinct": (0, 1),
 }
 # Size ranges don't overlap: herbivores are always the bigger species. GENE_MIN_MAX["size"][1]
 # normalises the size input and contact reach, so it must stay the largest size.
@@ -122,8 +126,8 @@ MATE_SELECTION_RADIUS = 60
 MATE_ATTRACTION_RADIUS = 500
 MATE_SEEK_HUNGER_THRESHOLD = 0.5
 MATE_SEEK_DANGER_THRESHOLD = 0.35
-MATE_SEEK_BLEND = 0.75
-MATE_SEEK_MIN_SPEED = 0.4
+MATE_SEEK_MIN_SPEED = 0.53      # times the mate_instinct gene: the least effort while seeking
+MATE_REFUSE_THRESHOLD = -0.5    # mate output below which a creature neither breeds nor seeks
 SMELL_DISTANCE = 400
 MAX_NORMALIZED_SIGHT_DISTANCE = 2000
 HEALTH_GAIN_SIZE_PENALTY = 0.01
@@ -253,15 +257,16 @@ BRAIN_INPUTS = (
     + 1             # eating
     + 1             # hurt
     + 4             # touch by kin / the other species: strength, angle
+    + 3             # nearest fertile kin angle/dist, own fertility
 )
-BRAIN_OUTPUTS = 4 + NUM_MEMORY  # rotation, speed, signal, memory, stop eating
+BRAIN_OUTPUTS = 5 + NUM_MEMORY  # rotation, speed, signal, memory, stop eating, mate
 BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]
 
 # --- Evolution ---
 MUTATION_RATE = 0.08
 MUTATION_AMOUNT = 0.15
 GENE_MUTATION_AMOUNT = 0.10      # multiplicative, +-10% of the gene
-ADDITIVE_GENE_MUTATION = {"color": 0.03}  # genes mutated by +-amount instead
+ADDITIVE_GENE_MUTATION = {"color": 0.03, "mate_instinct": 0.03}  # genes mutated by +-amount instead
 # Speciation: mates must be within this RMS gene distance (each gene / its species' range).
 SPECIATION_DISTANCE = 0.12
 SURVIVAL_RATE = 0.15

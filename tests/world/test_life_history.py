@@ -1,6 +1,7 @@
 import pytest
 
 from evolution import config
+from evolution.brain.layout import OUTPUTS
 from evolution.genetics import compatible
 from evolution.sim.breeding import mate_seeking_drive, stochastic_round
 from evolution.sim.simulation import Simulation
@@ -161,3 +162,30 @@ def test_mate_seeking_ignores_incompatible_partners():
     assert mate_seeking_drive(p1, [0.0, 0.0], kin) == [0.0, 0.0]
     p2.genes = dict(p1.genes)
     assert mate_seeking_drive(p1, [0.0, 0.0], kin) != [0.0, 0.0]
+
+
+def test_unwilling_parent_does_not_breed():
+    sim, p1, p2 = _breeding_sim()
+    for layer in p1.brain.weights + p1.brain.biases:
+        layer[:] = 0.0
+    p1.brain.biases[-1][0, OUTPUTS.mate] = -5.0
+    sim.step()
+    assert not p1.willing and p2.willing
+    assert not _offspring(sim, (p1.id, p2.id))
+
+
+def test_mate_instinct_gene_sets_the_pull_toward_a_mate():
+    sim, p1, p2 = _breeding_sim()
+    p2.pos = p2.geometry.vec2(700, 400)
+    p1.angle = 1.0
+    sim.world.reindex()
+    kin = sim.world.index.of(HERBIVORE)
+    p1.nearest_smell_strength = 0.0
+    strong = mate_seeking_drive(p1, [0.0, 0.0], kin)
+    p1.genes["mate_instinct"] = 0.2
+    weak = mate_seeking_drive(p1, [0.0, 0.0], kin)
+    assert abs(strong[0]) > abs(weak[0]) > 0
+    p1.genes["mate_instinct"] = 0.0
+    assert mate_seeking_drive(p1, [0.0, 0.0], kin) == [0.0, 0.0]
+    p1.genes["mate_instinct"], p1.willing = 0.75, False
+    assert mate_seeking_drive(p1, [0.0, 0.0], kin) == [0.0, 0.0]

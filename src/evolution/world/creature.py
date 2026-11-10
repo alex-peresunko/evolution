@@ -23,9 +23,12 @@ from ..config import (
     HURT_FADE_TICKS,
     JUVENILE_SIZE_FACTOR,
     KLEIBER_EXPONENT,
+    MAX_REPRODUCTIONS,
     MEAL_BREAK_THRESHOLD,
     NUM_MEMORY,
     NUM_WHISKERS,
+    REPRODUCTION_COOLDOWN_TICKS,
+    REPRODUCTION_HEALTH_THRESHOLD,
     SENESCENCE_RATE,
     SIGNAL_HEALTH_COST,
     SIZE_SPEED_PENALTY_FACTOR,
@@ -104,6 +107,7 @@ class Creature:
         self.brain_inputs = None
         self.brain_outputs = None
         self.mate_override = False          # last tick's outputs were steered toward a mate
+        self.willing = True                 # the brain's mate output is not refusing
 
         self._set_genes(genes)
         self.stamina = self.max_stamina
@@ -149,6 +153,14 @@ class Creature:
 
     def is_alive(self):
         return self.health > 0
+
+    def fertile(self, tick):
+        """Whether the creature could breed during `tick`, its own willingness aside."""
+        return (self.is_adult
+                and self.health > self.species.max_health * REPRODUCTION_HEALTH_THRESHOLD
+                and self.reproductions < MAX_REPRODUCTIONS
+                and (self.last_reproduction_tick is None
+                     or tick - self.last_reproduction_tick > REPRODUCTION_COOLDOWN_TICKS))
 
     def display(self):
         """Attractiveness as a mate sees it: the gene scaled by condition, (health + fat) /
