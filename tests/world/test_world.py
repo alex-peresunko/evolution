@@ -66,6 +66,39 @@ def test_patch_food_at_a_wall_does_not_line_up_on_it(monkeypatch):
     assert sum(x == config.FOOD_RADIUS for x in xs) <= 1
 
 
+def _regrowing_world(monkeypatch, n_food):
+    from evolution.world.food import Food
+
+    monkeypatch.setattr(world_module, "FOOD_REGROW_SHARE", 1.0)
+    world = _empty_world()
+    world.food_patches = []
+    world.food = [Food(WORLD_BOUNDS, pos=(1000.0, 1000.0)) for _ in range(n_food)]
+    world.reindex()
+    return world
+
+
+def test_food_regrows_beside_existing_food(monkeypatch):
+    world = _regrowing_world(monkeypatch, 1)
+    for _ in range(200):
+        f = world.spawn_food()
+        assert math.hypot(f.pos.x - 1000, f.pos.y - 1000) < 6 * config.FOOD_REGROW_RADIUS
+
+
+def test_crowded_ground_does_not_regrow(monkeypatch):
+    world = _regrowing_world(monkeypatch, config.FOOD_REGROW_CROWD)
+    spawned = [world.spawn_food() for _ in range(300)]
+    assert not [f for f in spawned if math.hypot(f.pos.x - 1000, f.pos.y - 1000)
+                <= config.FOOD_REGROW_CROWD_RADIUS]
+    assert any(math.hypot(f.pos.x - 1000, f.pos.y - 1000) > 1000 for f in spawned)
+
+
+def test_initial_food_is_scattered_anywhere(monkeypatch):
+    world = _regrowing_world(monkeypatch, 1)
+    far = [f for f in (world.spawn_food(anywhere=True) for _ in range(100))
+           if math.hypot(f.pos.x - 1000, f.pos.y - 1000) > 1000]
+    assert len(far) > 50
+
+
 def test_food_patches_bounce_off_world_edges():
     world = _empty_world()
     world.food_patches = [FoodPatch(WORLD_BOUNDS[0] - 0.1, 300.0, 0.0)]

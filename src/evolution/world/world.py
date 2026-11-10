@@ -6,6 +6,10 @@ from ..config import (
     FOOD_PATCH_RADIUS,
     FOOD_PATCH_SHARE,
     FOOD_RADIUS,
+    FOOD_REGROW_CROWD,
+    FOOD_REGROW_CROWD_RADIUS,
+    FOOD_REGROW_RADIUS,
+    FOOD_REGROW_SHARE,
     GRID_CELL_SIZE,
 )
 from ..species import ALL_SPECIES, CARNIVORE, HERBIVORE
@@ -115,11 +119,14 @@ class World:
         for patch in self.food_patches:
             patch.drift(self.bounds)
 
-    def spawn_food(self, attempts=10, near_patches=True):
-        """New food near a random patch (FOOD_PATCH_SHARE of the time, unless near_patches is
-        False) or anywhere, on dry land off obstacles unless `attempts` placements all fail."""
+    def spawn_food(self, attempts=10, anywhere=False):
+        """New food on dry land off obstacles, unless `attempts` placements all fail. It sprouts
+        beside existing food (FOOD_REGROW_SHARE), else near a random patch (FOOD_PATCH_SHARE of
+        the rest), else anywhere; `anywhere` skips the first two. Crowding is judged by the food
+        grid as of the last reindex()."""
         for _ in range(attempts):
-            food = self._place_food(near_patches)
+            food = Food(self.bounds, geometry=self.geometry,
+                        pos=None if anywhere else self._food_site())
             if self._open_ground(food.pos.x, food.pos.y):
                 break
         return food
@@ -128,13 +135,25 @@ class World:
         return not (any(lake.contains(x, y) for lake in self.lakes)
                     or any(circle_hits_rect(x, y, FOOD_RADIUS, o.rect) for o in self.obstacles))
 
-    def _place_food(self, near_patches):
-        w, h = self.bounds
-        pos = None
-        if near_patches and self.food_patches and random.random() < FOOD_PATCH_SHARE:
+    def _food_site(self):
+        """(x, y) for new food, or None for anywhere."""
+        if self.food and random.random() < FOOD_REGROW_SHARE:
+            parent = random.choice(self.food).pos
+            site = self._scatter(parent.x, parent.y, FOOD_REGROW_RADIUS)
+            if not self._crowded(*site):
+                return site
+        if self.food_patches and random.random() < FOOD_PATCH_SHARE:
             patch = random.choice(self.food_patches)
-            pos = (_fold(patch.x + random.gauss(0, FOOD_PATCH_RADIUS), FOOD_RADIUS,
-                         w - FOOD_RADIUS),
-                   _fold(patch.y + random.gauss(0, FOOD_PATCH_RADIUS), FOOD_RADIUS,
-                         h - FOOD_RADIUS))
-        return Food(self.bounds, geometry=self.geometry, pos=pos)
+            return self._scatter(patch.x, patch.y, FOOD_PATCH_RADIUS)
+        return None
+
+    def _scatter(self, x, y, sigma):
+        w, h = self.bounds
+        return (_fold(x + random.gauss(0, sigma), FOOD_RADIUS, w - FOOD_RADIUS),
+                _fold(y + random.gauss(0, sigma), FOOD_RADIUS, h - FOOD_RADIUS))
+
+    def _crowded(self, x, y):
+        near = self.index.food.query(self.geometry.vec2(x, y), FOOD_REGROW_CROWD_RADIUS)
+        limit = FOOD_REGROW_CROWD_RADIUS ** 2
+        return sum((f.pos.x - x) ** 2 + (f.pos.y - y) ** 2 <= limit
+                   for f in near) >= FOOD_REGROW_CROWD

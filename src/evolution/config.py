@@ -231,10 +231,16 @@ SIGNAL_HEALTH_COST = 0.5        # per tick at full signal
 
 # --- Food patches ---
 FOOD_PATCH_COUNT = 3
-FOOD_PATCH_SHARE = 0.8          # share of respawned food placed in a patch
+FOOD_PATCH_SHARE = 0.8          # share of the food that didn't regrow, placed in a patch
 FOOD_PATCH_RADIUS = 110         # Gaussian sigma
 FOOD_PATCH_SPEED = 0.3
 FOOD_PATCH_TURN = 0.05
+
+# --- Regrowth ---
+FOOD_REGROW_SHARE = 0.6         # share of respawned food that sprouts beside existing food
+FOOD_REGROW_RADIUS = 60         # Gaussian sigma around the parent item
+FOOD_REGROW_CROWD_RADIUS = 40
+FOOD_REGROW_CROWD = 3           # this many items within the crowd radius: no sprout there
 
 # --- Day/night ---
 DAY_LENGTH_TICKS = 3600

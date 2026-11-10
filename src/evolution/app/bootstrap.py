@@ -59,7 +59,7 @@ def build_world(populations, world_bounds=WORLD_BOUNDS, *, geometry=HEADLESS):
     obstacles = generate_obstacles(world_bounds, geometry)
     world = World(world_bounds, populations, [], obstacles,
                   generate_lakes(world_bounds, obstacles), geometry=geometry)
-    world.food = [world.spawn_food(near_patches=False) for _ in range(NUM_FOOD)]
+    world.food = [world.spawn_food(anywhere=True) for _ in range(NUM_FOOD)]
     return world
 
 
