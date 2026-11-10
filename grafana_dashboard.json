@@ -1067,8 +1067,8 @@
     },
     {
       "type": "timeseries",
-      "title": "Generations per hour",
-      "description": "How fast new generations are born. A drop means creatures breed later or less often.",
+      "title": "Litters per life",
+      "description": "Average number of litters parented by the creatures that died in the last 5 minutes. A population holds steady at about 2 divided by its litter size; this is the most direct measure of how well the species lives under selection.",
       "datasource": {
         "type": "prometheus",
         "uid": "fev2gbax7os8we"
@@ -1078,6 +1078,96 @@
         "h": 8,
         "x": 16,
         "y": 14
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*herbivore.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*carnivore.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fev2gbax7os8we"
+          },
+          "expr": "sum by (species) (rate(evolution_death_litters_total{job=\"evolution\"}[5m])) / sum by (species) (rate(evolution_deaths_total{job=\"evolution\"}[5m]))",
+          "legendFormat": "{{species}}",
+          "range": true
+        }
+      ],
+      "id": 13
+    },
+    {
+      "type": "timeseries",
+      "title": "Generations per hour",
+      "description": "How fast new generations are born. A drop means creatures breed later or less often.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "fev2gbax7os8we"
+      },
+      "gridPos": {
+        "w": 8,
+        "h": 8,
+        "x": 0,
+        "y": 22
       },
       "fieldConfig": {
         "defaults": {
@@ -1138,18 +1228,18 @@
           "range": true
         }
       ],
-      "id": 13
+      "id": 14
     },
     {
       "type": "row",
       "title": "Life and death",
       "collapsed": false,
-      "id": 14,
+      "id": 15,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 22
+        "y": 30
       },
       "panels": []
     },
@@ -1165,7 +1255,7 @@
         "w": 12,
         "h": 8,
         "x": 0,
-        "y": 23
+        "y": 31
       },
       "fieldConfig": {
         "defaults": {
@@ -1316,7 +1406,7 @@
           "range": true
         }
       ],
-      "id": 15
+      "id": 16
     },
     {
       "type": "timeseries",
@@ -1330,7 +1420,7 @@
         "w": 12,
         "h": 8,
         "x": 12,
-        "y": 23
+        "y": 31
       },
       "fieldConfig": {
         "defaults": {
@@ -1481,7 +1571,7 @@
           "range": true
         }
       ],
-      "id": 16
+      "id": 17
     },
     {
       "type": "timeseries",
@@ -1495,7 +1585,7 @@
         "w": 12,
         "h": 8,
         "x": 0,
-        "y": 31
+        "y": 39
       },
       "fieldConfig": {
         "defaults": {
@@ -1619,7 +1709,7 @@
           "range": true
         }
       ],
-      "id": 17
+      "id": 18
     },
     {
       "type": "timeseries",
@@ -1633,7 +1723,7 @@
         "w": 12,
         "h": 8,
         "x": 12,
-        "y": 31
+        "y": 39
       },
       "fieldConfig": {
         "defaults": {
@@ -1709,18 +1799,18 @@
           "range": true
         }
       ],
-      "id": 18
+      "id": 19
     },
     {
       "type": "row",
       "title": "Diversity",
       "collapsed": false,
-      "id": 19,
+      "id": 20,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 39
+        "y": 47
       },
       "panels": []
     },
@@ -1736,7 +1826,7 @@
         "w": 12,
         "h": 8,
         "x": 0,
-        "y": 40
+        "y": 48
       },
       "fieldConfig": {
         "defaults": {
@@ -1812,7 +1902,7 @@
           "range": true
         }
       ],
-      "id": 20
+      "id": 21
     },
     {
       "type": "timeseries",
@@ -1826,7 +1916,7 @@
         "w": 12,
         "h": 8,
         "x": 12,
-        "y": 40
+        "y": 48
       },
       "fieldConfig": {
         "defaults": {
@@ -1945,18 +2035,18 @@
           "range": true
         }
       ],
-      "id": 21
+      "id": 22
     },
     {
       "type": "row",
       "title": "Predators and prey",
       "collapsed": false,
-      "id": 22,
+      "id": 23,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 48
+        "y": 56
       },
       "panels": []
     },
@@ -1972,7 +2062,7 @@
         "w": 12,
         "h": 8,
         "x": 0,
-        "y": 49
+        "y": 57
       },
       "fieldConfig": {
         "defaults": {
@@ -2087,7 +2177,7 @@
           "range": true
         }
       ],
-      "id": 23
+      "id": 24
     },
     {
       "type": "timeseries",
@@ -2101,7 +2191,7 @@
         "w": 12,
         "h": 8,
         "x": 12,
-        "y": 49
+        "y": 57
       },
       "fieldConfig": {
         "defaults": {
@@ -2187,7 +2277,7 @@
           "range": true
         }
       ],
-      "id": 24
+      "id": 25
     },
     {
       "type": "timeseries",
@@ -2201,7 +2291,7 @@
         "w": 6,
         "h": 8,
         "x": 0,
-        "y": 57
+        "y": 65
       },
       "fieldConfig": {
         "defaults": {
@@ -2262,7 +2352,7 @@
           "range": true
         }
       ],
-      "id": 25
+      "id": 26
     },
     {
       "type": "timeseries",
@@ -2276,7 +2366,7 @@
         "w": 6,
         "h": 8,
         "x": 6,
-        "y": 57
+        "y": 65
       },
       "fieldConfig": {
         "defaults": {
@@ -2362,7 +2452,7 @@
           "range": true
         }
       ],
-      "id": 26
+      "id": 27
     },
     {
       "type": "timeseries",
@@ -2376,7 +2466,7 @@
         "w": 6,
         "h": 8,
         "x": 12,
-        "y": 57
+        "y": 65
       },
       "fieldConfig": {
         "defaults": {
@@ -2487,7 +2577,7 @@
           "range": true
         }
       ],
-      "id": 27
+      "id": 28
     },
     {
       "type": "timeseries",
@@ -2501,7 +2591,7 @@
         "w": 6,
         "h": 8,
         "x": 18,
-        "y": 57
+        "y": 65
       },
       "fieldConfig": {
         "defaults": {
@@ -2587,7 +2677,7 @@
           "range": true
         }
       ],
-      "id": 28
+      "id": 29
     },
     {
       "type": "timeseries",
@@ -2601,7 +2691,7 @@
         "w": 6,
         "h": 8,
         "x": 0,
-        "y": 65
+        "y": 73
       },
       "fieldConfig": {
         "defaults": {
@@ -2677,7 +2767,7 @@
           "range": true
         }
       ],
-      "id": 29
+      "id": 30
     },
     {
       "type": "timeseries",
@@ -2691,7 +2781,7 @@
         "w": 6,
         "h": 8,
         "x": 6,
-        "y": 65
+        "y": 73
       },
       "fieldConfig": {
         "defaults": {
@@ -2767,18 +2857,18 @@
           "range": true
         }
       ],
-      "id": 30
+      "id": 31
     },
     {
       "type": "row",
       "title": "Genes",
       "collapsed": false,
-      "id": 31,
+      "id": 32,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 73
+        "y": 81
       },
       "panels": []
     },
@@ -2794,7 +2884,7 @@
         "w": 12,
         "h": 9,
         "x": 0,
-        "y": 74
+        "y": 82
       },
       "fieldConfig": {
         "defaults": {
@@ -2838,7 +2928,7 @@
           "range": true
         }
       ],
-      "id": 32
+      "id": 33
     },
     {
       "type": "timeseries",
@@ -2852,7 +2942,7 @@
         "w": 12,
         "h": 9,
         "x": 12,
-        "y": 74
+        "y": 82
       },
       "fieldConfig": {
         "defaults": {
@@ -2896,18 +2986,18 @@
           "range": true
         }
       ],
-      "id": 33
+      "id": 34
     },
     {
       "type": "row",
       "title": "Best creature genes",
       "collapsed": true,
-      "id": 34,
+      "id": 35,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 83
+        "y": 91
       },
       "panels": [
         {
@@ -2922,7 +3012,7 @@
             "w": 12,
             "h": 8,
             "x": 0,
-            "y": 84
+            "y": 92
           },
           "fieldConfig": {
             "defaults": {
@@ -2966,7 +3056,7 @@
               "range": true
             }
           ],
-          "id": 35
+          "id": 36
         },
         {
           "type": "timeseries",
@@ -2980,7 +3070,7 @@
             "w": 12,
             "h": 8,
             "x": 12,
-            "y": 84
+            "y": 92
           },
           "fieldConfig": {
             "defaults": {
@@ -3024,7 +3114,7 @@
               "range": true
             }
           ],
-          "id": 36
+          "id": 37
         }
       ]
     },
@@ -3032,12 +3122,12 @@
       "type": "row",
       "title": "Lifestyle",
       "collapsed": false,
-      "id": 37,
+      "id": 38,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 84
+        "y": 92
       },
       "panels": []
     },
@@ -3053,7 +3143,7 @@
         "w": 6,
         "h": 8,
         "x": 0,
-        "y": 85
+        "y": 93
       },
       "fieldConfig": {
         "defaults": {
@@ -3179,7 +3269,7 @@
           "range": true
         }
       ],
-      "id": 38
+      "id": 39
     },
     {
       "type": "timeseries",
@@ -3193,7 +3283,7 @@
         "w": 6,
         "h": 8,
         "x": 6,
-        "y": 85
+        "y": 93
       },
       "fieldConfig": {
         "defaults": {
@@ -3319,7 +3409,7 @@
           "range": true
         }
       ],
-      "id": 39
+      "id": 40
     },
     {
       "type": "timeseries",
@@ -3333,7 +3423,7 @@
         "w": 6,
         "h": 8,
         "x": 12,
-        "y": 85
+        "y": 93
       },
       "fieldConfig": {
         "defaults": {
@@ -3419,7 +3509,207 @@
           "range": true
         }
       ],
-      "id": 40
+      "id": 41
+    },
+    {
+      "type": "timeseries",
+      "title": "Thirst",
+      "description": "Mean thirst of each species as a share of THIRST_MAX, capped at 1. Past 1 a creature dehydrates and loses health. It falls once the species learns to visit the lakes.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "fev2gbax7os8we"
+      },
+      "gridPos": {
+        "w": 6,
+        "h": 8,
+        "x": 18,
+        "y": 93
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*herbivore.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*carnivore.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fev2gbax7os8we"
+          },
+          "expr": "evolution_thirst_ratio{job=\"evolution\",species=\"herbivore\"}",
+          "legendFormat": "herbivore",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fev2gbax7os8we"
+          },
+          "expr": "evolution_thirst_ratio{job=\"evolution\",species=\"carnivore\"}",
+          "legendFormat": "carnivore",
+          "range": true
+        }
+      ],
+      "id": 42
+    },
+    {
+      "type": "timeseries",
+      "title": "Willing to mate",
+      "description": "Share of each species whose brain is not refusing to breed (mate output above MATE_REFUSE_THRESHOLD). Breeding costs a parent part of its health, so a dip can mean they learned to wait until fed.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "fev2gbax7os8we"
+      },
+      "gridPos": {
+        "w": 6,
+        "h": 8,
+        "x": 0,
+        "y": 101
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "mode": "none"
+            }
+          },
+          "color": {
+            "mode": "palette-classic"
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*herbivore.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "green"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*carnivore.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fev2gbax7os8we"
+          },
+          "expr": "evolution_willing_share{job=\"evolution\",species=\"herbivore\"}",
+          "legendFormat": "herbivore",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "fev2gbax7os8we"
+          },
+          "expr": "evolution_willing_share{job=\"evolution\",species=\"carnivore\"}",
+          "legendFormat": "carnivore",
+          "range": true
+        }
+      ],
+      "id": 43
     },
     {
       "type": "timeseries",
@@ -3432,8 +3722,8 @@
       "gridPos": {
         "w": 6,
         "h": 8,
-        "x": 18,
-        "y": 85
+        "x": 6,
+        "y": 101
       },
       "fieldConfig": {
         "defaults": {
@@ -3509,18 +3799,18 @@
           "range": true
         }
       ],
-      "id": 41
+      "id": 44
     },
     {
       "type": "row",
       "title": "Run health",
       "collapsed": false,
-      "id": 42,
+      "id": 45,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 93
+        "y": 109
       },
       "panels": []
     },
@@ -3536,7 +3826,7 @@
         "w": 6,
         "h": 8,
         "x": 0,
-        "y": 94
+        "y": 110
       },
       "fieldConfig": {
         "defaults": {
@@ -3597,7 +3887,7 @@
           "range": true
         }
       ],
-      "id": 43
+      "id": 46
     },
     {
       "type": "timeseries",
@@ -3611,7 +3901,7 @@
         "w": 6,
         "h": 8,
         "x": 6,
-        "y": 94
+        "y": 110
       },
       "fieldConfig": {
         "defaults": {
@@ -3687,7 +3977,7 @@
           "range": true
         }
       ],
-      "id": 44
+      "id": 47
     },
     {
       "type": "timeseries",
@@ -3701,7 +3991,7 @@
         "w": 4,
         "h": 8,
         "x": 12,
-        "y": 94
+        "y": 110
       },
       "fieldConfig": {
         "defaults": {
@@ -3762,7 +4052,7 @@
           "range": true
         }
       ],
-      "id": 45
+      "id": 48
     },
     {
       "type": "timeseries",
@@ -3776,7 +4066,7 @@
         "w": 4,
         "h": 8,
         "x": 16,
-        "y": 94
+        "y": 110
       },
       "fieldConfig": {
         "defaults": {
@@ -3837,7 +4127,7 @@
           "range": true
         }
       ],
-      "id": 46
+      "id": 49
     },
     {
       "type": "stat",
@@ -3851,7 +4141,7 @@
         "w": 4,
         "h": 8,
         "x": 20,
-        "y": 94
+        "y": 110
       },
       "fieldConfig": {
         "defaults": {
@@ -3919,7 +4209,7 @@
           "range": true
         }
       ],
-      "id": 47
+      "id": 50
     }
   ]
 }

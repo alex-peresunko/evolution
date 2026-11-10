@@ -134,6 +134,13 @@ ROWS = [
                    q(f"sum by (species) (rate({m('death_age_ticks_total')}[5m])) "
                      f"/ sum by (species) (rate({m('deaths_total')}[5m]))", "{{species}}"),
                    w=8, min_=0),
+        timeseries("Litters per life", "Average number of litters parented by the creatures "
+                   "that died in the last 5 minutes. A population holds steady at about 2 "
+                   "divided by its litter size; this is the most direct measure of how well "
+                   "the species lives under selection.",
+                   q(f"sum by (species) (rate({m('death_litters_total')}[5m])) "
+                     f"/ sum by (species) (rate({m('deaths_total')}[5m]))", "{{species}}"),
+                   w=8, min_=0),
         timeseries("Generations per hour", "How fast new generations are born. A drop means "
                    "creatures breed later or less often.",
                    q(f"deriv({m('generation')}[15m]) * 3600", "generations / hour"),
@@ -267,6 +274,14 @@ ROWS = [
                    "carnivore mid-meal raise this.",
                    *[q(per_minute(m("meals_abandoned_total", species=s)), s)
                      for s in SPECIES_COLORS], unit="short", min_=0, w=6),
+        timeseries("Thirst", "Mean thirst of each species as a share of THIRST_MAX, capped at "
+                   "1. Past 1 a creature dehydrates and loses health. It falls once the "
+                   "species learns to visit the lakes.",
+                   *by_species("thirst_ratio"), unit="percentunit", min_=0, w=6),
+        timeseries("Willing to mate", "Share of each species whose brain is not refusing to "
+                   "breed (mate output above MATE_REFUSE_THRESHOLD). Breeding costs a parent "
+                   "part of its health, so a dip can mean they learned to wait until fed.",
+                   *by_species("willing_share"), unit="percentunit", min_=0, w=6),
         timeseries("Signalling", "Mean signal output (0 to 1). Kin within SIGNAL_RADIUS hear "
                    "it, and it costs health, so a rising signal means it pays off: they "
                    "evolved to communicate.",
