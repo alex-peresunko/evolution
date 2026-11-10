@@ -44,6 +44,7 @@ def creature_info(c):
         "Eating": c.eating_ticks,
         "Fat": f"{int(c.fat)}/{config.FAT_MAX}",
         "Upkeep": round(c.upkeep(), 2),
+        "Display": round(c.display(), 1),
         "Signal": round(c.signal, 2),
         "Memory": " ".join(f"{m:+.2f}" for m in c.memory),
         "Reproductions": c.reproductions,

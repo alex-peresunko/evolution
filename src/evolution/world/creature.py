@@ -150,6 +150,11 @@ class Creature:
     def is_alive(self):
         return self.health > 0
 
+    def display(self):
+        """Attractiveness as a mate sees it: the gene scaled by condition, (health + fat) /
+        max health, so a starving creature cannot show off."""
+        return self.attractiveness * (self.health + self.fat) / self.max_health
+
     def death_cause(self, tick):
         """The most likely killer of a creature that died during `tick`, one of DEATH_CAUSES."""
         if self.last_trampled_tick == tick:

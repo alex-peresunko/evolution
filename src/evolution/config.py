@@ -269,7 +269,8 @@ SURVIVAL_RATE = 0.15
 # species are replaced by the Hall of Fame brain and mutated copies (0 disables).
 ELITE_REINJECT_INTERVAL = 0
 ELITE_REINJECT_COUNT = 2
-# Mate choice: attractiveness / default plus this weight times score / best candidate's score.
+# Mate choice: Creature.display() / default attractiveness plus this weight times score / best
+# candidate's score.
 MATE_SCORE_WEIGHT = 0.0
 HOF_SCORE_HALF_LIFE = 10000      # ticks; Hall of Fame and elite scores fade so newer brains win
 ELITE_POOL_SIZE = 10             # best recently retired brains per species, bred after extinction

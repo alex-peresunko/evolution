@@ -76,7 +76,7 @@ def stochastic_round(x):
 
 def mate_preference(mates, species):
     top_score = max((m.score for m in mates), default=0) or 1.0
-    return lambda m: (m.attractiveness / species.default_genes["attractiveness"]
+    return lambda m: (m.display() / species.default_genes["attractiveness"]
                       + MATE_SCORE_WEIGHT * m.score / top_score)
 
 

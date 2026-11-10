@@ -162,6 +162,19 @@ def test_mate_preference_weighs_score_against_attractiveness(monkeypatch):
     assert max(mates, key=mate_preference(mates, HERBIVORE)) is plain_skilled
 
 
+def test_mate_preference_follows_condition_not_just_the_gene():
+    pretty_starving, plain_fed = _creature(HERBIVORE), _creature(HERBIVORE)
+    pretty_starving.attractiveness, plain_fed.attractiveness = 15, 10
+    pretty_starving.health = pretty_starving.max_health * 0.5
+    mates = [pretty_starving, plain_fed]
+    assert max(mates, key=mate_preference(mates, HERBIVORE)) is plain_fed
+    plain_fed.fat = 0.0
+    pretty_starving.health = pretty_starving.max_health
+    assert max(mates, key=mate_preference(mates, HERBIVORE)) is pretty_starving
+    plain_fed.fat = plain_fed.max_health  # a fat mate outshines a merely healthy one
+    assert max(mates, key=mate_preference(mates, HERBIVORE)) is plain_fed
+
+
 def test_elite_pool_keeps_the_best_retired_brains():
     sim = _make_sim(n_herbs=0, n_carns=0)
     for score in range(config.ELITE_POOL_SIZE + 5):

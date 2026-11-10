@@ -127,7 +127,7 @@ World mechanics, all tuned through `config.py`:
 **Evolution is continuous.** Creatures die and are retired by `Simulation.retire`, which enters them into the statistics and the `HallOfFame` (`sim/records.py`).
 - Eligible nearby adults reproduce (`sim/breeding.py`: brain crossover + gene averaging + mutation, in `genetics.py`).
   - Crossover is neuron-wise: each neuron's incoming weights and bias come from one parent.
-  - Mates are ranked by attractiveness (`mate_preference`).
+  - Mates are ranked by `Creature.display()` (`mate_preference`): the attractiveness gene times condition, (health + fat) / max health.
 - Two optional selection boosts are off by default (both 0), because an A/B run showed no gain:
   - `MATE_SCORE_WEIGHT` adds score to mate ranking;
   - `ELITE_REINJECT_INTERVAL` periodically replaces the weakest `ELITE_REINJECT_COUNT` creatures of each species with the Hall of Fame brain and mutated copies (`Simulation.replace_weakest`, `populations.immigrants`).
