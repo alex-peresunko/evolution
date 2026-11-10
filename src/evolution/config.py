@@ -254,7 +254,7 @@ WINTER_FAT_INSULATION = 0.8     # share of the cold cost that full fat stores ta
 
 # --- Neural Network ---
 NUM_WHISKERS = 3
-NUM_MEMORY = 2
+NUM_MEMORY = 6
 WHISKER_TARGET_WIDTH = 12   # px; a target this close to a whisker ray is hit by it
 BRAIN_INPUTS = (
     NUM_WHISKERS  # obstacle proximity
@@ -274,7 +274,7 @@ BRAIN_INPUTS = (
     + 3             # thirst, nearest water angle/dist
 )
 BRAIN_OUTPUTS = 5 + NUM_MEMORY  # rotation, speed, signal, memory, stop eating, mate
-BRAIN_TOPOLOGY = [BRAIN_INPUTS, 16, 8, BRAIN_OUTPUTS]
+BRAIN_TOPOLOGY = [BRAIN_INPUTS, 24, 12, BRAIN_OUTPUTS]
 
 # --- Evolution ---
 MUTATION_RATE = 0.08

@@ -128,6 +128,7 @@ def test_trained_brain_imitates_teacher():
     X[:, IN.smell_strength] = 0.0
     X[:, IN.obstacle_whiskers] = 0.0
     X[:, IN.sight_angle] = 0.5
+    X[:, [IN.thirst, IN.hurt, IN.touch_other]] = 0.0
     Y = teacher_actions(X, np.zeros(len(X), bool))
     brain = NeuralNetwork(config.BRAIN_TOPOLOGY)
     before = loss(brain, X, Y)
