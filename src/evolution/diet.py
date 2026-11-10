@@ -1,8 +1,9 @@
 """How each species feeds during its tick: the strategy a Species plugs into Creature.act."""
 import math
 import random
+from typing import Protocol
 
-from ..config import (
+from .config import (
     ADRENALINE_STAMINA,
     BITE_COOLDOWN_TICKS,
     BITE_DAMAGE,
@@ -66,6 +67,17 @@ def _prune(recent, tick, window):
     for attacker, t in list(recent.items()):
         if tick - t > window:
             del recent[attacker]
+
+
+class Diet(Protocol):
+    """What a Species needs from its diet."""
+
+    # Whether following prey scent with no target in sight earns pursuit score.
+    tracks_by_smell: bool
+
+    def feed(self, c, world) -> None:
+        """Called once per tick from Creature.act, after the creature moved, also while it is
+        mid-meal (c.eating_ticks > 0): the diet advances or ends the meal itself."""
 
 
 class GrazingDiet:

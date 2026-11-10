@@ -45,10 +45,10 @@ persistence/  brain JSON files, history snapshots, Hall of Fame autosave, island
 sim/          Simulation (one tick = ordered phases), records, stats, breeding, populations
 world/        World and its entities, perception, terrain, spatial grids, geometry
 brain/        NeuralNetwork, BatchBrain, input/output Layout, imitation, brain-panel analysis
-species.py    Species (HERBIVORE, CARNIVORE); genetics.py; config.py
+species.py    Species (HERBIVORE, CARNIVORE); diet.py; genetics.py; config.py
 ```
 
-Nothing outside `ui/` imports pygame. `tests/` mirrors the package layout.
+Nothing outside `ui/` imports pygame. `tests/test_layering.py` enforces both rules. `tests/` mirrors the package layout.
 
 **Bit-exact golden trace (opt-in).** `tests/test_golden.py` (marker `golden`, skipped by plain `pytest`) replays seeded runs (evolution, imitation and rendering) and compares them with `tests/golden/trace.json`, exactly. The trace is local and git-ignored: don't run or re-record it for feature work or rule changes. For a behaviour-preserving refactor, `make golden-record` before and `make golden` after; only the adapter `tests/golden/scenarios.py` may change when APIs move.
 - It breaks on any change to the order of `random` / `np.random` calls, to the creature iteration order (`ALL_SPECIES`: herbivores first), to float operand order, or to the global id counters.
@@ -58,7 +58,7 @@ Nothing outside `ui/` imports pygame. `tests/` mirrors the package layout.
 `species.py` turns everything that differs between the species into data. A `Species` (compared by identity) holds:
 - `default_genes`, `gene_bounds`, `start_count`, `max_health`, `health_per_food`, `eat_ticks`, `swim_stamina_cost`;
 - the naming helpers `brain_file`, `title` and `plural`;
-- a `diet` strategy: `world/diet.py`'s `GrazingDiet` (food, digesting) or `PredatorDiet(prey=HERBIVORE)` (bites, scavenging).
+- a `diet` strategy (the `Diet` protocol in `diet.py`): `GrazingDiet` (food, digesting) or `PredatorDiet(prey=HERBIVORE)` (bites, scavenging).
 
 Code loops over `ALL_SPECIES` or keys dicts by `Species` instead of branching on a boolean. `Creature.is_carnivore` is a read-only shortcut for `species.is_predator`.
 

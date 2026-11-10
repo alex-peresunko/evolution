@@ -2,7 +2,7 @@
 from dataclasses import dataclass, field
 
 from . import config
-from .world.diet import GrazingDiet, PredatorDiet
+from .diet import Diet, GrazingDiet, PredatorDiet
 
 
 @dataclass(eq=False)
@@ -18,7 +18,7 @@ class Species:
     health_per_food: float
     eat_ticks: int
     swim_stamina_cost: float
-    diet: object = field(repr=False)
+    diet: Diet = field(repr=False)
 
     @property
     def title(self):

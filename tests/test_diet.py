@@ -2,9 +2,8 @@ import math
 
 import pytest
 
-from evolution import config
+from evolution import config, diet
 from evolution.species import CARNIVORE, HERBIVORE
-from evolution.world import diet
 from evolution.world.creature import Creature
 from evolution.world.world import World
 
