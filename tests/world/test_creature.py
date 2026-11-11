@@ -396,9 +396,9 @@ def test_thirst_grows_on_land_and_is_quenched_at_the_shore():
         world.reindex()
     c.act(still, dry)
     assert c.thirst == 1
-    c.thirst = 100
+    c.thirst = 2 * config.DRINK_RATE
     c.act(still, wet)
-    assert c.thirst == 100 - config.DRINK_RATE and not c.in_water
+    assert c.thirst == config.DRINK_RATE and not c.in_water
 
 
 def test_dehydration_costs_health_past_thirst_max():

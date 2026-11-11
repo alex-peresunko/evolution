@@ -109,8 +109,10 @@ def test_step_stores_signal_and_memory():
 
 
 def test_winter_stops_food_respawn_above_the_cap(monkeypatch):
+    from evolution.world import environment
     from evolution.world.environment import food_cap
 
+    monkeypatch.setattr(environment, "SEASONS_ENABLED", True)
     sim = _make_sim(n_herbs=0, n_carns=0, n_food=0)
     sim.world.tick = 3 * config.SEASON_LENGTH_TICKS // 4 - 1   # next tick is midwinter
     winter_cap = food_cap(-1)

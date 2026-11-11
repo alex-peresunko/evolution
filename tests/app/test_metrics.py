@@ -83,6 +83,8 @@ def test_death_causes():
     assert _dying(CARNIVORE, last_hit_tick=7, last_trampled_tick=7).death_cause(7) == "trampled"
     assert _dying(HERBIVORE, last_impact_tick=7, hunger=10_000).death_cause(7) == "impact"
     assert _dying(HERBIVORE, last_hit_tick=6, hunger=10_000).death_cause(7) == "starved"
+    parched = _dying(HERBIVORE, hunger=config.HUNGER_MAX + 1, thirst=2 * config.THIRST_MAX)
+    assert parched.death_cause(7) == "thirst"
     assert _dying(HERBIVORE, age=lifespan + 1).death_cause(7) == "old_age"
     assert _dying(HERBIVORE).death_cause(7) == "attrition"
 

@@ -14,14 +14,14 @@ ZOOM_STEP = 1.15             # zoom factor per wheel notch
 # --- Population ---
 NUM_HERBIVOROUS = 120
 NUM_CARNIVORES = 30
-NUM_FOOD = 400
+NUM_FOOD = 1600
 NUM_OBSTACLES = 5
 NUM_TREES = 14
 TREE_CROWN_RADIUS_RANGE = (34, 60)  # px; dinosaurs are ~25-45 px long
 TREE_TRUNK_FRACTION = 0.28          # solid trunk side as a share of the crown radius
 TREE_CROWN_ALPHA = 215              # crowns are drawn over creatures
 FOOD_RADIUS = 3
-FOOD_RESPAWN_RATE = 2
+FOOD_RESPAWN_RATE = 4           # items per tick
 
 # --- Spatial Grid ---
 GRID_CELL_SIZE = 200
@@ -108,6 +108,7 @@ HUNGER_HEALTH_PENALTY = 5
 REPRODUCTION_HEALTH_THRESHOLD = 0.5
 MAX_REPRODUCTIONS = 50
 HEALTH_LOSS_PER_TICK = 1
+HEALTH_SPEED_FLOOR = 0.5        # share of its speed a creature keeps at zero health
 HEALTH_LOSS_SPEED_FACTOR = 0.1
 # Upkeep: HEALTH_LOSS_PER_TICK times a weighted sum of trait / species-default ratios. The
 # weights sum to 1, so a creature with default genes pays exactly HEALTH_LOSS_PER_TICK.
@@ -159,9 +160,9 @@ LAKE_SHORE_ROUGHNESS = 0.45            # blob shore radius varies within (1 +- t
 LAKE_SHORE_HARMONICS = 10              # bays and headlands per blob, coarse to fine
 WATER_SPEED_FACTOR = 0.35
 # Thirst: ticks since the last drink. A creature drinks while its body reaches a lake.
-THIRST_MAX = 600                # past this, dehydration costs health
-THIRST_HEALTH_PENALTY = 3       # per tick at 2 x THIRST_MAX and beyond, linear from THIRST_MAX
-DRINK_RATE = 20                 # thirst quenched per tick at the water
+THIRST_MAX = 1800               # past this, dehydration costs health
+THIRST_HEALTH_PENALTY = 1       # per tick at 2 x THIRST_MAX and beyond, linear from THIRST_MAX
+DRINK_RATE = 60                 # thirst quenched per tick at the water
 WATER_SENSE_RADIUS = 1500       # px to the nearest shore at which a creature knows the way
 HERBIVORE_SWIM_STAMINA_COST = 3.0   # per tick in water, replaces regen
 CARNIVORE_SWIM_STAMINA_COST = 8.0
@@ -237,8 +238,8 @@ FOOD_PATCH_SPEED = 0.3
 FOOD_PATCH_TURN = 0.05
 
 # --- Regrowth ---
-FOOD_REGROW_SHARE = 0.6         # share of respawned food that sprouts beside existing food
-FOOD_REGROW_RADIUS = 60         # Gaussian sigma around the parent item
+FOOD_REGROW_SHARE = 0.3         # share of respawned food that sprouts beside existing food
+FOOD_REGROW_RADIUS = 120        # Gaussian sigma around the parent item
 FOOD_REGROW_CROWD_RADIUS = 40
 FOOD_REGROW_CROWD = 3           # this many items within the crowd radius: no sprout there
 
@@ -247,6 +248,7 @@ DAY_LENGTH_TICKS = 3600
 NIGHT_SIGHT_FACTOR = 0.35       # share of sight distance left at midnight
 
 # --- Seasons ---
+SEASONS_ENABLED = False         # off: endless midsummer
 SEASON_LENGTH_TICKS = 2 * DAY_LENGTH_TICKS   # one year; a run starts in spring
 SEASON_FOOD_AMPLITUDE = 0.65    # food cap x (1 + 0.65 * season): summer 1.65x, winter 0.35x
 WINTER_COLD_COST = 0.3          # extra health loss per tick at midwinter, lean

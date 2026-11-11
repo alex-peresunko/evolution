@@ -4,6 +4,7 @@ import pytest
 
 from evolution import config
 from evolution.species import CARNIVORE, HERBIVORE
+from evolution.world import environment
 from evolution.world import world as world_module
 from evolution.world.creature import Creature
 from evolution.world.environment import FoodPatch, day_light, food_cap, season, season_name
@@ -124,7 +125,14 @@ def test_day_light_cycle():
     assert day_light(day) == pytest.approx(1.0)
 
 
-def test_seasons_scale_the_food_cap():
+def test_seasons_off_is_endless_midsummer(monkeypatch):
+    monkeypatch.setattr(environment, "SEASONS_ENABLED", False)
+    winter = 3 * config.SEASON_LENGTH_TICKS // 4
+    assert season(winter) == 1.0 and season_name(winter) == "Summer"
+
+
+def test_seasons_scale_the_food_cap(monkeypatch):
+    monkeypatch.setattr(environment, "SEASONS_ENABLED", True)
     year = config.SEASON_LENGTH_TICKS
     assert season(0) == pytest.approx(0) and season_name(0) == "Spring"
     assert season(year // 4) == pytest.approx(1) and season_name(year // 4) == "Summer"

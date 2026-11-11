@@ -20,6 +20,7 @@ from ..config import (
     HEALTH_LOSS_PER_TICK,
     HEALTH_LOSS_SPEED_FACTOR,
     HEALTH_LOST_ON_HIT,
+    HEALTH_SPEED_FLOOR,
     HUNGER_HEALTH_PENALTY,
     HUNGER_MAX,
     HURT_FADE_TICKS,
@@ -183,10 +184,9 @@ class Creature:
             return "retaliation" if self.species.is_predator else "bitten"
         if self.last_impact_tick == tick:
             return "impact"
-        if self.hunger > HUNGER_MAX:
-            return "starved"
-        if self.thirst > THIRST_MAX:
-            return "thirst"
+        hunger, thirst = self.hunger / HUNGER_MAX, self.thirst / THIRST_MAX
+        if max(hunger, thirst) > 1:
+            return "thirst" if thirst > hunger else "starved"
         if self.age > self.genes["lifespan"]:
             return "old_age"
         return "attrition"
@@ -283,7 +283,8 @@ class Creature:
             effort = max(0.0, outputs[OUT.speed])
             self.angle = ((self.angle + outputs[OUT.rotation] * CREATURE_ROTATION_SPEED)
                           % (2 * math.pi))
-            speed_multiplier = max(0.1, self.health / self.max_health)
+            speed_multiplier = (HEALTH_SPEED_FLOOR
+                                + (1 - HEALTH_SPEED_FLOOR) * self.health / self.max_health)
             speed_penalty = STAMINA_EXHAUSTION_PENALTY if self.winded else 1.0
             weight_penalty = 1 / (1 + self.fat / FAT_MAX * FAT_SPEED_PENALTY)
             water_penalty = WATER_SPEED_FACTOR if self.in_water else 1.0

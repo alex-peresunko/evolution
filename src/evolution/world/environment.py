@@ -10,6 +10,7 @@ from ..config import (
     NUM_FOOD,
     SEASON_FOOD_AMPLITUDE,
     SEASON_LENGTH_TICKS,
+    SEASONS_ENABLED,
 )
 
 
@@ -20,10 +21,14 @@ def day_light(tick):
 
 def season(tick):
     """-1 at midwinter, 1 at midsummer; a run starts in spring (0, rising)."""
+    if not SEASONS_ENABLED:
+        return 1.0
     return math.sin(2 * math.pi * tick / SEASON_LENGTH_TICKS)
 
 
 def season_name(tick):
+    if not SEASONS_ENABLED:
+        return "Summer"
     phase = (tick / SEASON_LENGTH_TICKS) % 1
     return ("Spring", "Summer", "Autumn", "Winter")[int((phase + 0.125) * 4) % 4]
 

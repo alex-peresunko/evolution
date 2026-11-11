@@ -1,4 +1,4 @@
-import random
+import math
 
 import numpy as np
 
@@ -15,7 +15,7 @@ from ..config import (
 from ..species import ALL_SPECIES
 from ..world.environment import food_cap
 from ..world.food import Carcass
-from .breeding import breed, mate_seeking_drive
+from .breeding import breed, mate_seeking_drive, stochastic_round
 from .populations import immigrants, repopulate
 from .records import HallOfFame
 from .stats import Statistics
@@ -72,7 +72,8 @@ class Simulation:
             kept.append(food)
         world.food[:] = kept
         world.drift_food_patches()
-        if random.random() < FOOD_RESPAWN_RATE and len(world.food) < food_cap(world.season):
+        room = math.ceil(food_cap(world.season) - len(world.food))
+        for _ in range(min(stochastic_round(FOOD_RESPAWN_RATE), room)):
             world.food.append(world.spawn_food())
 
     def _update_carcasses(self):

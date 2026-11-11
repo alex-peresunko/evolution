@@ -25,9 +25,12 @@ from evolution.world.worldgen import generate_lakes
 
 
 def build_simulation():
-    """A world with random brains and plain rock obstacles; nothing listens for Hall of Fame
+    """A world with random brains of random thirst and plain rock obstacles; nothing listens for Hall of Fame
     records, so no brain file is written from here."""
     populations = {sp: founders(sp, WORLD_BOUNDS) for sp in ALL_SPECIES}
+    for population in populations.values():
+        for c in population:   # a round is shorter than THIRST_MAX: start some of them thirsty
+            c.thirst = random.randrange(config.THIRST_MAX)
     food = [Food(WORLD_BOUNDS) for _ in range(config.NUM_FOOD)]
     obstacles = [
         Obstacle(random.randint(100, config.WORLD_WIDTH - 100),
