@@ -36,17 +36,9 @@ def blur(surf, factor):
     return pygame.transform.smoothscale(small, (w, h))
 
 
-def value_noise(rng, w, h, cell):
-    """Smooth noise in [0, 1] with features roughly `cell` pixels across, shape (w, h)."""
-    small = (rng.random((max(2, w // cell), max(2, h // cell))) * 255).astype(np.uint8)
+def value_noise(rng, w, h, cell, cell_y=None):
+    """Smooth noise in [0, 1] with features roughly `cell` pixels across (`cell_y` high, when
+    given), shape (w, h)."""
+    small = (rng.random((max(2, w // cell), max(2, h // (cell_y or cell)))) * 255).astype(np.uint8)
     surf = pygame.transform.smoothscale(pygame.surfarray.make_surface(np.dstack([small] * 3)), (w, h))
     return pygame.surfarray.array_red(surf).astype(np.float32) / 255.0
-
-
-
-def blur_array(a, factor):
-    """Soft blur of a [0, 1] (w, h) array by smoothscaling down `factor` times and back."""
-    w, h = a.shape
-    surf = pygame.surfarray.make_surface(np.dstack([(a * 255).astype(np.uint8)] * 3))
-    small = pygame.transform.smoothscale(surf, (max(1, w // factor), max(1, h // factor)))
-    return pygame.surfarray.array_red(pygame.transform.smoothscale(small, (w, h))).astype(np.float32) / 255

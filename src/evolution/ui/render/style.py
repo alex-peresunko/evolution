@@ -65,6 +65,8 @@ def tinted_palette(palette, bucket):
 
 
 LAKE_SHORE_WIDTH = 9
-LAKE_MUD = (58, 52, 38)
-LAKE_SHALLOW = (54, 104, 108)
-LAKE_DEEP = (18, 46, 74)
+LAKE_MUD = (44, 38, 28)       # wet, at the waterline
+LAKE_SAND = (98, 86, 60)
+LAKE_BED = (84, 86, 62)       # the bottom, seen through the shallows
+LAKE_SHALLOW = (40, 98, 100)
+LAKE_DEEP = (13, 40, 68)

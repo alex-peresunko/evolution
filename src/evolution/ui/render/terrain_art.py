@@ -4,23 +4,62 @@ import random
 
 import numpy as np
 import pygame
+import pygame.gfxdraw
 
 from ... import config
 from ...world.terrain import Tree
-from .shapes import blur, blur_array, shaded_ellipse, value_noise
-from .style import LAKE_DEEP, LAKE_MUD, LAKE_SHALLOW, LAKE_SHORE_WIDTH, SS, mix
+from .shapes import blur, shaded_ellipse, value_noise
+from .style import (
+    LAKE_BED,
+    LAKE_DEEP,
+    LAKE_MUD,
+    LAKE_SAND,
+    LAKE_SHALLOW,
+    LAKE_SHORE_WIDTH,
+    SS,
+    mix,
+)
+
+LIGHT = np.array([-0.5, -0.6, 0.62], np.float32)
+LIGHT /= np.linalg.norm(LIGHT)
+
+
+def _lambert(height):
+    """Brightness of a height field (in px) under the scene's light, 0..1."""
+    gx, gy = np.gradient(height)
+    return np.clip((-gx * LIGHT[0] - gy * LIGHT[1] + LIGHT[2]) / np.sqrt(gx ** 2 + gy ** 2 + 1),
+                   0, 1)
+
+
+def _cracks(w, h, m, rnd):
+    """Fractures running across a (w, h) rock: 1 on a crack, fading to 0 beside it."""
+    surf = pygame.Surface((w, h))
+    for _ in range(rnd.randint(2, 3)):
+        a = rnd.uniform(0, 2 * math.pi)
+        x, y = w / 2 - math.cos(a) * w * 0.6, h / 2 - math.sin(a) * h * 0.6
+        x, y = x + rnd.uniform(-0.25, 0.25) * w, y + rnd.uniform(-0.25, 0.25) * h
+        pts = [(x, y)]
+        for _ in range(14):
+            a += rnd.uniform(-0.55, 0.55)
+            x, y = x + math.cos(a) * m * 0.11, y + math.sin(a) * m * 0.11
+            pts.append((x, y))
+            if rnd.random() < 0.2:   # a side branch
+                b = a + rnd.choice((-1, 1)) * rnd.uniform(0.6, 1.2)
+                pygame.draw.aaline(surf, (255, 255, 255), (x, y),
+                                   (x + math.cos(b) * m * 0.16, y + math.sin(b) * m * 0.16))
+        pygame.draw.lines(surf, (255, 255, 255), False, pts, 2)
+    return pygame.surfarray.array_red(blur(surf, 2)).astype(np.float32) / 255
 
 
 def _draw_rock(bg, rect, rng, rnd):
-    """Bevelled, lit boulder filling `rect`, from a rounded-box distance field."""
+    """A boulder filling `rect`: a block broken into flat facets, bedded, cracked and weathered,
+    with rubble and grass at its foot."""
     x, y, w, h = int(rect.x), int(rect.y), int(rect.width), int(rect.height)
     m = min(w, h)
-    rad = m * 0.3
+    rad = m * 0.2
 
-    pad = 18
-    shadow = pygame.Surface((w + pad * 2, h + pad * 2), pygame.SRCALPHA)
-    pygame.draw.rect(shadow, (0, 0, 0, 150), (pad, pad, w, h), border_radius=int(rad))
-    bg.blit(blur(shadow, 7), (x - pad + 9, y - pad + 11))
+    def noise(cell):
+        return value_noise(rng, w, h, cell)
 
     px = (np.arange(w, dtype=np.float32) + 0.5 - w / 2)[:, None]
     py = (np.arange(h, dtype=np.float32) + 0.5 - h / 2)[None, :]
@@ -28,45 +67,76 @@ def _draw_rock(bg, rect, rng, rnd):
     qy = np.abs(py) - (h / 2 - rad - 1)
     d = (np.sqrt(np.maximum(qx, 0) ** 2 + np.maximum(qy, 0) ** 2)
          + np.minimum(np.maximum(qx, qy), 0) - rad)
-    d += (value_noise(rng, w, h, 14) - 0.5) * m * 0.07
+    warp = (noise(22) - 0.5) * m * 0.1 + (noise(7) - 0.5) * m * 0.035
+    height = (-d + warp) * 1.6
+    n = rnd.randint(7, 10)
+    off = rnd.uniform(0, 2 * math.pi)
+    for i in range(n):   # each plane breaks off a corner or a side
+        a = off + i * 2 * math.pi / n + rnd.uniform(-0.3, 0.3)
+        ca, sa = math.cos(a), math.sin(a)
+        reach = (abs(ca) * w + abs(sa) * h) / 2 * rnd.uniform(0.78, 0.98)
+        height = np.minimum(height, (reach - px * ca - py * sa) * rnd.uniform(0.45, 1.3)
+                            + warp * 0.5)
+    top = m * rnd.uniform(0.2, 0.3)
+    height = np.minimum(height, top + (noise(18) - 0.5) * m * 0.1)
+    edge = height.copy()
 
-    bevel = m * 0.24
-    height = np.clip(-d / bevel, 0, 1)
-    height = 1 - (1 - height) ** 2
-    mottle = value_noise(rng, w, h, 9)
-    height = height + 0.05 * mottle + 0.025 * value_noise(rng, w, h, 3)
-    gx, gy = np.gradient(height * bevel * 0.8)
-    nz = 1 / np.sqrt(gx ** 2 + gy ** 2 + 1)
-    light = np.array([-0.5, -0.6, 0.62], np.float32)
-    light /= np.linalg.norm(light)
-    lam = np.clip((-gx * light[0] - gy * light[1] + light[2]) * nz, 0, 1)
+    bed = rnd.uniform(0, math.pi)   # bedding planes show as parallel grooves
+    along = (px * math.cos(bed) + py * math.sin(bed) + (noise(30) - 0.5) * m * 0.3) / (m * 0.15)
+    grooves = np.clip(1 - np.abs(along % 1 - 0.5) * 14, 0, 1) * np.clip((noise(26) - 0.45) * 3, 0, 1)
+    cracks = _cracks(w, h, m, rnd)
+    mottle = noise(9)
+    height = (height - 1.3 * grooves - 3.5 * cracks
+              + 3.0 * (mottle - 0.5) + 1.4 * (noise(3) - 0.5))
+    lam = _lambert(height)
+    foot = np.clip(edge / (m * 0.07), 0, 1) ** 0.5   # darker where the rock meets the ground
 
     tone = rnd.uniform(-10, 10)
-    base = np.array([104 + tone, 99 + tone, 92 + tone], np.float32)
-    shade = (0.28 + 0.95 * lam) * (0.82 + 0.36 * mottle)
-    col = base[None, None, :] * shade[..., None]
-    moss = np.clip((value_noise(rng, w, h, 16) - 0.6) * 5, 0, 1) * (height > 0.6)
-    col = col * (1 - moss[..., None]) + (np.array([62, 104, 50], np.float32)[None, None, :]
-                                         * (0.45 + 0.8 * lam)[..., None] * moss[..., None])
+    base = np.array([112 + tone, 106 + tone, 98 + tone * 0.6], np.float32)
+    warm = (noise(34) - 0.5)[..., None] * np.array([16, 6, -8], np.float32)
+    shade = (0.22 + 1.0 * lam) * (0.8 + 0.4 * mottle) * (0.5 + 0.5 * foot)
+    shade *= (1 - 0.3 * grooves) * (1 - 0.6 * cracks)
+    col = (base[None, None, :] + warm) * shade[..., None]
+    grain = rng.random((w, h), dtype=np.float32)
+    col *= np.where(grain < 0.08, 0.8, np.where(grain > 0.95, 1.14, 1.0))[..., None]
+    lichen = np.clip((noise(6) - 0.68) * 6, 0, 1) * np.clip((edge - top * 0.5) / 4, 0, 1)
+    col += lichen[..., None] * 0.4 * (np.array([164, 160, 118], np.float32) * (0.4 + 0.7 * lam)[..., None] - col)
+    moss = np.clip((noise(16) - 0.56) * 4, 0, 1) * np.clip((0.7 - lam) * 3.5, 0, 1)
+    col += moss[..., None] * 0.85 * (np.array([58, 98, 46], np.float32) * (0.45 + 0.9 * lam)[..., None] - col)
 
     rock = pygame.Surface((w, h), pygame.SRCALPHA)
     pygame.surfarray.pixels3d(rock)[:] = np.clip(col, 0, 255).astype(np.uint8)
-    pygame.surfarray.pixels_alpha(rock)[:] = (np.clip(-d + 0.5, 0, 1) * 255).astype(np.uint8)
+    pygame.surfarray.pixels_alpha(rock)[:] = (np.clip(edge + 0.5, 0, 1) * 255).astype(np.uint8)
 
-    margin = rad * 0.6 + 4
-    for _ in range(rnd.randint(1, 3)):
-        cx, cy = rnd.uniform(margin, w - margin), rnd.uniform(margin, h - margin)
-        a = rnd.uniform(0, 2 * math.pi)
-        pts = [(cx, cy)]
-        for _ in range(rnd.randint(3, 5)):
-            a += rnd.uniform(-0.8, 0.8)
-            seg = m * rnd.uniform(0.05, 0.1)
-            cx = min(w - margin, max(margin, cx + math.cos(a) * seg))
-            cy = min(h - margin, max(margin, cy + math.sin(a) * seg))
-            pts.append((cx, cy))
-        pygame.draw.aalines(rock, (150, 144, 134), False, [(qx + 1, qy + 1) for qx, qy in pts])
-        pygame.draw.aalines(rock, (38, 36, 34), False, pts)
+    pad = 20
+    shadow = pygame.Surface((w + pad * 2, h + pad * 2), pygame.SRCALPHA)
+    shadow.blit(rock, (pad, pad))
+    shadow.fill((0, 0, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
+    shadow.fill((255, 255, 255, 165), special_flags=pygame.BLEND_RGBA_MULT)
+    bg.blit(blur(shadow, 3), (x - pad + 1, y - pad + 2))
+    bg.blit(blur(shadow, 7), (x - pad + top * 0.3, y - pad + top * 0.38))
     bg.blit(rock, (x, y))
+
+    cx, cy = x + w / 2, y + h / 2
+    for _ in range(rnd.randint(7, 12)):   # rubble that has fallen off
+        a = rnd.uniform(0, 2 * math.pi)
+        ca, sa = math.cos(a), math.sin(a)
+        out = 1 / max(abs(ca) / (w / 2), abs(sa) / (h / 2)) + rnd.uniform(-2, 9)
+        sx, sy, r = cx + ca * out, cy + sa * out, rnd.uniform(1.5, 4.5)
+        stone = mix((70, 68, 62), (128, 122, 112), rnd.random())
+        pygame.draw.ellipse(bg, (10, 14, 12), (sx - r + 1, sy - r * 0.75 + 1.5, r * 2, r * 1.5))
+        pygame.draw.ellipse(bg, mix(stone, (0, 0, 0), 0.45), (sx - r, sy - r * 0.75, r * 2, r * 1.5))
+        pygame.draw.ellipse(bg, stone, (sx - r, sy - r * 0.75, r * 1.6, r * 1.15))
+    for _ in range(rnd.randint(8, 14)):   # grass growing up against the foot
+        a = rnd.uniform(0, 2 * math.pi)
+        ca, sa = math.cos(a), math.sin(a)
+        out = 1 / max(abs(ca) / (w / 2), abs(sa) / (h / 2)) * rnd.uniform(0.93, 1.03)
+        gx, gy = cx + ca * out, cy + sa * out
+        g = mix((30, 56, 34), (78, 112, 62), rnd.random() ** 1.5)
+        for _ in range(rnd.randint(2, 4)):
+            b = -math.pi / 2 + rnd.uniform(-0.7, 0.7)
+            ln = rnd.uniform(4, 8)
+            pygame.draw.aaline(bg, g, (gx, gy), (gx + math.cos(b) * ln, gy + math.sin(b) * ln))
 
 
 def _draw_tree_ground(bg, tree, rnd, index):
@@ -162,11 +232,8 @@ def build_crown(r, seed):
     foliage = (cover > 0) & (cover + 0.55 * (sprays - 0.5) + 0.3 * (leaves - 0.5) > 0.16)
 
     bump = height + 0.13 * sprays + 0.07 * leaves
-    gx, gy = np.gradient(bump * scale * 0.9)
-    nz = 1 / np.sqrt(gx ** 2 + gy ** 2 + 1)
-    light = np.array([-0.5, -0.6, 0.62], np.float32)
-    light /= np.linalg.norm(light)
-    lam = np.clip((-gx * light[0] - gy * light[1] + light[2]) * nz, 0, 1)
+    lam = _lambert(bump * scale * 0.9)
+    light = LIGHT
     shadow = np.zeros((size, size), np.float32)   # cast by higher tufts toward the light
     for s in (0.05, 0.1, 0.18):
         shift = (round(-light[0] * s * scale), round(-light[1] * s * scale))
@@ -205,27 +272,121 @@ def build_crown(r, seed):
 
 
 
-def _paint_lakes(col, lakes, ripple):
-    """Blend muddy shores and depth-shaded water into the (w, h, 3) background colours."""
-    w, h = col.shape[:2]
-    edge = np.full((w, h), np.inf, np.float32)   # gap to the nearest shoreline, < 0 = water
+def _shore_gaps(w, h, lakes):
+    """Per pixel, the gap to the nearest shoreline (< 0 = water, inf far from any lake), and
+    the pixel boxes (x0, y0, x1, y1) that hold the lakes with their shores, none overlapping."""
+    edge = np.full((w, h), np.inf, np.float32)
+    boxes = []
     for lake in lakes:
-        m = lake.max_radius + LAKE_SHORE_WIDTH + 2
+        m = lake.max_radius + 2 * LAKE_SHORE_WIDTH
         x0, x1 = max(0, int(lake.x - m)), min(w, int(lake.x + m) + 1)
         y0, y1 = max(0, int(lake.y - m)), min(h, int(lake.y + m) + 1)
         d = lake.shore_gap(np.arange(x0, x1, dtype=np.float32)[:, None] + 0.5,
                            np.arange(y0, y1, dtype=np.float32)[None, :] + 0.5)
         edge[x0:x1, y0:y1] = np.minimum(edge[x0:x1, y0:y1], d)
-    water_mask = (edge < 0).astype(np.float32)
-    blurred = sum(blur_array(water_mask, f) for f in (8, 16, 32, 64)) / 4
-    depth = np.clip((blurred - 0.5) * 1.6, 0, 1) * water_mask
-    mud = np.clip((LAKE_SHORE_WIDTH - edge) / 4, 0, 1)[..., None]
-    col[:] = col * (1 - mud) + np.array(LAKE_MUD, np.float32) * mud * (0.85 + 0.3 * ripple[..., None])
-    t = (depth ** 0.8)[..., None]
-    water = (np.array(LAKE_SHALLOW, np.float32) * (1 - t) + np.array(LAKE_DEEP, np.float32) * t)
-    water *= 0.92 + 0.16 * ripple[..., None]
-    wet = np.clip(0.5 - edge, 0, 1)[..., None]
-    col[:] = col * (1 - wet) + water * wet
+        box = [x0, y0, x1, y1]
+        merged = True
+        while merged:
+            merged = False
+            for other in boxes:
+                if (box[0] < other[2] and other[0] < box[2]
+                        and box[1] < other[3] and other[1] < box[3]):
+                    boxes.remove(other)
+                    box = [min(box[0], other[0]), min(box[1], other[1]),
+                           max(box[2], other[2]), max(box[3], other[3])]
+                    merged = True
+                    break
+        boxes.append(box)
+    return edge, boxes
+
+
+def _paint_lake(col, edge, rng):
+    """Paint one lake into its box of background colours: a sandy shore, the bed showing
+    through the shallows, deep water, wind streaks and the bank's shadow."""
+    w, h = edge.shape
+
+    def noise(cell, cell_y=None):
+        return value_noise(rng, w, h, cell, cell_y)
+
+    fine, mid = noise(4), noise(13)
+    grain = rng.random((w, h), dtype=np.float32)
+    pebbles = np.where(grain > 0.975, 1.35, np.where(grain < 0.03, 0.7, 1.0))[..., None]
+
+    reach = LAKE_SHORE_WIDTH * (0.7 + 1.0 * mid)   # a ragged edge to the grass
+    s = np.clip(edge / reach, 0, 1)                # 0 at the waterline, 1 where grass starts
+    damp = np.clip(s * 3, 0, 1)[..., None]
+    sand = (np.array(LAKE_MUD, np.float32) * (1 - damp)
+            + np.array(LAKE_SAND, np.float32) * damp) * (0.82 + 0.36 * fine[..., None]) * pebbles
+    beach = np.clip((1 - s) * 2.5, 0, 1)[..., None]
+    col[:] = col * (1 - beach) + sand * beach
+
+    water = edge < 0
+    murk = (1 - np.exp(np.minimum(edge, 0) / 13))[..., None]   # how far the bed is hidden
+    depth = np.clip(1 - np.exp(np.minimum(edge, 0) / 55) + 0.2 * (noise(40) - 0.5), 0, 1)
+    depth = depth[..., None]
+    bed = np.array(LAKE_BED, np.float32) * (0.75 + 0.5 * fine[..., None]) * pebbles
+    body = np.array(LAKE_SHALLOW, np.float32) * (1 - depth) + np.array(LAKE_DEEP, np.float32) * depth
+    wet = bed * (1 - murk) + body * murk
+    streaks = 0.65 * noise(26, 5) + 0.35 * noise(11, 3)
+    wet *= (1 - 0.14 * np.clip((0.42 - streaks) * 4, 0, 1))[..., None]
+    glint = np.clip((streaks - 0.63) * 5, 0, 1) * (0.5 + 0.5 * mid)
+    wet += (glint[..., None] * murk) * np.array([16, 24, 30], np.float32)
+    lap = np.clip(1 - np.abs(edge + 1.2) / 1.4, 0, 1) * (0.4 + 0.6 * fine)
+    wet += lap[..., None] * np.array([44, 50, 44], np.float32)
+    for shift, dark in (((2, 3), 0.2), ((5, 6), 0.14)):   # the bank toward the light shades it
+        wet *= (1 - dark * np.roll(~water, shift, axis=(0, 1)))[..., None]
+    col[water] = wet[water]
+
+
+def _lily_pad(bg, x, y, r, rnd):
+    a = rnd.uniform(0, 2 * math.pi)
+    pts = [(x, y)] + [(x + math.cos(a + 0.3 + (2 * math.pi - 0.6) * k / 10) * r,
+                       y + math.sin(a + 0.3 + (2 * math.pi - 0.6) * k / 10) * r) for k in range(11)]
+    green = mix((34, 84, 44), (70, 124, 58), rnd.random())
+    pygame.gfxdraw.filled_polygon(bg, [(px + 1, py + 2) for px, py in pts], (4, 16, 26, 130))
+    pygame.gfxdraw.filled_polygon(bg, pts, green)
+    pygame.gfxdraw.aapolygon(bg, pts, mix(green, (0, 0, 0), 0.4))
+    pygame.draw.line(bg, mix(green, (200, 230, 160), 0.3), (x, y),
+                     (x - math.cos(a) * r * 0.8, y - math.sin(a) * r * 0.8))
+    if rnd.random() < 0.12:
+        petal = rnd.choice(((236, 226, 232), (232, 170, 196)))
+        for k in range(6):
+            b = k * math.pi / 3
+            pygame.draw.circle(bg, petal, (x + math.cos(b) * 1.4, y + math.sin(b) * 1.4), 1.2)
+        pygame.draw.circle(bg, (236, 196, 70), (x, y), 1)
+
+
+def _decorate_lakes(bg, lakes, edge, rnd):
+    """Reed beds along the shores and lily pads in the shallows."""
+    w, h = edge.shape
+
+    def gap(x, y):
+        return edge[int(x), int(y)] if 0 <= x < w and 0 <= y < h else math.inf
+
+    for lake in lakes:
+        for _ in range(int(lake.radius / 16)):
+            a = rnd.uniform(0, 2 * math.pi)
+            for _ in range(rnd.randint(1, 4)):
+                b = a + rnd.uniform(-0.12, 0.12)
+                out = lake.shore(b) - rnd.uniform(9, 32)
+                x, y = lake.x + math.cos(b) * out, lake.y + math.sin(b) * out
+                if -42 < gap(x, y) < -8:
+                    _lily_pad(bg, x, y, rnd.uniform(2.5, 4.6), rnd)
+        for _ in range(int(lake.radius / 9)):
+            a = rnd.uniform(0, 2 * math.pi)
+            for _ in range(rnd.randint(4, 10)):
+                b = a + rnd.uniform(-0.07, 0.07)
+                out = lake.shore(b) + rnd.uniform(-7, 3)
+                x, y = lake.x + math.cos(b) * out, lake.y + math.sin(b) * out
+                if not -8 < gap(x, y) < 4:
+                    continue
+                lean, ln = rnd.uniform(-0.45, 0.45), rnd.uniform(7, 14)
+                tip = (x + math.sin(lean) * ln, y - math.cos(lean) * ln)
+                pygame.draw.aaline(bg, (8, 18, 16), (x + 1, y + 1), (x + 1 + ln * 0.5, y + 1 + ln * 0.3))
+                pygame.draw.aaline(bg, mix((38, 64, 34), (104, 124, 62), rnd.random()), (x, y), tip)
+                if rnd.random() < 0.3:   # a seed head
+                    pygame.draw.line(bg, (92, 62, 38), tip,
+                                     (tip[0] - math.sin(lean) * 3.5, tip[1] + math.cos(lean) * 3.5), 2)
 
 
 def build_background(w, h, obstacles, lakes=()):
@@ -245,12 +406,13 @@ def build_background(w, h, obstacles, lakes=()):
     ys = (np.arange(h, dtype=np.float32) / h - 0.5) * 2
     d = np.sqrt(xs[:, None] ** 2 + ys[None, :] ** 2) / math.sqrt(2)
     col *= (1 - 0.5 * d ** 2.2)[..., None]
-    if lakes:
-        _paint_lakes(col, lakes, blotch(30))
+    edge, lake_boxes = _shore_gaps(w, h, lakes)
+    for x0, y0, x1, y1 in lake_boxes:
+        _paint_lake(col[x0:x1, y0:y1], edge[x0:x1, y0:y1], rng)
     bg = pygame.surfarray.make_surface(np.clip(col, 0, 255).astype(np.uint8))
 
     def dry(x, y, margin=LAKE_SHORE_WIDTH):
-        return not any(lake.shore_gap(x, y) < margin for lake in lakes)
+        return edge[min(w - 1, int(x)), min(h - 1, int(y))] >= margin
 
     for _ in range(w * h // 700):
         bx, by = rnd.uniform(0, w), rnd.uniform(0, h)
@@ -280,6 +442,7 @@ def build_background(w, h, obstacles, lakes=()):
                                (px + math.cos(a) * 1.6, py + math.sin(a) * 1.6), 1.2)
         pygame.draw.circle(bg, (230, 190, 70), (px, py), 1)
 
+    _decorate_lakes(bg, lakes, edge, rnd)
     trees = 0
     for obs in obstacles:
         if isinstance(obs, Tree):
