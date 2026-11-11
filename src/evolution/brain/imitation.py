@@ -4,7 +4,6 @@ import math
 
 import numpy as np
 
-from ..config import CREATURE_ROTATION_SPEED
 from .layout import INPUTS as IN
 from .layout import OUTPUTS as OUT
 
@@ -13,6 +12,7 @@ FLEE_SMELL = 0.6         # predator smell strength that makes a herbivore run
 CRUISE_SPEED = 0.55      # below STAMINA_EFFORT_THRESHOLD, so cruising is free
 SPRINT_MIN_STAMINA = 0.2
 WANDER_TURN = 0.05
+TURN_GAIN = 1.0          # rotation output per radian off course
 TARGET_LIMIT = 0.95      # tanh outputs never reach +-1
 THIRSTY = 0.6            # thirst input that sends a creature to the water it senses
 CROWDED = 0.5            # kin touch strength (bodies in contact) that makes a wanderer step aside
@@ -32,7 +32,7 @@ def teacher_actions(X, is_carnivore):
     half = X[:, IN.sight_angle] * math.pi
 
     seen = X[:, IN.target_dist] < 1
-    rel = np.where(seen, X[:, IN.target_angle] * half, WANDER_TURN * CREATURE_ROTATION_SPEED)
+    rel = np.where(seen, X[:, IN.target_angle] * half, WANDER_TURN / TURN_GAIN)
 
     carcass = carn & ~seen & (X[:, IN.carcass_dist] < 1)
     rel = np.where(carcass, X[:, IN.carcass_angle] * half, rel)
@@ -55,7 +55,7 @@ def teacher_actions(X, is_carnivore):
     rel = np.where(fleeing, _wrap(X[:, IN.smell_angle] * math.pi + math.pi), rel)
     rel = np.where(touched, _wrap(X[:, IN.touch_other_angle] * math.pi + math.pi), rel)
 
-    rotation = np.clip(rel / CREATURE_ROTATION_SPEED, -1, 1)
+    rotation = np.clip(rel * TURN_GAIN, -1, 1)
     whiskers = X[:, IN.obstacle_whiskers]
     left, centre, right = whiskers[:, 0], whiskers[:, 1], whiskers[:, -1]
     blocked = np.maximum.reduce([left, centre, right]) > OBSTACLE_NEAR

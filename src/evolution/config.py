@@ -91,6 +91,7 @@ CARNIVORE_HEALTH = 5000
 HERBIVORE_HEALTH_PER_FOOD = 600
 CARNIVORE_HEALTH_PER_FOOD = 1200
 CREATURE_ROTATION_SPEED = 0.25
+TURN_RESPONSE = 0.2             # share of the gap to the commanded turn rate closed each tick
 HEALTH_LOST_ON_HIT = 50
 # Solid bodies: after acting, creatures are pushed out of each other and out of carcasses.
 BODY_RADIUS_FACTOR = 0.9        # body radius = size * factor (< 1: bodies may overlap a little); 0 turns collisions off

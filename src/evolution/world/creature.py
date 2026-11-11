@@ -44,6 +44,7 @@ from ..config import (
     STAMINA_REGEN_RATE,
     THIRST_HEALTH_PENALTY,
     THIRST_MAX,
+    TURN_RESPONSE,
     UPKEEP_WEIGHTS,
     WATER_SPEED_FACTOR,
     WINTER_COLD_COST,
@@ -87,6 +88,7 @@ class Creature:
         self.last_hit_tick: int | None = None
         self.last_impact_tick: int | None = None
         self.knock = geometry.vec2(0, 0)    # knockback velocity from collisions, px/tick
+        self.turn = 0.0                     # turn rate, -1..1 of CREATURE_ROTATION_SPEED
         self.hurt = 0.0                     # 1 when bitten or hit back, fading to 0
         self.recent_biters = {}             # prey: carnivore -> tick of its last bite
         self.last_trample_tick: int | None = None
@@ -279,10 +281,11 @@ class Creature:
         effort = 0.0
         if self.eating_ticks > 0:
             speed = 0.0
+            self.turn = 0.0
         else:
             effort = max(0.0, outputs[OUT.speed])
-            self.angle = ((self.angle + outputs[OUT.rotation] * CREATURE_ROTATION_SPEED)
-                          % (2 * math.pi))
+            self.turn += (outputs[OUT.rotation] - self.turn) * TURN_RESPONSE
+            self.angle = (self.angle + self.turn * CREATURE_ROTATION_SPEED) % (2 * math.pi)
             speed_multiplier = (HEALTH_SPEED_FLOOR
                                 + (1 - HEALTH_SPEED_FLOOR) * self.health / self.max_health)
             speed_penalty = STAMINA_EXHAUSTION_PENALTY if self.winded else 1.0

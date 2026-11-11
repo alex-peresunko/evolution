@@ -289,6 +289,20 @@ def test_full_carnivore_keeps_eating_and_gains_fat():
     assert carn.eating_ticks > 0 and carn.fat > 0
 
 
+def _turned(a, b):
+    return (b - a + math.pi) % (2 * math.pi) - math.pi
+
+
+def test_turning_has_inertia():
+    c = Creature(HERBIVORE, WORLD_BOUNDS)
+    start = c.angle
+    _act(c, [1.0, 0.0])
+    first = _turned(start, c.angle)
+    assert first == pytest.approx(config.TURN_RESPONSE * config.CREATURE_ROTATION_SPEED)
+    _act(c, [-1.0, 0.0])
+    assert abs(_turned(start + first, c.angle)) < first
+
+
 def test_world_edge_is_a_wall_not_a_wrap():
     bounds = (config.WORLD_WIDTH, config.WORLD_HEIGHT)
     c = Creature(HERBIVORE, bounds)
