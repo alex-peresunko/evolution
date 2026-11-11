@@ -69,14 +69,14 @@ def _draw_rock(bg, rect, rng, rnd):
     bg.blit(rock, (x, y))
 
 
-def _draw_tree_ground(bg, tree, rnd):
-    """Crown shadow, roots and trunk under a tree; the crown itself is drawn over creatures."""
+def _draw_tree_ground(bg, tree, rnd, index):
+    """Crown shadow, roots and trunk under a tree; the crown itself is drawn over creatures.
+    `index` is the tree's place among the trees, which seeds its crown."""
     r = tree.crown_radius
-    pad = int(r * 0.4) + 8
-    w = int(r * 2) + pad * 2
-    shadow = pygame.Surface((w, w), pygame.SRCALPHA)
-    pygame.draw.circle(shadow, (0, 0, 0, 120), (w / 2, w / 2), r * 0.95)
-    bg.blit(blur(shadow, 6), (tree.x - w / 2 + r * 0.22, tree.y - w / 2 + r * 0.28))
+    shadow, half = build_crown(round(r), index)
+    shadow.fill((0, 0, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
+    shadow.fill((255, 255, 255, 150), special_flags=pygame.BLEND_RGBA_MULT)
+    bg.blit(blur(shadow, 5), (tree.x - half + r * 0.22, tree.y - half + r * 0.28))
 
     t = tree.rect.w / 2
     bark, dark = (92, 66, 42), (44, 30, 20)
@@ -96,55 +96,112 @@ def _draw_tree_ground(bg, tree, rnd):
     bg.blit(small, (tree.x - small.get_width() / 2, tree.y - small.get_height() / 2))
 
 
-def build_crown(r, seed):
-    """Leafy crown of radius `r` px, lit as a height field of overlapping leaf clumps with
-    leaf-scale noise; returns (sprite, half width)."""
-    rnd = random.Random(seed)
-    rng = np.random.default_rng(seed)
-    w = math.ceil(r * 2.3) + 4
-    c = w / 2
-    clumps = [(rnd.uniform(-0.08, 0.08), rnd.uniform(-0.08, 0.08), 0.5)]
-    n = rnd.randint(7, 10)
+def _grow(rnd, segs, tufts, x, y, a, length, thick, depth):
+    steps = 3
+    for k in range(steps):
+        a += rnd.uniform(-0.35, 0.35)
+        nx, ny = x + math.cos(a) * length / steps, y + math.sin(a) * length / steps
+        segs.append((x, y, nx, ny, thick * (1 - 0.25 * k)))
+        x, y = nx, ny
+        tx, ty = x + rnd.uniform(-0.06, 0.06), y + rnd.uniform(-0.06, 0.06)
+        d = math.hypot(tx, ty)
+        tufts.append((tx, ty, min(rnd.uniform(0.16, 0.26), 1.13 - d),
+                      0.9 * (1 - 0.75 * d) + rnd.uniform(-0.08, 0.08), rnd.uniform(-1, 1)))
+        if depth < 1 and k < steps - 1:
+            _grow(rnd, segs, tufts, x, y, a + rnd.choice((-1, 1)) * rnd.uniform(0.6, 1.1),
+                  length * 0.5, thick * 0.55, depth + 1)
+
+
+def _boughs(rnd):
+    """A tree's branches from above, in crown radii from the trunk: wood segments
+    (x0, y0, x1, y1, thickness) and the leaf tufts they carry (x, y, radius, height, tone)."""
+    segs, tufts = [], []
+    n = rnd.randint(7, 9)
     off = rnd.uniform(0, 2 * math.pi)
     for i in range(n):
-        a = off + i * 2 * math.pi / n + rnd.uniform(-0.25, 0.25)
-        d = rnd.uniform(0.52, 0.66)
-        clumps.append((math.cos(a) * d, math.sin(a) * d, rnd.uniform(0.32, 0.44)))
-    for i in range(4):
-        a = off + i * math.pi / 2 + 0.7
-        clumps.append((math.cos(a) * 0.3, math.sin(a) * 0.3, rnd.uniform(0.34, 0.42)))
+        a = off + i * 2 * math.pi / n
+        _grow(rnd, segs, tufts, 0.0, 0.0, a + rnd.uniform(-0.2, 0.2), rnd.uniform(0.68, 0.92),
+              0.08, 0)
+        d = rnd.uniform(0.3, 0.55)   # the inner canopy between the boughs
+        tufts.append((math.cos(a + 0.4) * d, math.sin(a + 0.4) * d, rnd.uniform(0.24, 0.32),
+                      0.9 * (1 - 0.75 * d) + rnd.uniform(0.0, 0.1), rnd.uniform(-1, 1)))
+    tufts.append((rnd.uniform(-0.08, 0.08), rnd.uniform(-0.08, 0.08), 0.24, 0.92, rnd.uniform(-1, 1)))
+    return segs, tufts
 
-    px = (np.arange(w, dtype=np.float32) + 0.5 - c)[:, None] / r
-    py = (np.arange(w, dtype=np.float32) + 0.5 - c)[None, :] / r
-    height = np.full((w, w), -1.0, np.float32)
-    for x, y, cr in clumps:
-        dome = cr * cr - (px - x) ** 2 - (py - y) ** 2
-        lift = 0.35 * (1 - math.hypot(x, y))
-        height = np.maximum(height, np.sqrt(np.maximum(dome, 0)) + lift - (dome <= 0) * 2)
-    edge = height + 1.0                     # > 0 inside the crown
-    leaves = value_noise(rng, w, w, max(2, int(r * 0.09)))
-    twigs = value_noise(rng, w, w, max(2, int(r * 0.035)))
-    bump = height + 0.05 * leaves + 0.022 * twigs
-    gx, gy = np.gradient(bump * r * 0.9)
+
+def build_crown(r, seed):
+    """Crown of radius `r` px seen from above: tufts of leaves on spreading boughs, lit as a
+    height field, with the boughs showing in the gaps; returns (sprite, half width). The same
+    seed gives the same tree at every radius."""
+    rnd = random.Random(seed)
+    rng = np.random.default_rng(seed)
+    segs, tufts = _boughs(rnd)
+    w = math.ceil(r * 2.3) + 4
+    ss = 2 if r < 110 else 1
+    size, scale = w * ss, r * ss
+    c = size / 2
+
+    height = np.full((size, size), -1.0, np.float32)
+    cover = np.zeros((size, size), np.float32)   # 1 at a tuft's centre, 0 at its edge
+    tone = np.zeros((size, size), np.float32)
+    for x, y, cr, z, tn in tufts:
+        x0, x1 = max(0, int(c + (x - cr) * scale)), min(size, int(c + (x + cr) * scale) + 2)
+        y0, y1 = max(0, int(c + (y - cr) * scale)), min(size, int(c + (y + cr) * scale) + 2)
+        dx = (np.arange(x0, x1, dtype=np.float32) + 0.5 - c)[:, None] / scale - x
+        dy = (np.arange(y0, y1, dtype=np.float32) + 0.5 - c)[None, :] / scale - y
+        q = 1 - (dx * dx + dy * dy) / (cr * cr)
+        h = z + cr * 0.9 * np.sqrt(np.maximum(q, 0))
+        win = (q > 0) & (h > height[x0:x1, y0:y1])
+        height[x0:x1, y0:y1][win] = h[win]
+        tone[x0:x1, y0:y1][win] = tn
+        np.maximum(cover[x0:x1, y0:y1], q, out=cover[x0:x1, y0:y1])
+
+    sprays = value_noise(rng, size, size, max(2, int(scale * 0.07)))
+    leaves = value_noise(rng, size, size, max(2, int(scale * 0.025)))
+    grain = rng.random((size, size), dtype=np.float32)
+    foliage = (cover > 0) & (cover + 0.55 * (sprays - 0.5) + 0.3 * (leaves - 0.5) > 0.16)
+
+    bump = height + 0.13 * sprays + 0.07 * leaves
+    gx, gy = np.gradient(bump * scale * 0.9)
     nz = 1 / np.sqrt(gx ** 2 + gy ** 2 + 1)
     light = np.array([-0.5, -0.6, 0.62], np.float32)
     light /= np.linalg.norm(light)
     lam = np.clip((-gx * light[0] - gy * light[1] + light[2]) * nz, 0, 1)
-    occl = np.clip(height / 0.55, 0, 1) ** 0.6
+    shadow = np.zeros((size, size), np.float32)   # cast by higher tufts toward the light
+    for s in (0.05, 0.1, 0.18):
+        shift = (round(-light[0] * s * scale), round(-light[1] * s * scale))
+        over = np.roll(bump, shift, axis=(0, 1)) - bump - 0.6 * s
+        np.maximum(shadow, np.clip(over / 0.1, 0, 1), out=shadow)
+    depth = np.clip((height - 0.1) / 0.75, 0, 1) ** 0.7
 
-    tone = rnd.uniform(-1, 1)
-    dark = np.array(mix((16, 48, 24), (40, 56, 16), 0.5 + 0.35 * tone), np.float32)
-    lit = np.array(mix((96, 164, 66), (156, 176, 60), 0.4 + 0.35 * tone), np.float32)
-    t = np.clip(lam * (0.55 + 0.45 * occl) * (0.8 + 0.4 * leaves), 0, 1)[..., None] ** 1.2
+    variety = rnd.uniform(-1, 1)
+    dark = np.array(mix((12, 38, 22), (30, 44, 14), 0.5 + 0.35 * variety), np.float32)
+    lit = np.array(mix((92, 158, 62), (150, 172, 58), 0.4 + 0.35 * variety), np.float32)
+    t = lam * (0.45 + 0.55 * depth) * (0.7 + 0.6 * leaves) * (1 - 0.6 * shadow)
+    t = np.clip(t, 0, 1)[..., None] ** 1.15
     col = dark * (1 - t) + lit * t
-    sparkle = np.clip((twigs - 0.78) * 6, 0, 1) * np.clip((lam - 0.6) * 3, 0, 1)
-    col += sparkle[..., None] * np.array([60, 60, 30], np.float32)
+    col += tone[..., None] * np.array([12, 5, -8], np.float32) * (0.4 + t)
+    col *= np.where(grain < 0.14, 0.72, 1.0)[..., None]
+    col += ((grain > 0.9) * lam * (1 - shadow))[..., None] * np.array([46, 50, 22], np.float32)
 
-    crown = pygame.Surface((w, w), pygame.SRCALPHA)
+    wood = pygame.Surface((size, size), pygame.SRCALPHA)
+    for x0, y0, x1, y1, thick in segs:
+        p0, p1 = (c + x0 * scale, c + y0 * scale), (c + x1 * scale, c + y1 * scale)
+        pygame.draw.line(wood, (40, 28, 18), p0, p1, max(1, round(thick * scale)))
+        if thick * scale >= 3:
+            pygame.draw.line(wood, (78, 58, 38), (p0[0] - 1, p0[1] - 1), (p1[0] - 1, p1[1] - 1),
+                             max(1, round(thick * scale * 0.4)))
+    col = np.where(foliage[..., None], col, pygame.surfarray.pixels3d(wood))
+    bare = pygame.surfarray.pixels_alpha(wood) > 0
+    col = np.where((foliage | bare)[..., None], col, dark)   # no black fringe when scaled down
+
+    crown = pygame.Surface((size, size), pygame.SRCALPHA)
     pygame.surfarray.pixels3d(crown)[:] = np.clip(col, 0, 255).astype(np.uint8)
-    alpha = np.clip(edge * r * 0.6, 0, 1) * config.TREE_CROWN_ALPHA
-    pygame.surfarray.pixels_alpha(crown)[:] = alpha.astype(np.uint8)
-    return crown.convert_alpha(), c
+    pygame.surfarray.pixels_alpha(crown)[:] = np.where(
+        foliage, config.TREE_CROWN_ALPHA, np.where(bare, 255, 0)).astype(np.uint8)
+    if ss > 1:
+        crown = pygame.transform.smoothscale(crown, (w, w))
+    return crown.convert_alpha(), w / 2
 
 
 
@@ -223,9 +280,11 @@ def build_background(w, h, obstacles, lakes=()):
                                (px + math.cos(a) * 1.6, py + math.sin(a) * 1.6), 1.2)
         pygame.draw.circle(bg, (230, 190, 70), (px, py), 1)
 
+    trees = 0
     for obs in obstacles:
         if isinstance(obs, Tree):
-            _draw_tree_ground(bg, obs, rnd)
+            _draw_tree_ground(bg, obs, rnd, trees)
+            trees += 1
         else:
             _draw_rock(bg, obs.rect, rng, rnd)
     return bg.convert()
