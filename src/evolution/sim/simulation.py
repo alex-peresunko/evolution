@@ -15,7 +15,7 @@ from ..config import (
 from ..species import ALL_SPECIES
 from ..world.environment import food_cap
 from ..world.food import Carcass
-from .breeding import breed, mate_seeking_drive, stochastic_round
+from .breeding import MateRadar, breed, mate_seeking_drive, stochastic_round
 from .populations import immigrants, repopulate
 from .records import HallOfFame
 from .stats import Statistics
@@ -60,17 +60,7 @@ class Simulation:
 
     def _update_food(self):
         world = self.world
-        tally = world.tally
-        kept = []
-        for food in world.food:
-            food.update()
-            if food.consumed:
-                continue
-            if food.is_rotten():
-                tally.food_rotted += 1
-                continue
-            kept.append(food)
-        world.food[:] = kept
+        world.age_food()
         world.drift_food_patches()
         room = math.ceil(food_cap(world.season) - len(world.food))
         for _ in range(min(stochastic_round(FOOD_RESPAWN_RATE), room)):
@@ -101,12 +91,15 @@ class Simulation:
                 c.signal, c.memory = sig, mem
                 c.brain_inputs, c.brain_outputs = x, y
         rows = outputs.tolist() if len(outputs) else []
+        radars = {species: MateRadar(world.index.of(species)) for species in ALL_SPECIES}
         for c, row in zip(creatures, rows):
             rotation, speed = row[OUT.rotation], row[OUT.speed]
             c.willing = row[OUT.mate] >= MATE_REFUSE_THRESHOLD
-            steered = mate_seeking_drive(c, row, world.index.of(c.species))
+            radar = radars[c.species]
+            steered = mate_seeking_drive(c, row, world.index.of(c.species), radar)
             c.mate_override = steered[OUT.rotation] != rotation or steered[OUT.speed] != speed
             c.act(steered, world)
+            radar.acted(c)
 
     def _retire_the_dead(self):
         world = self.world

@@ -2,6 +2,7 @@ import random
 
 from ..config import (
     FAT_SIZE_FACTOR,
+    FOOD_MAX_LIFETIME,
     FOOD_PATCH_COUNT,
     FOOD_PATCH_RADIUS,
     FOOD_PATCH_SHARE,
@@ -108,12 +109,29 @@ class World:
         """Brain input rows for creatures() (see perception.perceive_all)."""
         return perceive_all(self.creatures(), self.food, self.herbivores, self.carnivores,
                             self.obstacles, self.carcasses, self.light, self.season, self.lakes,
-                            self.tick)
+                            self.tick, food_xy=self.index.food_xy(self.food))
 
     def separate(self):
         separate(self.creatures(), self.carcasses, self.obstacles, self.tick, self.terrain)
 
     # --- food ------------------------------------------------------------------------------
+
+    def age_food(self):
+        """Age every food item by a tick and drop the eaten and the rotten ones."""
+        food = self.food
+        gone = []
+        i = 0
+        for item in food:
+            item.lifetime = lifetime = item.lifetime + 1
+            if item.consumed or lifetime >= FOOD_MAX_LIFETIME:
+                gone.append(i)
+            i += 1
+        if gone:
+            items = [food[i] for i in gone]
+            self.tally.food_rotted += sum(not item.consumed for item in items)
+            for i in reversed(gone):
+                del food[i]
+            self.index.food_removed(food, gone, items)
 
     def drift_food_patches(self):
         for patch in self.food_patches:

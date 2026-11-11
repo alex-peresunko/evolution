@@ -1,9 +1,16 @@
+import random
+
 import pytest
 
 from evolution import config
 from evolution.brain.layout import OUTPUTS
 from evolution.genetics import compatible
-from evolution.sim.breeding import mate_seeking_drive, stochastic_round
+from evolution.sim.breeding import (
+    MateRadar,
+    _scan_for_mate,
+    mate_seeking_drive,
+    stochastic_round,
+)
 from evolution.sim.simulation import Simulation
 from evolution.species import CARNIVORE, HERBIVORE
 from evolution.world.creature import Creature
@@ -204,3 +211,34 @@ def test_mate_instinct_gene_sets_the_pull_toward_a_mate():
     assert mate_seeking_drive(p1, [0.0, 0.0], kin) == [0.0, 0.0]
     p1.genes["mate_instinct"], p1.willing = 0.75, False
     assert mate_seeking_drive(p1, [0.0, 0.0], kin) == [0.0, 0.0]
+
+
+def test_mate_radar_finds_what_the_scan_finds():
+    rng = random.Random(7)
+    herd = []
+    for i in range(120):
+        # Two gene pools that cannot interbreed, some juveniles, some too weak or hungry.
+        c = _adult(size=16 if i % 3 else 20, max_speed=5 if i % 3 else 8)
+        c.pos = c.geometry.vec2(rng.uniform(1000, 2200), rng.uniform(1000, 2200))
+        c.is_adult = rng.random() < 0.8
+        c.health = c.max_health * rng.choice((0.3, 0.9))
+        c.hunger = rng.choice((0, config.HUNGER_MAX))
+        herd.append(c)
+    for a, b in zip(herd[::10], herd[5::10]):   # equally near mates: the scan order decides
+        b.pos = b.geometry.vec2(a.pos.x, a.pos.y)
+    world = World(WORLD_BOUNDS, {HERBIVORE: herd}, [])
+    world.reindex()
+    kin = world.index.of(HERBIVORE)
+    radar = MateRadar(kin)
+    found = 0
+    for c in herd:
+        expected = _scan_for_mate(c, kin)
+        assert radar.nearest(c) == expected
+        found += expected[0] is not None
+        # As in a tick: c moves and may stop being ready before the next one looks.
+        c.pos.x += rng.uniform(-30, 30)
+        c.pos.y += rng.uniform(-30, 30)
+        if rng.random() < 0.2:
+            c.health = 0.0
+        radar.acted(c)
+    assert found > 60

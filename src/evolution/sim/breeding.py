@@ -39,10 +39,102 @@ def _compatible(a, b):
     return result
 
 
-def mate_seeking_drive(c, outputs, kin_grid):
+def _scan_for_mate(c, kin_grid):
+    """(mate, distance): the nearest compatible, ready adult among the kin that
+    kin_grid.query(c.pos, MATE_ATTRACTION_RADIUS) returns, the first of equally near ones;
+    (None, inf) when there is none."""
+    pos = c.pos
+    nearest, nearest_dist = None, math.inf
+    for m in kin_grid.query(pos, MATE_ATTRACTION_RADIUS):
+        if m is not c and m.is_adult and _ready_to_seek(m) and _compatible(c, m):
+            d = pos.distance_to(m.pos)
+            if d < nearest_dist:  # strict: the first of equally near mates wins, like min()
+                nearest, nearest_dist = m, d
+    return nearest, nearest_dist
+
+
+class MateRadar:
+    """Answers nearest(c) as _scan_for_mate(c, kin_grid) would, without visiting every
+    neighbour, for the creatures in `kin_grid` while they act one after another.
+
+    acted(c) must follow every Creature.act. Between two of its own acts a creature may stop
+    being a ready adult, but not become one."""
+
+    def __init__(self, kin_grid):
+        self._grid = kin_grid
+        self._kin = None
+
+    def _build(self):
+        cells = [(cell, c) for cell, group in self._grid.grid.items() for c in group]
+        self._kin = kin = [c for _, c in cells]
+        self._cells = [cell for cell, _ in cells]
+        self._slot = {c.id: i for i, c in enumerate(kin)}
+        # Query order: by cell, then by insertion, which is how `cells` were just read.
+        order = sorted(range(len(kin)), key=lambda i: self._cells[i])
+        self._rank = [0] * len(kin)
+        for rank, i in enumerate(order):
+            self._rank[i] = rank
+        self._x = np.array([c.pos.x for c in kin], dtype=np.float64)
+        self._y = np.array([c.pos.y for c in kin], dtype=np.float64)
+        self._ready = [c.is_adult and _ready_to_seek(c) for c in kin]
+        self._bar = np.where(self._ready, 0.0, np.inf)
+        self._dx, self._dy = np.empty(len(kin)), np.empty(len(kin))
+
+    def acted(self, c):
+        if self._kin is None:
+            return
+        i = self._slot[c.id]
+        self._x[i], self._y[i] = c.pos.x, c.pos.y
+        ready = c.is_adult and _ready_to_seek(c)
+        if ready != self._ready[i]:
+            self._ready[i] = ready
+            self._bar[i] = 0.0 if ready else np.inf
+
+    def nearest(self, c):
+        if self._kin is None:
+            self._build()
+        pos, kin, cells = c.pos, self._kin, self._cells
+        min_x, max_x, min_y, max_y = self._grid.cell_range(pos, MATE_ATTRACTION_RADIUS)
+        dx, dy = self._dx, self._dy
+        np.subtract(self._x, pos.x, out=dx)
+        np.subtract(self._y, pos.y, out=dy)
+        np.multiply(dx, dx, out=dx)
+        np.multiply(dy, dy, out=dy)
+        np.add(dx, dy, out=dx)
+        np.add(dx, self._bar, out=dx)
+        dx[self._slot[c.id]] = np.inf
+
+        def eligible(i):
+            x, y = cells[i]
+            m = kin[i]
+            return (min_x <= x <= max_x and min_y <= y <= max_y
+                    and m.is_adult and _ready_to_seek(m) and _compatible(c, m))
+
+        while True:
+            i = int(dx.argmin())
+            squared = dx[i]
+            if squared == np.inf:
+                return None, math.inf
+            dx[i] = np.inf
+            if eligible(i):
+                break
+        nearest, nearest_dist = kin[i], pos.distance_to(kin[i].pos)
+        # Squared distances this close may round to the same distance: the scan order decides.
+        ties = [j for j in np.flatnonzero(dx <= squared * (1 + 1e-9)).tolist() if eligible(j)]
+        if ties:
+            nearest_dist = math.inf
+            for j in sorted(ties + [i], key=self._rank.__getitem__):
+                d = pos.distance_to(kin[j].pos)
+                if d < nearest_dist:
+                    nearest, nearest_dist = kin[j], d
+        return nearest, nearest_dist
+
+
+def mate_seeking_drive(c, outputs, kin_grid, radar=None):
     """outputs with steering blended toward the nearest compatible, ready adult of c's species
     (within MATE_ATTRACTION_RADIUS) while c is a fed, healthy, willing adult out of danger. The
-    blend is c's mate_instinct gene; at 0 the brain steers alone."""
+    blend is c's mate_instinct gene; at 0 the brain steers alone. `radar` is a MateRadar of
+    `kin_grid`."""
     blend = c.genes["mate_instinct"]
     if blend <= 0 or not c.willing:
         return outputs
@@ -52,13 +144,8 @@ def mate_seeking_drive(c, outputs, kin_grid):
         return outputs
     if c.health < c.max_health * REPRODUCTION_HEALTH_THRESHOLD:
         return outputs
-    pos = c.pos
-    nearest, nearest_dist = None, math.inf
-    for m in kin_grid.query(pos, MATE_ATTRACTION_RADIUS):
-        if m is not c and m.is_adult and _ready_to_seek(m) and _compatible(c, m):
-            d = pos.distance_to(m.pos)
-            if d < nearest_dist:  # strict: the first of equally near mates wins, like min()
-                nearest, nearest_dist = m, d
+    nearest, nearest_dist = (radar.nearest(c) if radar is not None
+                             else _scan_for_mate(c, kin_grid))
     if nearest is None or nearest_dist < 1:
         return outputs
     vec = nearest.pos - c.pos

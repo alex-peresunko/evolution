@@ -227,8 +227,10 @@ class Creature:
 
     def act(self, outputs, world):
         """Live one tick on the brain's `outputs`. The steps' order is part of the rules."""
-        self.hurt = max(0.0, self.hurt - 1 / HURT_FADE_TICKS)
-        self.stunned_ticks = max(0, self.stunned_ticks - 1)
+        if self.hurt > 0:
+            self.hurt = max(0.0, self.hurt - 1 / HURT_FADE_TICKS)
+        if self.stunned_ticks > 0:
+            self.stunned_ticks -= 1
         lakes = world.terrain.near(self.pos.x, self.pos.y)[1]
         growth_factor = self._grow(lakes)
         self._drink(lakes)
@@ -245,7 +247,8 @@ class Creature:
 
     def _grow(self, lakes):
         self.age += 1
-        self.in_water = any(lake.contains(self.pos.x, self.pos.y) for lake in lakes)
+        self.in_water = bool(lakes) and any(lake.contains(self.pos.x, self.pos.y)
+                                            for lake in lakes)
         if self.respawn_immunity_ticks > 0:
             self.respawn_immunity_ticks -= 1
         if not self.is_adult and self.age >= ADULTHOOD_AGE:
@@ -256,7 +259,8 @@ class Creature:
 
     def _drink(self, lakes):
         reach = self.size + CONTACT_REACH
-        if self.in_water or any(lake.reaches(self.pos.x, self.pos.y, reach) for lake in lakes):
+        if self.in_water or (lakes and any(lake.reaches(self.pos.x, self.pos.y, reach)
+                                           for lake in lakes)):
             self.thirst = max(0, self.thirst - DRINK_RATE)
         else:
             self.thirst += 1
@@ -302,11 +306,14 @@ class Creature:
             self.stamina += STAMINA_REGEN_RATE
         self.stamina = max(0, min(self.stamina, self.max_stamina))
 
-        heading = self.geometry.vec2(math.cos(self.angle), math.sin(self.angle))
-        self.pos += heading * speed
+        pos = self.pos
+        step_x, step_y = math.cos(self.angle) * speed, math.sin(self.angle) * speed
+        pos.x += step_x
+        pos.y += step_y
         if self._outside_walls():
             self.health -= HEALTH_LOST_ON_HIT
-            self.pos -= heading * speed * 3
+            pos.x -= step_x * 3
+            pos.y -= step_y * 3
             self.clamp_to_walls()
         return speed
 
@@ -326,6 +333,8 @@ class Creature:
                         + self.signal * SIGNAL_HEALTH_COST)
 
     def _collide(self, obstacles):
+        if not obstacles:
+            return
         body = self.geometry.rect(self.pos.x - self.size, self.pos.y - self.size,
                                   self.size * 2, self.size * 2)
         for obs in obstacles:

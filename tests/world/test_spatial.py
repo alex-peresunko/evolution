@@ -1,6 +1,8 @@
 
+import random
+
 from evolution.world.geometry import Vector2
-from evolution.world.spatial import SpatialHashGrid
+from evolution.world.spatial import SpatialHashGrid, SpatialIndex
 
 
 class _Obj:
@@ -37,3 +39,48 @@ def test_query_boundary_cell():
     # Query from slightly to the left — should still find it
     results = grid.query(Vector2(99, 99), 10)
     assert obj in results
+
+
+def _cells(grid):
+    return {key: cell for key, cell in grid.grid.items() if cell}
+
+
+def _index_and_fresh(food):
+    """An index rebuilt after changes to `food` next to one built from scratch."""
+    fresh = SpatialIndex((1000, 1000), [], 100)
+    fresh.rebuild(food, {}, [])
+    return fresh
+
+
+def test_food_grid_follows_appends_and_reported_removals():
+    rng = random.Random(4)
+    food = [_Obj(rng.uniform(0, 1000), rng.uniform(0, 1000)) for _ in range(200)]
+    index = SpatialIndex((1000, 1000), [], 100)
+    index.rebuild(food, {}, [])
+    for _ in range(20):
+        gone = sorted(rng.sample(range(len(food)), 7))
+        items = [food[i] for i in gone]
+        for i in reversed(gone):
+            del food[i]
+        index.food_removed(food, gone, items)
+        assert index.food_xy(food) is None       # stale until the rebuild
+        assert items[0] in index.food.query(items[0].pos, 1)
+        food.extend(_Obj(rng.uniform(0, 1000), rng.uniform(0, 1000)) for _ in range(5))
+        index.rebuild(food, {}, [])
+        fresh = _index_and_fresh(food)
+        assert _cells(index.food) == _cells(fresh.food)
+        assert index.food_xy(food).tolist() == [[f.pos.x, f.pos.y] for f in food]
+
+
+def test_food_grid_starts_over_after_an_unreported_change():
+    food = [_Obj(10 + i, 10) for i in range(5)]
+    index = SpatialIndex((1000, 1000), [], 100)
+    index.rebuild(food, {}, [])
+    del food[1]
+    assert index.food_xy(food) is None
+    index.rebuild(food, {}, [])
+    assert _cells(index.food) == _cells(_index_and_fresh(food).food)
+    replaced = [_Obj(500, 500)]
+    index.rebuild(replaced, {}, [])
+    assert index.food.query(Vector2(10, 10), 1) == ()
+    assert index.food_xy(replaced).tolist() == [[500, 500]]

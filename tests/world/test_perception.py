@@ -252,6 +252,7 @@ def _random_creature(rnd, is_carnivore, obstacles):
 @pytest.mark.parametrize("light", [1.0, 0.3])
 @pytest.mark.parametrize("seed, n_herb, n_carn, n_food", [
     (0, 40, 40, 60), (1, 120, 30, 75), (2, 5, 150, 10), (3, 1, 1, 0), (4, 0, 20, 30), (5, 30, 0, 30),
+    (6, 60, 10, 4000),
 ])
 def test_perceive_all_matches_reference(seed, n_herb, n_carn, n_food, light):
     rnd = random.Random(seed)

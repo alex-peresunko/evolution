@@ -70,6 +70,7 @@ Code loops over `ALL_SPECIES` or keys dicts by `Species` instead of branching on
 - food, carcasses, obstacles, lakes and food patches;
 - the clock (`tick`, `light`, `season`);
 - a `SpatialIndex` (grids for food, carcasses and each species), rebuilt by `reindex()`.
+  - The food grid and the food position array (`SpatialIndex.food_xy`) are kept between ticks, because food never moves: a rebuild only adds the items appended to `world.food` and drops those `World.age_food` removed (`food_removed`). Any other code may append to `world.food` or replace the list, but must not delete from it or reorder it in place.
 
 `Simulation` (`sim/simulation.py`) wraps a World together with the `HallOfFame`, the `Statistics`, `generation` and `extinctions`. `step()` advances one tick in phases, and their order is part of the rules:
 1. clock
@@ -91,7 +92,7 @@ The simulation does no I/O itself. It notifies `SimulationListener`s (`sim/event
 
 `app/bootstrap.start_simulation(source, geometry=..., listeners=...)` is the one startup path: it loads populations, builds the world and restores saved progress.
 
-**Perception.** Perception for all creatures is one vectorized numpy pass, `world.perception.perceive_all` (via `World.perceive()`). It returns the (N, `BRAIN_INPUTS`) input matrix and sets `c.whiskers`, `c.target_whiskers`, `c.nearest_target_dist`, `c.nearest_smell_strength` and `c.effective_sight`. `tests/world/test_perception.py` holds the original scalar implementation as a reference, and the vectorized code must keep matching it.
+**Perception.** Perception for all creatures is one vectorized numpy pass, `world.perception.perceive_all` (via `World.perceive()`). Creature-to-creature senses work on full pair matrices (`_Relative`); food, obstacle whiskers, crowns, lakes and touch only on the pairs in range (`_near_pairs`, `_nonzero`), which is what keeps a tick cheap with thousands of food items. It returns the (N, `BRAIN_INPUTS`) input matrix and sets `c.whiskers`, `c.target_whiskers`, `c.nearest_target_dist`, `c.nearest_smell_strength` and `c.effective_sight`. `tests/world/test_perception.py` holds the original scalar implementation as a reference, and the vectorized code must keep matching it.
 
 **Brains.** NN inference for all creatures goes through `brain.batch.BatchBrain.forward()`, which stacks the per-creature weights and runs one vectorized `np.einsum` per layer. The Simulation owns one instance. The stacks are cached until the population changes, which assumes a creature's brain never changes in place after it is created. Any change to `NeuralNetwork`'s weight/bias layout has to stay compatible with it.
 
@@ -192,7 +193,7 @@ Topology is `config.BRAIN_TOPOLOGY = [BRAIN_INPUTS, 24, 12, BRAIN_OUTPUTS]` = `[
 
 Outputs: `[rotation, speed, signal, memory..., stop_eating, mate]`.
 
-**Mating.** A creature breeds when it is fertile (`Creature.fertile`: adult, healthy, off cooldown) and willing (`c.willing`: its `mate` output is not below `MATE_REFUSE_THRESHOLD`). The brain sees the nearest fertile kin (`INPUTS.mate_angle` / `mate_dist`) and its own fertility. `sim.breeding.mate_seeking_drive` still blends a ready adult's steering toward the nearest mate, by the creature's heritable `mate_instinct` gene: at 0 the brain steers alone.
+**Mating.** A creature breeds when it is fertile (`Creature.fertile`: adult, healthy, off cooldown) and willing (`c.willing`: its `mate` output is not below `MATE_REFUSE_THRESHOLD`). The brain sees the nearest fertile kin (`INPUTS.mate_angle` / `mate_dist`) and its own fertility. `sim.breeding.mate_seeking_drive` still blends a ready adult's steering toward the nearest mate, by the creature's heritable `mate_instinct` gene: at 0 the brain steers alone. During a tick the nearest mate comes from a `MateRadar` (one per species, told of every `act` through `acted`), which must keep answering exactly like the plain scan `_scan_for_mate`.
 
 ### Genes
 
