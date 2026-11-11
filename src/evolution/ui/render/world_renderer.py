@@ -132,7 +132,7 @@ class WorldRenderer:
             if sb > 3:
                 phase = phases.get(c.id, 0.0)
                 if c.current_speed > 0.3:
-                    stride = c.current_speed / (c.size * 0.5 + 2) * 0.35
+                    stride = c.current_speed / (c.size * 0.5 + 2) * 0.1 * WALK_FRAMES
                     phase += stride * view.ticks_per_frame if slow_motion else stride
                     phases[c.id] = phase
                 frame = int(phase) % WALK_FRAMES

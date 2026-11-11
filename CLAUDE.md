@@ -166,7 +166,8 @@ Entities take their vector and rect types from a `world.geometry.Geometry(vec2, 
 ### Rendering (game.py only)
 
 `ui/render/world_renderer.WorldRenderer` draws the world, and `ui/hud` draws panels, charts, the minimap and the brain panel. The entity classes have no draw methods.
-- **Sprites** are drawn procedurally once (`ui/render/*_art.py`, 4× supersampled, then smoothscaled), pre-rotated into `config.SPRITE_ANGLE_STEPS` buckets with the drop shadow baked in, and cached in `SpriteCache` by `(is_carnivore, size, health level, walk frame, angle)`. A frame is mostly `screen.blits`.
+- **Sprites** are drawn procedurally on first use (`ui/render/*_art.py`, 4× supersampled, then smoothscaled), pre-rotated into `config.SPRITE_ANGLE_STEPS` buckets with the drop shadow baked in, and cached in `SpriteCache` by `(is_carnivore, size, health level, walk frame, angle)`. A frame is mostly `screen.blits`.
+  - The art hangs on a `rig.Spine`: body, pattern, legs and skeleton are laid out in (station along the spine, lateral offset), so a pose only supplies the spine curve and the foot positions. `creature_art.walk_pose` gives the `WALK_FRAMES` stride poses (tail, trunk and neck sway with the legs) and `carcass_art.death_pose` the carcass's. Poses and their outlines are cached, so a new size, tint or health level only repaints.
 - **Obstacles** are static and baked into the background surface at startup. If obstacles ever move or change, the background must be rebuilt.
 - **Also drawn:**
   - carcasses (`carcass_art`): the dead creature's skeleton seen from above, lying at its death angle (`Carcass.angle`), with flesh and a blood stain that shrink as it's eaten;

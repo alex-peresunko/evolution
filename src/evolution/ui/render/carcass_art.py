@@ -1,221 +1,234 @@
-"""Carcass sprites: the dead creature's skeleton seen from above, facing +x, with the flesh
-still on it; u = body radius in supersampled pixels."""
+"""Carcass sprites, facing +x: the dead creature in its death pose, opened up and then stripped
+to the skeleton as its meat goes. Lengths are in u, the body radius."""
 import math
 import random
+from functools import cache
 
 import pygame
 
-from .creature_art import head_outline
-from .shapes import blur, ellipse, ellipse_pts
-from .style import (
-    CARCASS_LEVELS,
-    CARNIVORE_PALETTE,
-    HERBIVORE_PALETTE,
-    SS,
-    faded_palette,
-    mix,
-    tinted_palette,
+from .creature_art import (
+    ANATOMY,
+    DRAW,
+    SKULL_BASE,
+    Foot,
+    Pose,
+    jaw_width,
+    limb_joints,
+    silhouette_shadow,
+    skull_outline,
+    tinted,
 )
+from .rig import Pen, Spine, patch, smooth_profile, turned
+from .shapes import blur, ellipse_pts
+from .style import CARCASS_LEVELS, SS, mix
 
 BONE = (230, 222, 200)
 BONE_EDGE = (110, 98, 80)
 SOCKET = (78, 64, 50)
 TOOTH = (250, 248, 236)
+SKIN_UNTIL = 0.5   # share of the meat below which no skin is left
 
-# Spine control points from the tail tip to the base of the skull: (x, y, vertebra half-width).
-# The neck is thrown back, as in most fossil skeletons.
-_HERBIVORE_SPINE = ((-1.9, 0.45, 0.02), (-1.5, 0.2, 0.035), (-1.1, 0.05, 0.055),
-                    (-0.75, 0.0, 0.07), (0.5, 0.0, 0.075), (0.9, -0.1, 0.06),
-                    (1.3, -0.35, 0.05), (1.55, -0.7, 0.045))
-_CARNIVORE_SPINE = ((-2.3, 0.5, 0.02), (-1.7, 0.25, 0.04), (-1.0, 0.05, 0.065),
-                    (-0.5, 0.0, 0.08), (0.45, 0.0, 0.085), (0.68, -0.08, 0.08),
-                    (0.84, -0.16, 0.075))
-# Torso: (centre x, half length, half width), matching the living sprite's body.
-_HERBIVORE_TORSO = (-0.12, 1.0, 0.56)
-_CARNIVORE_TORSO = (-0.1, 0.88, 0.5)
-
-
-def _bone(s, u, x, y, rx, ry, rot=0.0):
-    e = 0.025 * u
-    ellipse(s, BONE_EDGE, x, y, rx + e, ry + e, rot)
-    ellipse(s, BONE, x, y, rx, ry, rot)
+# Spine heading (radians) by station: back arched, neck and tail thrown to opposite sides.
+_CURL = {False: ((-1.9, -1.0), (-1.2, -0.5), (-0.5, -0.08), (0.45, 0.0), (1.2, -0.7), (2.32, -1.15)),
+         True: ((-2.3, -1.0), (-1.4, -0.45), (-0.4, -0.05), (0.3, 0.0), (0.84, -0.5), (1.2, -0.6))}
+# Where each limb lies, per limb and side (1, -1): (station past the joint, lateral reach,
+# foot heading).
+_SPLAY = {False: ((0.14, 0.72, 0.7), (-0.1, 0.73, -2.2), (-0.16, 0.74, 2.3), (0.12, 0.75, -0.9)),
+          True: ((0.3, 0.72, 0.3), (-0.34, 0.68, -2.6), (0.16, 0.42, 0.6), (0.1, 0.44, -1.2))}
+_RIB_CAGE = {False: (0.4, -0.55), True: (0.38, -0.45)}
+_HERBIVORE_SKULL = 1.86
 
 
-def _rod(s, u, pts, width, knobs=True):
-    """A long bone through `pts` (in px), `width` in u, with knobbed ends."""
-    w = width * u
-    pygame.draw.lines(s, BONE_EDGE, False, pts, max(1, int(w + 0.05 * u)))
+@cache
+def death_pose(carn):
+    body = ANATOMY[carn]
+    spine = Spine.bent(body.xs, smooth_profile(_CURL[carn]))
+    feet = []
+    splay = iter(_SPLAY[carn])
+    for limb in body.limbs:
+        for side in (1, -1):
+            dx, lat, heading = next(splay)
+            x, y = spine.place(limb.station + dx, side * lat)
+            feet.append(Foot(x, y, spine.at(limb.station)[2] + heading, 0.0))
+    return Pose(spine, tuple(feet), 0.0)
+
+
+def _bone(pen, pt, rx, ry, rot=0.0):
+    pen.oval(BONE_EDGE, pt, rx + 0.025, ry + 0.025, rot, n=14)
+    pen.oval(BONE, pt, rx, ry, rot, n=14)
+
+
+def _rod(pen, pts, width, knobs=True):
+    """A long bone through `pts`, with knobbed ends."""
+    pen.line(BONE_EDGE, pts, width + 0.05)
     if knobs:
-        for x, y in (pts[0], pts[-1]):
-            pygame.draw.circle(s, BONE_EDGE, (x, y), w * 0.75 + 0.025 * u)
-    pygame.draw.lines(s, BONE, False, pts, max(1, int(w)))
+        for pt in (pts[0], pts[-1]):
+            pen.oval(BONE_EDGE, pt, width * 0.75 + 0.025, width * 0.75 + 0.025, n=12)
+    pen.line(BONE, pts, width)
     if knobs:
-        for x, y in (pts[0], pts[-1]):
-            pygame.draw.circle(s, BONE, (x, y), w * 0.75)
+        for pt in (pts[0], pts[-1]):
+            pen.oval(BONE, pt, width * 0.75, width * 0.75, n=12)
 
 
-def _spine_samples(ctrl, step):
-    """(x, y, half-width, direction) every `step` along the control polyline, in u."""
-    out = []
-    for (x0, y0, w0), (x1, y1, w1) in zip(ctrl, ctrl[1:], strict=False):
-        seg = math.hypot(x1 - x0, y1 - y0)
-        a = math.atan2(y1 - y0, x1 - x0)
-        n = max(1, round(seg / step))
-        for k in range(n):
-            t = k / n
-            out.append((x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, w0 + (w1 - w0) * t, a))
-    x, y, w = ctrl[-1]
-    out.append((x, y, w, out[-1][3]))
-    return out
-
-
-def _place(points, cx, cy, u, ax, ay, a):
-    """Local skull points (x forward from the neck, in u) to sprite pixels."""
-    ca, sa = math.cos(a), math.sin(a)
-    return [(cx + (ax + x * ca - y * sa) * u, cy + (ay + x * sa + y * ca) * u) for x, y in points]
-
-
-def _carnivore_skull(s, cx, cy, u, ax, ay, a):
-    outline = [((px - cx) / u - 0.84, (py - cy) / u) for px, py in head_outline(cx, cy, u)]
-    inner = [((px - cx) / u - 0.84, (py - cy) / u) for px, py in head_outline(cx, cy, u, 0.9)]
-    pygame.draw.polygon(s, BONE_EDGE, _place(outline, cx, cy, u, ax, ay, a))
-    pygame.draw.polygon(s, BONE, _place(inner, cx, cy, u, ax, ay, a))
+def _carnivore_skull(pen, joint, angle):
+    pen.poly(BONE_EDGE, turned(joint, angle, skull_outline()))
+    pen.poly(BONE, turned(joint, angle, skull_outline(0.9)))
     for side in (1, -1):
-        for x, y in ((0.41, 0.39), (0.54, 0.36), (0.66, 0.32), (0.78, 0.275), (0.9, 0.22)):
-            pygame.draw.polygon(s, TOOTH, _place(
-                [(x - 0.04, side * (y - 0.03)), (x + 0.04, side * (y - 0.03)),
-                 (x + 0.01, side * (y + 0.05))], cx, cy, u, ax, ay, a))
-        for (x, y), (rx, ry), rot in (((0.26, 0.24), (0.075, 0.055), 0.3),    # orbit
-                                      ((0.55, 0.19), (0.11, 0.04), 0.15),     # antorbital opening
-                                      ((0.06, 0.18), (0.06, 0.04), -0.4),     # temporal opening
-                                      ((0.93, 0.07), (0.035, 0.02), 0.0)):    # nostril
-            pts = ellipse_pts(x, side * y, rx, ry, side * rot, n=16)
-            pygame.draw.polygon(s, SOCKET, _place(pts, cx, cy, u, ax, ay, a))
+        for x in (0.47, 0.57, 0.67, 0.77, 0.87, 0.96):
+            y = jaw_width(x)
+            pen.poly(TOOTH, turned(joint, angle, [(x - 0.035, side * (y - 0.03)),
+                                                  (x + 0.035, side * (y - 0.03)),
+                                                  (x + 0.01, side * (y + 0.05))]))
+        for (x, y), (rx, ry), rot in (((0.3, 0.26), (0.075, 0.055), 0.3),    # orbit
+                                      ((0.6, 0.15), (0.11, 0.04), 0.1),      # antorbital opening
+                                      ((0.1, 0.2), (0.06, 0.04), -0.4),      # temporal opening
+                                      ((0.93, 0.07), (0.035, 0.02), 0.0)):   # nostril
+            pen.poly(SOCKET, turned(joint, angle, ellipse_pts(x, side * y, rx, ry, side * rot, 16)))
 
 
-def _herbivore_skull(s, cx, cy, u, ax, ay, a):
-    pygame.draw.polygon(s, BONE_EDGE, _place(ellipse_pts(0.22, 0, 0.27, 0.17), cx, cy, u, ax, ay, a))
-    pygame.draw.polygon(s, BONE, _place(ellipse_pts(0.22, 0, 0.24, 0.14), cx, cy, u, ax, ay, a))
+def _herbivore_skull(pen, joint, angle):
+    pen.poly(BONE_EDGE, turned(joint, angle, ellipse_pts(0.22, 0, 0.26, 0.165)))
+    pen.poly(BONE, turned(joint, angle, ellipse_pts(0.22, 0, 0.23, 0.135)))
     for side in (1, -1):
         for (x, y), (rx, ry) in (((0.16, 0.085), (0.045, 0.032)), ((0.38, 0.045), (0.025, 0.016))):
-            pts = ellipse_pts(x, side * y, rx, ry, n=14)
-            pygame.draw.polygon(s, SOCKET, _place(pts, cx, cy, u, ax, ay, a))
+            pen.poly(SOCKET, turned(joint, angle, ellipse_pts(x, side * y, rx, ry, n=14)))
 
 
-def _ribs(s, cx, cy, u, torso, x_from, x_to, pairs):
-    bx, rx, ry = torso
-    for k in range(pairs):
-        x = x_from + (x_to - x_from) * k / (pairs - 1)
-        half = ry * math.sqrt(max(0.0, 1 - ((x - bx) / rx) ** 2))
+def _skeleton(pen, carn, pose):
+    body, spine = ANATOMY[carn], pose.spine
+    width = body.width
+    for limb, _side, hip, kn, foot in limb_joints(body, pose):
+        thick = 0.035 if limb.upper < 0.18 else 0.08
+        ankle = foot[:2]
+        _rod(pen, [hip, kn], thick)
+        _rod(pen, [kn, ankle], thick)
+        toes = (-0.45, 0.0, 0.45) if carn else (-0.75, -0.25, 0.25, 0.75)
+        for a in toes[:2] if thick < 0.05 else toes:
+            tip = turned(ankle, foot.heading + a, [(0.75 * limb.lower if carn else 0.15, 0.0)])[0]
+            _rod(pen, [ankle, tip], thick * 0.45, knobs=False)
+            pen.oval(BONE_EDGE, tip, thick * 0.35, thick * 0.35, n=8)
+    for station, lat, rx, ry, rot in ((body.hips + 0.05, 0.17, 0.22, 0.09, 0.35),      # pelvis
+                                      (body.shoulders - 0.12, 0.24, 0.17, 0.06, -0.6)):  # shoulder
         for side in (1, -1):
-            pts = [(cx + (x - 0.22 * t * t) * u, cy + side * (0.06 + half * 0.92 * math.sin(
-                t * math.pi / 2)) * u) for t in (0.0, 0.25, 0.5, 0.75, 1.0)]
-            _rod(s, u, pts, 0.045, knobs=False)
-
-
-def _limb(s, cx, cy, u, joints, width, toes, toe_len, side):
-    """A splayed leg: `joints` in u (hip first, the foot last, y for side +1)."""
-    pts = [(cx + x * u, cy + side * y * u) for x, y in joints]
-    for p, q in zip(pts, pts[1:], strict=False):
-        _rod(s, u, [p, q], width)
-    fx, fy = joints[-1]
-    for d in toes:
-        tx, ty = fx + toe_len * math.cos(d), side * (fy + toe_len * math.sin(d))
-        _rod(s, u, [(cx + fx * u, cy + side * fy * u), (cx + tx * u, cy + ty * u)],
-             width * 0.45, knobs=False)
-        pygame.draw.circle(s, BONE_EDGE, (cx + tx * u, cy + ty * u), width * 0.35 * u)
-
-
-def _skeleton(s, cx, cy, u, carn):
-    spine = _CARNIVORE_SPINE if carn else _HERBIVORE_SPINE
-    torso = _CARNIVORE_TORSO if carn else _HERBIVORE_TORSO
-    if carn:
-        _limb(s, cx, cy, u, ((-0.2, 0.18), (-0.05, 0.6), (0.2, 0.78)), 0.09,
-              (-0.45, 0.0, 0.45), 0.22, 1)
-        _limb(s, cx, cy, u, ((-0.2, 0.18), (-0.05, 0.6), (0.2, 0.78)), 0.09,
-              (-0.45, 0.0, 0.45), 0.22, -1)
+            _bone(pen, spine.place(station, side * lat), rx, ry, spine.at(station)[2] + side * rot)
+    x_from, x_to = _RIB_CAGE[carn]
+    for k in range(8):
+        x = x_from + (x_to - x_from) * k / 7
         for side in (1, -1):
-            _limb(s, cx, cy, u, ((0.5, 0.2), (0.62, 0.36), (0.74, 0.36)), 0.035,
-                  (-0.3, 0.3), 0.08, side)
-    else:
-        for x in (0.45, -0.6):
-            for side in (1, -1):
-                _limb(s, cx, cy, u, ((x, 0.18), (x + 0.05, 0.5), (x + 0.12, 0.72)), 0.075,
-                      (-0.6, -0.1, 0.4, 0.9), 0.13, side)
-    hip = spine[3][0]
-    for side in (1, -1):
-        _bone(s, u, cx + (hip + 0.05) * u, cy + side * 0.17 * u, 0.22 * u, 0.09 * u, side * 0.35)
-        _bone(s, u, cx + 0.32 * u, cy + side * 0.24 * u, 0.17 * u, 0.06 * u, -side * 0.6)
-    _ribs(s, cx, cy, u, torso, 0.35 if carn else 0.4, -0.45 if carn else -0.55, 8)
-    samples = _spine_samples(spine, 0.11)
-    for x, y, w, a in samples:
-        px, py = cx + x * u, cy + y * u
-        _bone(s, u, px, py, 0.02 * u, w * 1.7 * u, a)
-        _bone(s, u, px, py, 0.05 * u, w * 0.75 * u, a)
-    x, y, _, a = samples[-1]
-    (_carnivore_skull if carn else _herbivore_skull)(s, cx, cy, u, x, y, a)
+            _rod(pen, [spine.place(x - 0.22 * t * t,
+                                   side * (0.06 + width(x) * 0.88 * math.sin(t * math.pi / 2)))
+                       for t in (0.0, 0.25, 0.5, 0.75, 1.0)], 0.045, knobs=False)
+    neck_end = SKULL_BASE if carn else _HERBIVORE_SKULL
+    x = body.xs[0] + 0.04
+    while x <= neck_end:
+        px, py, a = spine.at(x)
+        w = 0.018 + 0.12 * min(width(x), 0.5)
+        _bone(pen, (px, py), 0.02, w * 1.7, a)
+        _bone(pen, (px, py), 0.05, w * 0.75, a)
+        x += 0.11
+    px, py, a = spine.at(neck_end)
+    (_carnivore_skull if carn else _herbivore_skull)(pen, (px, py), a)
 
 
-def _flesh(s, cx, cy, u, carn, meat, skin):
-    """What's left of the body under the bones; `meat` 1 is untouched, 0 bare bones."""
-    bx, rx, ry = _CARNIVORE_TORSO if carn else _HERBIVORE_TORSO
-    k = 0.5 + 0.55 * meat
-    if meat > 0.5:
-        ellipse(s, skin["rim"], cx + bx * u, cy, rx * k * u, ry * 1.15 * k * u)
-        ellipse(s, skin["core"], cx + bx * u, cy, rx * k * 0.92 * u, ry * 1.15 * k * 0.88 * u)
-    raw_rim, raw = mix((70, 24, 22), (112, 18, 22), meat), mix((128, 66, 52), (176, 38, 40), meat)
+def _opening(spine, width, rnd, size):
+    """Ragged outline of the hole eaten into the flank and belly; `size` 0..1."""
+    cx, cf = -0.1 + 0.1 * size, 0.42 * (1 - size)
+    rx, rf = 0.2 + 0.62 * size, 0.42 + 0.5 * size
+    pts = []
+    for i in range(22):
+        a = 2 * math.pi * i / 22
+        k = rnd.uniform(0.82, 1.08)
+        sx = cx + rx * k * math.cos(a)
+        pts.append(spine.place(sx, max(-0.97, min(0.97, cf + rf * k * math.sin(a))) * width(sx)))
+    return pts
+
+
+def _raw(pen, spine, width, outline, meat):
+    """Flesh inside `outline`: dark at the torn edge, wet red in the middle."""
+    cx = sum(x for x, _ in outline) / len(outline)
+    cy = sum(y for _, y in outline) / len(outline)
+    rim, mid = mix((60, 26, 22), (92, 12, 16), meat), mix((120, 60, 48), (178, 36, 40), meat)
     for i in range(5):
         t = i / 4
-        ellipse(s, mix(raw_rim, raw, t), cx + bx * u, cy - 0.04 * t * u,
-                rx * k * (0.9 - 0.3 * t) * u, ry * k * (0.95 - 0.3 * t) * u)
+        k = 1 - 0.5 * t
+        pen.poly(mix(rim, mid, t), [(cx + (x - cx) * k, cy + (y - cy) * k) for x, y in outline])
 
 
-def _flesh_over_ribs(s, cx, cy, u, carn, meat):
-    """Meat still covering the middle of the rib cage."""
-    bx, rx, ry = _CARNIVORE_TORSO if carn else _HERBIVORE_TORSO
-    a = int(200 * meat ** 1.3)
-    for i in range(4):
-        t = i / 3
-        color = mix((96, 16, 20), (184, 46, 46), t) + (a,)
-        ellipse(s, color, cx + (bx - 0.05) * u, cy - 0.03 * t * u,
-                rx * (0.25 + 0.4 * meat) * (1 - 0.35 * t) * u,
-                ry * (0.25 + 0.35 * meat) * (1 - 0.35 * t) * u)
+def _wounds(pen, spine, width, rnd):
+    """Bite marks on an otherwise whole body."""
+    for x, f in ((0.62, -0.5), (-0.1, 0.72), (-0.42, 0.6)):
+        for k in range(3):
+            sx = x + k * 0.07
+            p0 = spine.place(sx, (f - 0.22) * width(sx))
+            p1 = spine.place(sx + 0.06 + rnd.uniform(0, 0.04), (f + 0.2) * width(sx))
+            pen.capsule((70, 8, 12), p0, p1, 0.028, 0.012)
+            pen.capsule((168, 30, 34), p0, p1, 0.014, 0.004)
+
+
+def _draw_body(pen, carn, pose, meat, cb, rnd):
+    body, spine = ANATOMY[carn], pose.spine
+    width = body.width
+    if meat > SKIN_UNTIL:
+        DRAW[carn](pen, tinted(carn, cb, 0), pose, dead=True)
+        size = (1 - meat) / (1 - SKIN_UNTIL)
+        if size <= 0:
+            _wounds(pen, spine, width, rnd)
+            return
+        hole = _opening(spine, width, rnd, size)
+        _raw(pen, spine, width, hole, meat)
+        bones, mask = pen.layer(), pen.layer()
+        _skeleton(bones, carn, pose)
+        mask.poly((255, 255, 255, 255), hole)
+        pen.stamp(bones, mask)
+        gloss = pen.layer()
+        gloss.poly((150, 24, 30, int(150 * (1 - size))), hole)
+        pen.stamp(gloss)
+        return
+    left = meat / SKIN_UNTIL
+    if left > 0:
+        for x0, x1, k in ((body.xs[0] + 0.5, body.hips, 0.45), (body.shoulders, body.xs[-1] - 0.5,
+                                                                0.5)):
+            xs = [x for x in body.xs if x0 <= x <= x1]   # sinew along the tail and the neck
+            sinew = mix((84, 44, 34), (120, 22, 26), left)
+            pen.poly(sinew, [spine.place(x, k * left * width(x)) for x in xs]
+                     + [spine.place(x, -k * left * width(x)) for x in reversed(xs)])
+        _raw(pen, spine, width, patch(spine, width, -0.05, 0.0, 0.3 + 0.5 * left, 0.5 + 0.4 * left,
+                                      n=20), meat)
+    _skeleton(pen, carn, pose)
+    if left > 0:
+        gloss = pen.layer()
+        for i in range(4):
+            t = i / 3
+            gloss.poly(mix((96, 16, 20), (184, 46, 46), t) + (int(210 * left ** 1.3),),
+                       patch(spine, width, -0.08, 0.0, (0.2 + 0.45 * left) * (1 - 0.35 * t),
+                             (0.25 + 0.45 * left) * (1 - 0.35 * t), n=16))
+        pen.stamp(gloss)
 
 
 def build_carcass(carn, sb, level, cb):
-    """Unrotated carcass sprite facing +x with its blood stain, the shadow of its bones and
-    flesh, and the x offset of the sprite centre from the carcass position. `level` 0 is a
-    fresh kill, CARCASS_LEVELS - 1 bare bones."""
+    """Unrotated carcass sprite facing +x with its blood stain, the shadow of the body, and the
+    x offset of the sprite centre from the carcass position. `level` 0 is a fresh kill,
+    CARCASS_LEVELS - 1 bare bones."""
     meat = 1 - level / (CARCASS_LEVELS - 1)
-    x0, x1, y_half = (-2.45, 2.0, 1.05) if carn else (-2.05, 2.0, 1.1)
+    x0, x1, y_half = (-2.3, 2.1, 1.2) if carn else (-2.0, 2.2, 1.3)
     w = math.ceil((x1 - x0) * sb) + 2
     h = math.ceil(2 * y_half * sb) + 2
     ox = 1 - x0 * sb
-    cx, cy, u = ox * SS, h * SS / 2, sb * SS
+    size = (w * SS, h * SS)
     rnd = random.Random(sb * 31 + carn * 7 + level)
 
-    stain = pygame.Surface((w * SS, h * SS), pygame.SRCALPHA)
+    stain = Pen(pygame.Surface(size, pygame.SRCALPHA), ox * SS, h * SS / 2, sb * SS)
     blood = mix((70, 52, 34), (110, 12, 14), meat) + (int(110 + 110 * meat),)
-    torso = _CARNIVORE_TORSO if carn else _HERBIVORE_TORSO
-    for _ in range(7):
-        ellipse(stain, blood, cx + (torso[0] + rnd.uniform(-0.6, 0.5)) * u,
-                cy + rnd.uniform(-0.35, 0.35) * u, rnd.uniform(0.3, 0.6) * (0.6 + 0.4 * meat) * u,
-                rnd.uniform(0.2, 0.4) * (0.6 + 0.4 * meat) * u, rnd.uniform(0, math.pi))
+    spread = 0.55 + 0.45 * min(1.0, 2 * (1 - meat) + 0.3)
+    for _ in range(8):
+        stain.oval(blood, (rnd.uniform(-0.7, 0.45), rnd.uniform(-0.4, 0.4)),
+                   rnd.uniform(0.3, 0.62) * spread, rnd.uniform(0.2, 0.42) * spread,
+                   rnd.uniform(0, math.pi))
 
-    body = pygame.Surface((w * SS, h * SS), pygame.SRCALPHA)
-    if meat > 0:
-        skin = faded_palette(tinted_palette(CARNIVORE_PALETTE if carn else HERBIVORE_PALETTE, cb), 0)
-        _flesh(body, cx, cy, u, carn, meat, skin)
-    _skeleton(body, cx, cy, u, carn)
-    if meat > 0:
-        over = pygame.Surface((w * SS, h * SS), pygame.SRCALPHA)
-        _flesh_over_ribs(over, cx, cy, u, carn, meat)
-        body.blit(over, (0, 0))
+    body = stain.layer()
+    _draw_body(body, carn, death_pose(carn), meat, cb, rnd)
 
-    sprite = pygame.transform.smoothscale(blur(stain, 6), (w, h))
-    body = pygame.transform.smoothscale(body, (w, h))
+    sprite = pygame.transform.smoothscale(blur(stain.surf, 6), (w, h))
+    body = pygame.transform.smoothscale(body.surf, (w, h))
     sprite.blit(body, (0, 0))
-    shadow = blur(body, 2)
-    shadow.fill((0, 0, 0), special_flags=pygame.BLEND_RGB_MULT)
-    shadow.fill((255, 255, 255, 70), special_flags=pygame.BLEND_RGBA_MULT)
-    return sprite, shadow, w / 2 - ox
+    return sprite, silhouette_shadow(body, 70), w / 2 - ox

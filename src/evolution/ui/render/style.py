@@ -8,9 +8,9 @@ FOOD_DRAW_RADIUS = 8
 FOOD_VARIANTS = 6
 FOOD_LEVELS = 8
 HEALTH_LEVELS = 4
-WALK_FRAMES = 4
+WALK_FRAMES = 8
 PULSE_LEVELS = 4
-CARCASS_LEVELS = 4
+CARCASS_LEVELS = 6
 HIT_FLASH_TICKS = 8
 CROWN_GHOST_ALPHA = 120  # creatures under a crown show through it this strongly
 BG_CACHE_MARGIN = 0.25  # share of the view cached around it on each side when zoomed
@@ -19,7 +19,7 @@ NIGHT_COLOR = (8, 12, 42)
 HERBIVORE_PALETTE = {
     "rim": (36, 88, 70), "core": (132, 196, 136), "leg": (28, 70, 56), "spot": (168, 216, 156),
     "stripe": (58, 120, 92), "crest": (150, 210, 150), "claw": (226, 220, 200),
-    "eye": (255, 255, 255), "pupil": (15, 15, 20), "nose": (24, 52, 42),
+    "eye": (226, 178, 72), "pupil": (15, 15, 20), "nose": (24, 52, 42),
 }
 CARNIVORE_PALETTE = {
     "rim": (92, 44, 22), "core": (206, 128, 58), "leg": (70, 34, 18), "stripe": (54, 26, 14),
