@@ -5,6 +5,8 @@ FROM python:${PYTHON_VERSION}-slim as base
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+# Numba caches its compiled kernels; appuser cannot write next to the sources or to a home.
+ENV NUMBA_CACHE_DIR=/tmp/numba-cache
 
 WORKDIR /app
 
