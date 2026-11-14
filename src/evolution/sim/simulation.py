@@ -15,6 +15,7 @@ from ..config import (
 from ..species import ALL_SPECIES
 from ..world.environment import food_cap
 from ..world.food import Carcass
+from . import act_kernel
 from .breeding import MateRadar, breed, mate_seeking_drive, stochastic_round
 from .populations import immigrants, repopulate
 from .records import HallOfFame
@@ -24,6 +25,10 @@ from .stats import Statistics
 class Simulation:
     """Advances a World tick by tick and runs evolution on it: deaths feed the Hall of Fame,
     extinct species are repopulated from it, and ready adults breed."""
+
+    # Run the act loop compiled (act_kernel) where it supports the world; False runs the Python
+    # reference loop.
+    compiled_act = True
 
     def __init__(self, world, generation=1, listeners=()):
         self.world = world
@@ -90,6 +95,15 @@ class Simulation:
             for c, sig, mem, x, y in zip(creatures, signals, memories, inputs, outputs):
                 c.signal, c.memory = sig, mem
                 c.brain_inputs, c.brain_outputs = x, y
+            if self.compiled_act and act_kernel.supported(world):
+                act_kernel.act_all(world, creatures, outputs)
+                return
+        self._act_in_python(creatures, outputs)
+
+    def _act_in_python(self, creatures, outputs):
+        """The act loop: the mate-seeking drive and Creature.act for each creature in turn. The
+        reference for act_kernel.act_all, which must match it exactly."""
+        world = self.world
         rows = outputs.tolist() if len(outputs) else []
         radars = {species: MateRadar(world.index.of(species)) for species in ALL_SPECIES}
         for c, row in zip(creatures, rows):

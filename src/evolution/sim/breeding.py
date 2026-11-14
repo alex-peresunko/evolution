@@ -4,6 +4,7 @@ import random
 import time
 
 import numpy as np
+from numba import njit
 
 from ..brain.layout import OUTPUTS as OUT
 from ..config import (
@@ -53,6 +54,39 @@ def _scan_for_mate(c, kin_grid):
     return nearest, nearest_dist
 
 
+@njit(cache=True, error_model="numpy")
+def _closest_ready(x, y, ready, cell_x, cell_y, skip, px, py, x0, x1, y0, y1):
+    """Index of the kin with the smallest squared distance to (px, py) among those that are
+    ready, not skipped and in the cells x0..x1, y0..y1 (the first of equal ones), and that
+    squared distance; (-1, inf) when there is none."""
+    best, best_d2 = -1, math.inf
+    for i in range(x.shape[0]):
+        if (not ready[i] or skip[i] or cell_x[i] < x0 or cell_x[i] > x1
+                or cell_y[i] < y0 or cell_y[i] > y1):
+            continue
+        dx = x[i] - px
+        dy = y[i] - py
+        d2 = dx * dx + dy * dy
+        if d2 < best_d2:
+            best, best_d2 = i, d2
+    return best, best_d2
+
+
+@njit(cache=True, error_model="numpy")
+def _ready_within(x, y, ready, cell_x, cell_y, skip, px, py, x0, x1, y0, y1, limit):
+    """Indices of the kin _closest_ready considers whose squared distance is <= limit."""
+    found = []
+    for i in range(x.shape[0]):
+        if (not ready[i] or skip[i] or cell_x[i] < x0 or cell_x[i] > x1
+                or cell_y[i] < y0 or cell_y[i] > y1):
+            continue
+        dx = x[i] - px
+        dy = y[i] - py
+        if dx * dx + dy * dy <= limit:
+            found.append(i)
+    return found
+
+
 class MateRadar:
     """Answers nearest(c) as _scan_for_mate(c, kin_grid) would, without visiting every
     neighbour, for the creatures in `kin_grid` while they act one after another.
@@ -67,60 +101,52 @@ class MateRadar:
     def _build(self):
         cells = [(cell, c) for cell, group in self._grid.grid.items() for c in group]
         self._kin = kin = [c for _, c in cells]
-        self._cells = [cell for cell, _ in cells]
+        self._cell_x = np.array([cell[0] for cell, _ in cells], dtype=np.int64)
+        self._cell_y = np.array([cell[1] for cell, _ in cells], dtype=np.int64)
         self._slot = {c.id: i for i, c in enumerate(kin)}
         # Query order: by cell, then by insertion, which is how `cells` were just read.
-        order = sorted(range(len(kin)), key=lambda i: self._cells[i])
+        order = sorted(range(len(kin)), key=lambda i: cells[i][0])
         self._rank = [0] * len(kin)
         for rank, i in enumerate(order):
             self._rank[i] = rank
         self._x = np.array([c.pos.x for c in kin], dtype=np.float64)
         self._y = np.array([c.pos.y for c in kin], dtype=np.float64)
-        self._ready = [c.is_adult and _ready_to_seek(c) for c in kin]
-        self._bar = np.where(self._ready, 0.0, np.inf)
-        self._dx, self._dy = np.empty(len(kin)), np.empty(len(kin))
+        self._ready = np.array([c.is_adult and _ready_to_seek(c) for c in kin], dtype=np.bool_)
+        self._skip = np.zeros(len(kin), dtype=np.bool_)
 
     def acted(self, c):
         if self._kin is None:
             return
         i = self._slot[c.id]
         self._x[i], self._y[i] = c.pos.x, c.pos.y
-        ready = c.is_adult and _ready_to_seek(c)
-        if ready != self._ready[i]:
-            self._ready[i] = ready
-            self._bar[i] = 0.0 if ready else np.inf
+        self._ready[i] = c.is_adult and _ready_to_seek(c)
 
     def nearest(self, c):
         if self._kin is None:
             self._build()
-        pos, kin, cells = c.pos, self._kin, self._cells
-        min_x, max_x, min_y, max_y = self._grid.cell_range(pos, MATE_ATTRACTION_RADIUS)
-        dx, dy = self._dx, self._dy
-        np.subtract(self._x, pos.x, out=dx)
-        np.subtract(self._y, pos.y, out=dy)
-        np.multiply(dx, dx, out=dx)
-        np.multiply(dy, dy, out=dy)
-        np.add(dx, dy, out=dx)
-        np.add(dx, self._bar, out=dx)
-        dx[self._slot[c.id]] = np.inf
-
-        def eligible(i):
-            x, y = cells[i]
-            m = kin[i]
-            return (min_x <= x <= max_x and min_y <= y <= max_y
-                    and m.is_adult and _ready_to_seek(m) and _compatible(c, m))
-
+        pos, kin = c.pos, self._kin
+        x0, x1, y0, y1 = self._grid.cell_range(pos, MATE_ATTRACTION_RADIUS)
+        # Ready (as of its last act) and in range are checked in the kernels; the rest, and
+        # readiness lost since, here. A creature that fails is skipped for the rest of the call.
+        skip = self._skip
+        skip[:] = False
+        me = self._slot.get(c.id)
+        if me is not None:
+            skip[me] = True
+        args = (self._x, self._y, self._ready, self._cell_x, self._cell_y, skip, pos.x, pos.y,
+                x0, x1, y0, y1)
         while True:
-            i = int(dx.argmin())
-            squared = dx[i]
-            if squared == np.inf:
+            i, squared = _closest_ready(*args)
+            if i < 0:
                 return None, math.inf
-            dx[i] = np.inf
-            if eligible(i):
+            skip[i] = True
+            m = kin[i]
+            if m.is_adult and _ready_to_seek(m) and _compatible(c, m):
                 break
-        nearest, nearest_dist = kin[i], pos.distance_to(kin[i].pos)
+        nearest, nearest_dist = m, pos.distance_to(m.pos)
         # Squared distances this close may round to the same distance: the scan order decides.
-        ties = [j for j in np.flatnonzero(dx <= squared * (1 + 1e-9)).tolist() if eligible(j)]
+        ties = [j for j in _ready_within(*args, squared * (1 + 1e-9))
+                if kin[j].is_adult and _ready_to_seek(kin[j]) and _compatible(c, kin[j])]
         if ties:
             nearest_dist = math.inf
             for j in sorted(ties + [i], key=self._rank.__getitem__):

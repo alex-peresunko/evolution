@@ -91,10 +91,15 @@ class SimpleRect:
 
 @dataclass(frozen=True)
 class Geometry:
-    """The vector and rectangle types every entity of one world is built with."""
+    """The vector and rectangle types every entity of one world is built with.
+
+    `kind` names their arithmetic for the compiled act loop (sim.act_kernel), which reproduces
+    it: "headless" (Vector2.distance_to squares with **, float rects) or "pygame"
+    (distance_to squares with *, rects truncated to ints). None: the loop runs in Python."""
 
     vec2: Callable
     rect: Callable
+    kind: str | None = None
 
 
-HEADLESS = Geometry(Vector2, SimpleRect)
+HEADLESS = Geometry(Vector2, SimpleRect, kind="headless")

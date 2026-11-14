@@ -20,7 +20,7 @@ from .render.motion import MotionSmoother
 from .view_state import ViewState
 
 # pygame's C vectors and rects: much faster than the headless ones, and the renderer needs them.
-PYGAME_GEOMETRY = Geometry(pygame.math.Vector2, pygame.Rect)
+PYGAME_GEOMETRY = Geometry(pygame.math.Vector2, pygame.Rect, kind="pygame")
 
 
 def draw_frame(screen, font, sim, view, renderer, fps):
