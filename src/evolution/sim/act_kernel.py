@@ -943,7 +943,7 @@ def _recent(creatures, slot, rows, attribute):
     extra rows (attackers pulled in by reference) stay empty: only acting creatures are bitten
     or trampled, and the attackers their own dicts name need not be in the kernel."""
     dicts = [getattr(c, attribute) for c in creatures] if slot is not None else []
-    width = max(4, max((len(d) for d in dicts), default=0) + 4)
+    width = max(4, max(map(len, dicts), default=0) + 4)
     who = np.full((rows, width), -1, dtype=np.int64)
     when = np.zeros((rows, width), dtype=np.int64)
     count = np.zeros(rows, dtype=np.int64)

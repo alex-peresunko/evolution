@@ -14,6 +14,7 @@ from ..config import (
     GRID_CELL_SIZE,
 )
 from ..species import ALL_SPECIES, CARNIVORE, HERBIVORE
+from . import creature_table as T
 from .collision import separate
 from .creature_table import CreatureTable
 from .environment import FoodPatch, day_light, season
@@ -106,7 +107,14 @@ class World:
         self.season = season(self.tick)
 
     def reindex(self):
-        self.index.rebuild(self.food, self.populations, self.carcasses)
+        creatures = self.creatures()
+        self.table.arrange(creatures)
+        xy = self.table.fl[:, (T.X, T.Y)]
+        positions, start = {}, 0
+        for s in ALL_SPECIES:
+            end = start + len(self.populations[s])
+            positions[s], start = xy[start:end], end
+        self.index.rebuild(self.food, self.populations, self.carcasses, positions)
 
     def perceive(self):
         """Brain input rows for creatures() (see perception.perceive_all)."""

@@ -110,6 +110,16 @@ class CreatureTable:
         self.stale = False
 
 
+def rows_in(table, creatures):
+    """The rows of `creatures` in `table` as an index array, or None unless all are in it."""
+    rows = []
+    for c in creatures:
+        if c._t is not table:
+            return None
+        rows.append(c._r)
+    return np.array(rows, dtype=np.intp)
+
+
 def fertile(fl, it, tick, max_health, threshold, max_reproductions, cooldown):
     """Creature.fertile(tick) of every row, vectorized: the same comparisons on the same
     values. `max_health` is the species' max health per SPECIES index."""

@@ -22,6 +22,8 @@ from ..config import (
 )
 from ..genetics import combine_brains, combine_genes, compatible, mutate_brain
 from ..species import ALL_SPECIES
+from ..world import creature as creature_module
+from ..world import creature_table as T
 from ..world.creature import Creature
 
 
@@ -194,6 +196,22 @@ def mate_preference(mates, species):
                       + MATE_SCORE_WEIGHT * m.score / top_score)
 
 
+def _ready(world, group):
+    """(ready, xy): the willing, fertile members of `group` and their (N, 2) positions."""
+    table = world.table
+    rows = T.rows_in(table, group)
+    if rows is None:
+        ready = [p for p in group if p.willing and p.fertile(world.tick)]
+        return ready, np.array([(p.pos.x, p.pos.y) for p in ready]).reshape(-1, 2)
+    fl, it = table.fl[rows], table.it[rows]
+    max_health = np.array([s.max_health for s in ALL_SPECIES], dtype=np.float64)
+    mask = (it[:, T.WILLING] != 0) & T.fertile(
+        fl, it, world.tick, max_health, creature_module.REPRODUCTION_HEALTH_THRESHOLD,
+        creature_module.MAX_REPRODUCTIONS, creature_module.REPRODUCTION_COOLDOWN_TICKS)
+    picked = np.flatnonzero(mask)
+    return [group[i] for i in picked.tolist()], fl[np.ix_(picked, (T.X, T.Y))]
+
+
 def breed(world):
     """Pair up nearby ready adults of each species and return their young (not yet added).
     Each parent gives PARENTAL_INVESTMENT of its health, and the litter splits the sum.
@@ -206,17 +224,20 @@ def breed(world):
         group = world.population(species)
         pop_cap = int(species.start_count * REPRODUCTION_POP_CAP_FACTOR)
         # Readiness only changes for creatures that pair this tick, which `paired` excludes.
-        ready = [p for p in group if p.willing and p.fertile(world.tick)]
+        ready, xy = _ready(world, group)
         if len(ready) < 2:
             continue
-        xy = np.array([(p.pos.x, p.pos.y) for p in ready])
         close = np.hypot(xy[:, None, 0] - xy[None, :, 0],
                          xy[:, None, 1] - xy[None, :, 1]) < MATE_SELECTION_RADIUS
         np.fill_diagonal(close, False)
+        # Each row's neighbours in column order, as np.flatnonzero(close[i]) gives them.
+        rows, cols = np.nonzero(close)
+        bounds = np.searchsorted(rows, np.arange(len(ready) + 1)).tolist()
+        cols = cols.tolist()
         for i, p1 in enumerate(ready):
             if p1.id in paired or len(group) + len(offspring) >= pop_cap:
                 continue
-            mates = [ready[j] for j in np.flatnonzero(close[i])
+            mates = [ready[j] for j in cols[bounds[i]:bounds[i + 1]]
                      if ready[j].id not in paired and _compatible(p1, ready[j])]
             if not mates:
                 continue

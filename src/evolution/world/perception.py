@@ -32,6 +32,8 @@ from ..config import (
     WATER_SENSE_RADIUS,
     WHISKER_TARGET_WIDTH,
 )
+from ..species import ALL_SPECIES
+from . import creature_table as T
 
 _PI = math.pi
 _TWO_PI = 2 * math.pi
@@ -560,17 +562,51 @@ def _kernel(obs, whisker_angles, herbs, carns, carcasses, food_xy, rects, crowns
         out[i, columns[_C_HUNGER]] = min(1.0, obs[i, _HUNGER] / kc[_K_HUNGER])
 
 
+def _rows(creatures):
+    """(fl, it, held): the CreatureTable arrays of `creatures`, row n being creatures[n]: the
+    table's own (held) when one holds exactly them, else copies of their rows."""
+    if creatures and creatures[0]._t.holds(creatures):
+        t = creatures[0]._t
+        return t.fl, t.it, True
+    fl = np.array([c._t.fl[c._r] for c in creatures]).reshape(-1, T.N_FL)
+    it = np.array([c._t.it[c._r] for c in creatures], dtype=np.int64).reshape(-1, T.N_IT)
+    return fl, it, False
+
+
+def _observe(fl, it, tick):
+    """(N, _OBS_COLS) array of what perception reads from each creature row: the values
+    Creature's fields hold, computed as the Python expressions would compute them."""
+    from . import creature as creature_module  # its config values, read now (tests patch them)
+    species = it[:, T.SPECIES]
+    max_health = np.array([s.max_health for s in ALL_SPECIES], dtype=np.float64)
+    eat_ticks = np.array([s.eat_ticks for s in ALL_SPECIES], dtype=np.float64)
+    predator = np.array([s.is_predator for s in ALL_SPECIES], dtype=np.float64)
+    eating = it[:, T.EATING]
+    obs = np.empty((len(fl), _OBS_COLS))
+    for col, source in ((_X, T.X), (_Y, T.Y), (_ANGLE, T.ANGLE), (_SIGHT_D, T.SIGHT),
+                        (_SIGHT_A, T.SIGHT_ANGLE), (_HEALTH, T.HEALTH),
+                        (_MAX_HEALTH, T.MAX_HEALTH), (_SIZE, T.SIZE), (_CUR_SPEED, T.SPEED),
+                        (_GEN_MAX_SPEED, T.GEN_MAX_SPEED), (_STAMINA, T.STAMINA),
+                        (_MAX_STAMINA, T.MAX_STAMINA), (_SIGNAL, T.SIGNAL), (_HURT, T.HURT),
+                        (_MAX_SPEED, T.MAX_SPEED)):
+        obs[:, col] = fl[:, source]
+    obs[:, _HUNGER] = it[:, T.HUNGER]
+    obs[:, _PREDATOR] = predator[species]
+    obs[:, _ID] = it[:, T.ID]
+    obs[:, _FERTILE] = T.fertile(fl, it, tick, max_health,
+                                 creature_module.REPRODUCTION_HEALTH_THRESHOLD,
+                                 creature_module.MAX_REPRODUCTIONS,
+                                 creature_module.REPRODUCTION_COOLDOWN_TICKS)
+    obs[:, _THIRST] = np.minimum(1.0, it[:, T.THIRST] / THIRST_MAX)
+    obs[:, _EATING] = np.where(eating != 0, eating / np.where(eating != 0, eat_ticks[species], 1),
+                               0.0)
+    return obs
+
+
 def _gather(creatures, tick):
     """(N, _OBS_COLS) array of what perception reads from each creature."""
-    return np.array([
-        (c.pos.x, c.pos.y, c.angle, c.sight_distance, c.sight_angle, c.health, c.max_health,
-         c.size, c.current_speed, c.genetic_max_speed, c.stamina, c.max_stamina, c.hunger,
-         c.species.is_predator, c.id, c.signal, c.fertile(tick),
-         min(1.0, c.thirst / THIRST_MAX),
-         c.eating_ticks / c.species.eat_ticks if c.eating_ticks else 0.0,
-         c.hurt, c.max_speed)
-        for c in creatures
-    ], dtype=np.float64).reshape(-1, _OBS_COLS)
+    fl, it, _ = _rows(creatures)
+    return _observe(fl, it, tick)
 
 
 def _targets(obs):
@@ -646,7 +682,8 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
     if n == 0:
         return out
 
-    obs = _gather(creatures, tick)
+    fl, it, held = _rows(creatures)
+    obs = _observe(fl, it, tick)
     n_herbs = len(herbivores)
     # The world passes creatures as herbivores + carnivores: their rows are the targets' rows.
     if (len(carnivores) + n_herbs == n and creatures[:n_herbs] == herbivores
@@ -658,7 +695,7 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
     if food_xy is None:
         food_xy = np.array([(o.pos.x, o.pos.y) for o in food_items],
                            dtype=np.float64).reshape(-1, 2)
-    whisker_angles = np.array([c.whisker_angles for c in creatures], dtype=np.float64)
+    whisker_angles = np.ascontiguousarray(fl[:, T.WHISKER_ANGLES])
     static = _static.get(obstacles, lakes)
     world_w, world_h = creatures[0].world_bounds
 
@@ -676,8 +713,15 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
             float(season), NIGHT_SIGHT_FACTOR + (1 - NIGHT_SIGHT_FACTOR) * light, _tunables(),
             columns,
             out, whisker_dist, target_whisker_dist, target_dist, target_found, smell_self, eye)
-    out[:, IN.memory] = [c.memory for c in creatures]
+    out[:, IN.memory] = fl[:, T.MEMORY]
 
+    if held:
+        fl[:, T.EFFECTIVE_SIGHT] = eye
+        fl[:, T.WHISKERS] = whisker_dist
+        fl[:, T.TARGET_WHISKERS] = target_whisker_dist
+        fl[:, T.TARGET_DIST] = np.where(target_found, target_dist, math.nan)
+        fl[:, T.SMELL] = smell_self
+        return out
     wl = whisker_dist.tolist()
     twl = target_whisker_dist.tolist()
     td = target_dist.tolist()

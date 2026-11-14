@@ -72,6 +72,11 @@ Code loops over `ALL_SPECIES` or keys dicts by `Species` instead of branching on
 - a `SpatialIndex` (grids for food, carcasses and each species), rebuilt by `reindex()`.
   - The food grid and the food position array (`SpatialIndex.food_xy`) are kept between ticks, because food never moves: a rebuild only adds the items appended to `world.food` and drops those `World.age_food` removed (`food_removed`). Any other code may append to `world.food` or replace the list, but must not delete from it or reorder it in place.
 
+**Creature state is a struct of arrays.** Every creature's per-tick fields live in one row of a `world.creature_table.CreatureTable` (`fl` floats, `it` ints/bools/ticks, `genes`), and `Creature` reads and writes them through descriptors, so `c.health`, `c.pos.x` etc. work as before (`c.pos` / `c.knock` are `RowVector` views of the row; arithmetic on them returns plain geometry vectors).
+- A creature is in exactly one table (`c._t`, row `c._r`): a new one has a table of its own, `World.reindex` / `World.perceive` move the living ones into `world.table` in `creatures()` order (`arrange`), and leavers get their own table back. Compiled and vectorized code (perception, `act_kernel`, `collision.separate`, spatial grids, breeding readiness, retire / mark-best fast paths) works on `world.table` in place when `table.holds(creatures)`.
+- Types are behaviour (the golden trace hashes reprs): health, fat, stamina and score keep an is-int flag; fields set from the genes (`max_health`, `sight_distance`, …) are `Mirror`s that keep the Python value and a float copy in the table.
+- New per-creature state the compiled code needs goes into the table as a new column at the end; `act_kernel` spells out its columns and asserts they match.
+
 `Simulation` (`sim/simulation.py`) wraps a World together with the `HallOfFame`, the `Statistics`, `generation` and `extinctions`. `step()` advances one tick in phases, and their order is part of the rules:
 1. clock
 2. food

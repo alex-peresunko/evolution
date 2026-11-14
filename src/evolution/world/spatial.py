@@ -77,10 +77,14 @@ class SpatialIndex:
     def of(self, species):
         return self._species[species]
 
-    def rebuild(self, food, populations, carcasses):
+    def rebuild(self, food, populations, carcasses, positions=None):
+        """`positions`: optional {species: (N, 2) array} of the populations' positions."""
         self._sync_food(food)
         for species, grid in self._species.items():
-            _fill(grid, populations[species])
+            if positions is None:
+                _fill(grid, populations[species])
+            else:
+                _fill_at(grid, populations[species], positions[species])
         _fill(self.carcasses, carcasses)
 
     def food_xy(self, food):
@@ -133,3 +137,20 @@ def _fill(grid, items):
     grid.clear()
     for item in items:
         grid.insert(item)
+
+
+def _fill_at(grid, items, xy):
+    """_fill, with the items' positions given as an (N, 2) array: the same cells, computed as
+    cell_of does (int() truncates toward zero, like astype)."""
+    grid.clear()
+    if not len(items):
+        return
+    cx = np.minimum(grid.cols - 1, np.maximum(0, (xy[:, 0] / grid.cell_size).astype(np.int64)))
+    cy = np.minimum(grid.rows - 1, np.maximum(0, (xy[:, 1] / grid.cell_size).astype(np.int64)))
+    cells = grid.grid
+    for item, cell in zip(items, zip(cx.tolist(), cy.tolist())):
+        bucket = cells.get(cell)
+        if bucket is None:
+            cells[cell] = [item]
+        else:
+            bucket.append(item)

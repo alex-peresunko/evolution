@@ -13,6 +13,7 @@ from ..config import (
     SCORE_SAMPLE_INTERVAL,
 )
 from ..species import ALL_SPECIES
+from ..world import creature_table as T
 from ..world.environment import food_cap
 from ..world.food import Carcass
 from . import act_kernel
@@ -90,10 +91,16 @@ class Simulation:
         inputs = world.perceive()
         outputs = self._brains.forward(creatures, inputs)
         if len(outputs):
-            signals = np.maximum(0.0, outputs[:, OUT.signal]).tolist()
-            memories = outputs[:, OUT.memory].tolist()
-            for c, sig, mem, x, y in zip(creatures, signals, memories, inputs, outputs):
-                c.signal, c.memory = sig, mem
+            table = world.table
+            if table.holds(creatures):     # World.perceive arranged it
+                table.fl[:, T.SIGNAL] = np.maximum(0.0, outputs[:, OUT.signal])
+                table.fl[:, T.MEMORY] = outputs[:, OUT.memory]
+            else:
+                signals = np.maximum(0.0, outputs[:, OUT.signal]).tolist()
+                memories = outputs[:, OUT.memory].tolist()
+                for c, sig, mem in zip(creatures, signals, memories):
+                    c.signal, c.memory = sig, mem
+            for c, x, y in zip(creatures, inputs, outputs):
                 c.brain_inputs, c.brain_outputs = x, y
             if self.compiled_act and act_kernel.supported(world):
                 act_kernel.act_all(world, creatures, outputs)
@@ -117,6 +124,10 @@ class Simulation:
 
     def _retire_the_dead(self):
         world = self.world
+        table = world.table
+        if table.holds(world.creatures()) and (table.fl[:, T.HEALTH] > 0).all():
+            self._notify("deaths_processed")    # nobody died
+            return
         for species in ALL_SPECIES:
             alive = []
             for c in world.population(species):
@@ -153,12 +164,21 @@ class Simulation:
                 self.replace_weakest(species, best, ELITE_REINJECT_COUNT)
 
     def _mark_best(self):
+        world = self.world
+        table = world.table
+        start = 0 if table.holds(world.creatures()) else None
         for species in ALL_SPECIES:
-            population = self.world.population(species)
+            population = world.population(species)
             for c in population:
                 c.is_best = False
-            if population:
+            if not population:
+                continue
+            if start is None:
                 max(population, key=lambda c: c.score).is_best = True
+            else:   # np.argmax, like max(), picks the first of equal scores
+                end = start + len(population)
+                population[int(np.argmax(table.fl[start:end, T.SCORE]))].is_best = True
+                start = end
 
     def _breed(self):
         offspring = breed(self.world)

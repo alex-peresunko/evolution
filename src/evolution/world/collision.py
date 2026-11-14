@@ -10,6 +10,8 @@ from ..config import (
     KNOCK_MIN,
     RESTITUTION,
 )
+from . import creature_table as T
+from .creature_table import CreatureTable
 
 
 def _unit(dx, dy, dist):
@@ -76,15 +78,20 @@ def separate(creatures, carcasses, obstacles, tick, terrain=None):
     by mass, and the knock decays by KNOCK_FRICTION. A creature moved into an obstacle keeps
     its old position and loses its knock; a wall stops the knock along that axis. `terrain`
     (a TerrainGrid of `obstacles`) narrows that obstacle check."""
-    if BODY_RADIUS_FACTOR <= 0:
+    if BODY_RADIUS_FACTOR <= 0 or not creatures:
         return
-    live = [c for c in creatures if c.health > 0]
+    table = creatures[0]._t
+    if not table.holds(creatures):
+        table = CreatureTable()
+        table.arrange(creatures)
+    fl, it = table.fl, table.it
+    live = np.flatnonzero(fl[:, T.HEALTH] > 0)
     n = len(live)
     if n == 0:
         return
-    xy0 = np.array([(c.pos.x, c.pos.y) for c in live])
-    r = np.array([c.size for c in live]) * BODY_RADIUS_FACTOR
-    knock0 = np.array([(c.knock.x, c.knock.y) for c in live])
+    xy0 = fl[np.ix_(live, (T.X, T.Y))]
+    r = fl[live, T.SIZE] * BODY_RADIUS_FACTOR
+    knock0 = fl[np.ix_(live, (T.KNOCK_X, T.KNOCK_Y))]
     knock = knock0.copy()
     xy = xy0.copy()
 
@@ -104,15 +111,18 @@ def separate(creatures, carcasses, obstacles, tick, terrain=None):
         return
 
     if len(i) or len(ci):
-        speed = np.array([c.current_speed for c in live])
-        angle = np.array([c.angle for c in live])
+        speed = fl[live, T.SPEED]
+        angle = fl[live, T.ANGLE]
         v = np.column_stack((np.cos(angle) * speed, np.sin(angle) * speed)) + knock
         dv = _impulses(xy, v, mass, i, j, cxy, ci, ck)
         knock += dv
         excess = np.hypot(dv[:, 0], dv[:, 1]) - IMPACT_DAMAGE_THRESHOLD
-        for m in np.flatnonzero(excess > 0).tolist():
-            live[m].health -= IMPACT_DAMAGE * float(excess[m])
-            live[m].last_impact_tick = tick
+        hit = excess > 0
+        if hit.any():
+            rows = live[hit]
+            fl[rows, T.HEALTH] -= IMPACT_DAMAGE * excess[hit]
+            it[rows, T.HEALTH_INT] = 0
+            it[rows, T.LAST_IMPACT] = tick
     xy += knock
 
     for _ in range(COLLISION_PASSES):
@@ -138,23 +148,27 @@ def separate(creatures, carcasses, obstacles, tick, terrain=None):
 
     knock *= KNOCK_FRICTION
     knock[np.hypot(knock[:, 0], knock[:, 1]) < KNOCK_MIN] = 0.0
-    moved = np.any(xy != xy0, axis=1)
-    for m in np.flatnonzero(moved | np.any(knock != knock0, axis=1)).tolist():
-        c = live[m]
-        kx, ky = float(knock[m, 0]), float(knock[m, 1])
-        if moved[m]:
-            old_x, old_y = c.pos.x, c.pos.y
-            want_x, want_y = float(xy[m, 0]), float(xy[m, 1])
-            c.pos.x, c.pos.y = want_x, want_y
-            c.clamp_to_walls()
-            if c.pos.x != want_x:
-                kx = 0.0
-            if c.pos.y != want_y:
-                ky = 0.0
-            body = c.geometry.rect(c.pos.x - c.size, c.pos.y - c.size, c.size * 2, c.size * 2)
-            nearby = (terrain.near(c.pos.x, c.pos.y)[0]
-                      if terrain is not None and c.size <= terrain.reach else obstacles)
-            if any(obs.rect.colliderect(body) for obs in nearby):
-                c.pos.x, c.pos.y = old_x, old_y
-                kx = ky = 0.0
-        c.knock.x, c.knock.y = kx, ky
+    moved = np.flatnonzero(np.any(xy != xy0, axis=1))
+    if len(moved):
+        # Creature.clamp_to_walls, then the obstacle check, on the wanted positions.
+        rows = live[moved]
+        size = fl[rows, T.SIZE]
+        want = xy[moved]
+        w, h = table.members[rows[0]].world_bounds
+        x = np.minimum(np.maximum(want[:, 0], size), w - size)
+        y = np.minimum(np.maximum(want[:, 1], size), h - size)
+        knock[moved[x != want[:, 0]], 0] = 0.0
+        knock[moved[y != want[:, 1]], 1] = 0.0
+        members = table.members
+        for k, (m, row, cx, cy, s) in enumerate(zip(moved.tolist(), rows.tolist(), x.tolist(),
+                                                    y.tolist(), size.tolist())):
+            body = members[row].geometry.rect(cx - s, cy - s, s * 2, s * 2)
+            nearby = (terrain.near(cx, cy)[0]
+                      if terrain is not None and s <= terrain.reach else obstacles)
+            if any(obs.rect.colliderect(body) for obs in nearby):   # stay where it was
+                x[k], y[k] = xy0[m]
+                knock[m] = 0.0
+        fl[rows, T.X] = x
+        fl[rows, T.Y] = y
+    fl[live, T.KNOCK_X] = knock[:, 0]
+    fl[live, T.KNOCK_Y] = knock[:, 1]
