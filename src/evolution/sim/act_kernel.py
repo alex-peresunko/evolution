@@ -958,10 +958,12 @@ def _gather(world, creatures):
     return members, slot, fl, it, genes
 
 
-def _recent(members, slot, attribute):
-    """(who, when, count) of each acting member's recent attackers dict."""
-    dicts = [getattr(c, attribute) for c in members]
-    width = max(4, max(len(d) for d in dicts) + 4)
+def _recent(members, slot, acting, attribute):
+    """(who, when, count) of each acting member's recent attackers dict. The extra members
+    (attackers pulled in by reference) get empty rows: only acting creatures are bitten or
+    trampled, and the attackers their own dicts name need not be members."""
+    dicts = [getattr(c, attribute) for c in members[:acting]]
+    width = max(4, max((len(d) for d in dicts), default=0) + 4)
     who = np.full((len(members), width), -1, dtype=np.int64)
     when = np.zeros((len(members), width), dtype=np.int64)
     count = np.zeros(len(members), dtype=np.int64)
@@ -1014,8 +1016,8 @@ def act_all(world, creatures, outputs):
     for n, bounds in enumerate(keys):
         gene_span[n, :len(bounds)] = [hi - lo for lo, hi in bounds]
     gene_count = np.array([len(b) for b in keys], dtype=np.int64)
-    rb = _recent(members, slot, "recent_biters")
-    rt = _recent(members, slot, "recent_tramplers")
+    rb = _recent(members, slot, len(creatures), "recent_biters")
+    rt = _recent(members, slot, len(creatures), "recent_tramplers")
     rb_changed = np.zeros(len(members), dtype=np.bool_)
     rt_changed = np.zeros(len(members), dtype=np.bool_)
 

@@ -44,6 +44,36 @@ def _run(compiled, seed, ticks, monkeypatch):
     return states
 
 
+def _run_with_outside_attackers(compiled, monkeypatch):
+    """A herbivore remembers a biter that has left the population, whose own dict names a
+    trampler that is not a member either (the headless crash: KeyError in _recent)."""
+    monkeypatch.setattr(Simulation, "compiled_act", compiled)
+    random.seed(5)
+    np.random.seed(5)
+    monkeypatch.setattr(Creature, "_id_counter", 1)
+    monkeypatch.setattr(Food, "_id_counter", -1)
+    monkeypatch.setattr(Carcass, "_id_counter", -10**9)
+    with contextlib.redirect_stdout(io.StringIO()):
+        sim = start_simulation(None)
+        world = sim.world
+        herbivore = world.herbivores[0]
+        biter, trampler = world.carnivores[0], world.herbivores[1]
+        world.populations[biter.species].remove(biter)
+        world.populations[trampler.species].remove(trampler)
+        herbivore.recent_biters[biter] = world.tick
+        biter.recent_tramplers[trampler] = world.tick
+        states = []
+        for _ in range(5):
+            sim.step()
+            states.append(_state(sim))
+    return states
+
+
+def test_attackers_outside_the_population_are_handled(monkeypatch):
+    assert (_run_with_outside_attackers(True, monkeypatch)
+            == _run_with_outside_attackers(False, monkeypatch))
+
+
 @pytest.mark.parametrize("seed", [3, 11])
 def test_compiled_act_loop_matches_the_python_loop(seed, monkeypatch):
     python = _run(False, seed, 120, monkeypatch)
