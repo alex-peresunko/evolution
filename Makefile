@@ -3,18 +3,18 @@
 
 GRAFANA := http://localhost:3000
 # make run headless WORKERS=4: island workers in the container, one core each.
+# Exported, so compose sees it in both sh (macOS/Linux) and cmd.exe (Windows).
 WORKERS ?= 0
+export WORKERS
 # Must match DASHBOARD_UID in monitoring/dashboard.py.
 DASHBOARD := $(GRAFANA)/api/dashboards/uid/6a418c28-cbeb-46f9-a1f4-af86d6e6d051
-# Brackets keep grep from matching the recipe shell's own command line. Watch mode never
-# writes saved_brains/, so it does not count as a running simulation.
-LOCAL_SIM := ps -Ao pid=,command= | grep -E '[g]ame(_headless)?\.py' | grep -v -- '--watch'
-CONTAINER_SIM := --filter label=io.podman.compose.project=evolution \
-	--filter label=io.podman.compose.service=server
+# Shell logic lives in Python: on Windows, make runs recipes in cmd.exe, not sh.
+TASKS := poetry run python scripts/make_tasks.py
 
 run:
 ifeq ($(filter-out run,$(MAKECMDGOALS)),)
-	@echo "usage: make run ui | make run watch | make run headless"; exit 2
+	@echo usage: make run ui, make run watch or make run headless
+	@exit 2
 else
 	@:
 endif
@@ -27,20 +27,16 @@ watch:
 	poetry run python game.py --watch $(ARGS)
 
 headless: not-running
-	WORKERS=$(WORKERS) podman compose up --build -d
-	@echo "waiting for Grafana..."
-	@# /api/health answers before the data source and dashboard are provisioned.
-	@for i in $$(seq 120); do curl -sf $(DASHBOARD) >/dev/null && exit 0; sleep 1; done; \
-		echo "Grafana is not ready after 120s (podman compose logs grafana)"; exit 1
-	@open $(GRAFANA) 2>/dev/null || echo "Grafana: $(GRAFANA)"
-	@echo "make logs: follow the simulation · make stop: save and stop"
+	podman compose up --build -d
+	@echo waiting for Grafana...
+# /api/health answers before the data source and dashboard are provisioned.
+	@$(TASKS) wait-url $(DASHBOARD) 120
+	@$(TASKS) open $(GRAFANA)
+	@echo make logs: follow the simulation - make stop: save and stop
 
 # Both write saved_brains/best_brain_*.json, so only one simulation may run.
 not-running:
-	@if $(LOCAL_SIM) >/dev/null; then \
-		echo "a simulation is already running locally:"; $(LOCAL_SIM); exit 1; fi
-	@if [ -n "$$(podman ps -q $(CONTAINER_SIM) 2>/dev/null)" ]; then \
-		echo "the headless simulation container is running (make stop)"; exit 1; fi
+	@$(TASKS) not-running
 
 stop:
 	podman compose down
