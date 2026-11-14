@@ -7,6 +7,7 @@ import pytest
 from evolution import config
 from evolution.brain.layout import INPUTS
 from evolution.species import CARNIVORE, HERBIVORE
+from evolution.world import perception
 from evolution.world.creature import Creature
 from evolution.world.food import Carcass, Food
 from evolution.world.perception import perceive_all
@@ -414,3 +415,13 @@ def test_mate_inputs_point_at_the_nearest_fertile_kin():
     mate.last_reproduction_tick = 0   # still in its cooldown at tick 10
     row = perceive_all([me], [], [me, juvenile, mate], [], [], tick=10)[0]
     assert (row[INPUTS.mate_angle], row[INPUTS.mate_dist]) == (0.0, 1.0)
+
+
+def test_the_compiled_kernel_reads_config_values_at_call_time(monkeypatch):
+    """Numba freezes globals at compile time and caches the result on disk, so the kernel must
+    get its config values as arguments: a changed value has to take effect."""
+    herb = _facing(False, 500, 400)
+    carn = _facing(True, 500, 500)    # 100 px away
+    assert perceive_all([herb], [], [herb], [carn], [])[0][INPUTS.smell_strength] > 0
+    monkeypatch.setattr(perception, "SMELL_DISTANCE", 50)
+    assert perceive_all([herb], [], [herb], [carn], [])[0][INPUTS.smell_strength] == 0

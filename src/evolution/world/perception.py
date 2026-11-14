@@ -25,7 +25,6 @@ from ..config import (
     MATE_ATTRACTION_RADIUS,
     MAX_NORMALIZED_SIGHT_DISTANCE,
     NIGHT_SIGHT_FACTOR,
-    NUM_WHISKERS,
     SIGNAL_RADIUS,
     SMELL_DISTANCE,
     THIRST_MAX,
@@ -34,53 +33,46 @@ from ..config import (
     WHISKER_TARGET_WIDTH,
 )
 
-_MAX_SIZE = GENE_MIN_MAX["size"][1]
 _PI = math.pi
 _TWO_PI = 2 * math.pi
 _INF = math.inf
 
-# Column indices, as plain ints the kernel can use.
-_OBST_W = IN.obstacle_whiskers.start
-_TARGET_W = IN.target_whiskers.start
-_C_TARGET_ANGLE = IN.target_angle
-_C_TARGET_DIST = IN.target_dist
-_C_SMELL_ANGLE = IN.smell_angle
-_C_SMELL_STRENGTH = IN.smell_strength
-_C_PREY_VX = IN.prey_vx
-_C_PREY_VY = IN.prey_vy
-_C_HEALTH = IN.health
-_C_SIN = IN.sin_angle
-_C_COS = IN.cos_angle
-_C_SIZE = IN.size
-_C_SPEED = IN.speed
-_C_SIGHT = IN.sight
-_C_SIGHT_ANGLE = IN.sight_angle
-_C_STAMINA = IN.stamina
-_C_HUNGER = IN.hunger
-_C_KIN_ANGLE = IN.kin_angle
-_C_KIN_DIST = IN.kin_dist
-_C_KIN_DENSITY = IN.kin_density
-_C_SIGNAL_ANGLE = IN.signal_angle
-_C_SIGNAL_STRENGTH = IN.signal_strength
-_C_CARCASS_ANGLE = IN.carcass_angle
-_C_CARCASS_DIST = IN.carcass_dist
-_C_LIGHT = IN.light
-_C_SEASON = IN.season
-_C_CARCASS_SMELL_ANGLE = IN.carcass_smell_angle
-_C_CARCASS_SMELL_STRENGTH = IN.carcass_smell_strength
-_C_IN_WATER = IN.in_water
-_C_EATING = IN.eating
-_C_HURT = IN.hurt
-_C_TOUCH_KIN = IN.touch_kin
-_C_TOUCH_KIN_ANGLE = IN.touch_kin_angle
-_C_TOUCH_OTHER = IN.touch_other
-_C_TOUCH_OTHER_ANGLE = IN.touch_other_angle
-_C_MATE_ANGLE = IN.mate_angle
-_C_MATE_DIST = IN.mate_dist
-_C_FERTILE = IN.fertile
-_C_THIRST = IN.thirst
-_C_WATER_ANGLE = IN.water_angle
-_C_WATER_DIST = IN.water_dist
+# Numba freezes module globals into the compiled code, and its disk cache only notices edits
+# to this file. So everything that comes from elsewhere (config values, the brain layout's
+# column positions) reaches the kernel at call time: tunables in the `kc` array, indexed by
+# _K_*, and the INPUTS column of each _C_* field in the `columns` array.
+(_K_SMELL, _K_KIN, _K_SIGNAL, _K_MATE, _K_DENSITY, _K_TOUCH, _K_BODY, _K_WHISKER_WIDTH,
+ _K_WATER, _K_HUNGER, _K_SIGHT_NORM, _K_MAX_SIZE) = range(12)
+_MAX_SIZE = GENE_MIN_MAX["size"][1]
+
+
+def _tunables():
+    """The `kc` array: the config values the kernel uses, read now (tests may patch them)."""
+    return np.array([SMELL_DISTANCE, KIN_SENSE_RADIUS, SIGNAL_RADIUS, MATE_ATTRACTION_RADIUS,
+                     KIN_DENSITY_NORM, TOUCH_TOLERANCE, BODY_RADIUS_FACTOR, WHISKER_TARGET_WIDTH,
+                     WATER_SENSE_RADIUS, HUNGER_MAX, MAX_NORMALIZED_SIGHT_DISTANCE, _MAX_SIZE],
+                    dtype=np.float64)
+
+# Fields the kernel writes; groups (the whiskers) by their first column.
+_FIELDS = ("obstacle_whiskers", "target_whiskers", "target_angle", "target_dist", "smell_angle",
+           "smell_strength", "prey_vx", "prey_vy", "health", "sin_angle", "cos_angle", "size",
+           "speed", "sight", "sight_angle", "stamina", "hunger", "kin_angle", "kin_dist",
+           "kin_density", "signal_angle", "signal_strength", "carcass_angle", "carcass_dist",
+           "light", "season", "carcass_smell_angle", "carcass_smell_strength", "in_water",
+           "eating", "hurt", "touch_kin", "touch_kin_angle", "touch_other", "touch_other_angle",
+           "mate_angle", "mate_dist", "fertile", "thirst", "water_angle", "water_dist")
+(_C_OBST_W, _C_TARGET_W, _C_TARGET_ANGLE, _C_TARGET_DIST, _C_SMELL_ANGLE, _C_SMELL_STRENGTH,
+ _C_PREY_VX, _C_PREY_VY, _C_HEALTH, _C_SIN, _C_COS, _C_SIZE, _C_SPEED, _C_SIGHT, _C_SIGHT_ANGLE,
+ _C_STAMINA, _C_HUNGER, _C_KIN_ANGLE, _C_KIN_DIST, _C_KIN_DENSITY, _C_SIGNAL_ANGLE,
+ _C_SIGNAL_STRENGTH, _C_CARCASS_ANGLE, _C_CARCASS_DIST, _C_LIGHT, _C_SEASON,
+ _C_CARCASS_SMELL_ANGLE, _C_CARCASS_SMELL_STRENGTH, _C_IN_WATER, _C_EATING, _C_HURT,
+ _C_TOUCH_KIN, _C_TOUCH_KIN_ANGLE, _C_TOUCH_OTHER, _C_TOUCH_OTHER_ANGLE, _C_MATE_ANGLE,
+ _C_MATE_DIST, _C_FERTILE, _C_THIRST, _C_WATER_ANGLE, _C_WATER_DIST) = range(len(_FIELDS))
+
+
+def _column(name):
+    column = getattr(IN, name)
+    return column.start if isinstance(column, slice) else column
 
 # Observer columns of the (N, _OBS_COLS) array _gather builds.
 (_X, _Y, _ANGLE, _SIGHT_D, _SIGHT_A, _HEALTH, _MAX_HEALTH, _SIZE, _CUR_SPEED, _GEN_MAX_SPEED,
@@ -163,25 +155,25 @@ def _max_size(tgt):
 
 
 @njit(**_JIT)
-def _touch_reach(size, max_size):
+def _touch_reach(size, max_size, kc):
     """Bodies farther apart than this do not press (the +1 absorbs rounding); -1 when there are
     no targets (max_size -inf)."""
     if max_size == -_INF:
         return -1.0
-    return (size + max_size) * BODY_RADIUS_FACTOR + TOUCH_TOLERANCE + 1.0
+    return (size + max_size) * kc[_K_BODY] + kc[_K_TOUCH] + 1.0
 
 
 @njit(**_JIT)
-def _press(d, size, tgt_size):
+def _press(d, size, tgt_size, kc):
     """Touch strength: with gap = distance minus the body radii, 0.5 at contact, growing
     linearly to 1 at TOUCH_TOLERANCE deep, from 0 at TOUCH_TOLERANCE apart."""
-    gap = d - (size + tgt_size) * BODY_RADIUS_FACTOR
-    return min(max((TOUCH_TOLERANCE - gap) / (2 * TOUCH_TOLERANCE), 0.0), 1.0)
+    gap = d - (size + tgt_size) * kc[_K_BODY]
+    return min(max((kc[_K_TOUCH] - gap) / (2 * kc[_K_TOUCH]), 0.0), 1.0)
 
 
 @njit(**_JIT)
 def _scan(x, y, own_id, cos_a, sin_a, eye, half_angle, cos_half, size, tgt, crowns,
-          touch_reach, whisker_reach, cos_w, sin_w, occlusion, tw):
+          touch_reach, whisker_reach, cos_w, sin_w, occlusion, tw, kc):
     """One pass over the targets (rows of tgt: x, y, id, ...) for every sense of them.
     Returns (seen, near, near_d, touched, press):
       seen: the nearest target inside the sight cone (up to `eye`) not hidden by a crown;
@@ -194,7 +186,7 @@ def _scan(x, y, own_id, cos_a, sin_a, eye, half_angle, cos_half, size, tgt, crow
     near, near_d = -1, _INF
     touched, best_press = -1, 0.0
     # Nothing farther than `reach` matters; squared distances above it skip the exact hypot.
-    reach = max(max(eye, SMELL_DISTANCE), max(touch_reach, whisker_reach)) + 1.0
+    reach = max(max(eye, kc[_K_SMELL]), max(touch_reach, whisker_reach)) + 1.0
     reach2 = reach * reach
     for j in range(tgt.shape[0]):
         dx = tgt[j, _T_X] - x
@@ -203,13 +195,13 @@ def _scan(x, y, own_id, cos_a, sin_a, eye, half_angle, cos_half, size, tgt, crow
             continue
         d = math.hypot(dx, dy)
         if d <= whisker_reach:
-            _target_whisker_hits(dx, dy, cos_w, sin_w, eye, occlusion, tw)
+            _target_whisker_hits(dx, dy, cos_w, sin_w, eye, occlusion, tw, kc)
         if tgt[j, _T_ID] == own_id:
             continue
         if d < near_d:
             near, near_d = j, d
         if d < touch_reach:
-            press = _press(d, size, tgt[j, _T_SIZE])
+            press = _press(d, size, tgt[j, _T_SIZE], kc)
             if press > best_press:
                 touched, best_press = j, press
         if (d > 0.0 and d <= eye and d < seen_d
@@ -220,7 +212,7 @@ def _scan(x, y, own_id, cos_a, sin_a, eye, half_angle, cos_half, size, tgt, crow
 
 
 @njit(**_JIT)
-def _scan_kin(x, y, own_id, size, kin, touch_reach):
+def _scan_kin(x, y, own_id, size, kin, touch_reach, kc):
     """One pass over the own species for the kin senses. Returns (near, near_d, dense, loudest,
     heard, mate, mate_d, touched, press): the nearest kin (only guaranteed within
     KIN_SENSE_RADIUS), the count within KIN_SENSE_RADIUS, the loudest signal (-1 when none is
@@ -231,8 +223,8 @@ def _scan_kin(x, y, own_id, size, kin, touch_reach):
     loudest, loudest_heard = -1, 0.0
     mate, mate_d = -1, _INF
     touched, best_press = -1, 0.0
-    reach = max(max(KIN_SENSE_RADIUS, SIGNAL_RADIUS),
-                max(MATE_ATTRACTION_RADIUS, touch_reach)) + 1.0
+    reach = max(max(kc[_K_KIN], kc[_K_SIGNAL]),
+                max(kc[_K_MATE], touch_reach)) + 1.0
     reach2 = reach * reach
     for j in range(kin.shape[0]):
         if kin[j, _T_ID] == own_id:
@@ -244,37 +236,39 @@ def _scan_kin(x, y, own_id, size, kin, touch_reach):
         d = math.hypot(dx, dy)
         if d < near_d:
             near, near_d = j, d
-        if d < KIN_SENSE_RADIUS:
+        if d < kc[_K_KIN]:
             dense += 1
-        if d < SIGNAL_RADIUS:
-            heard = kin[j, _T_SIGNAL] * (1.0 - d / SIGNAL_RADIUS)
+        if d < kc[_K_SIGNAL]:
+            heard = kin[j, _T_SIGNAL] * (1.0 - d / kc[_K_SIGNAL])
             if heard > loudest_heard:
                 loudest, loudest_heard = j, heard
         if kin[j, _T_FERTILE] != 0.0 and d < mate_d:
             mate, mate_d = j, d
         if d < touch_reach:
-            press = _press(d, size, kin[j, _T_SIZE])
+            press = _press(d, size, kin[j, _T_SIZE], kc)
             if press > best_press:
                 touched, best_press = j, press
     return near, near_d, dense, loudest, loudest_heard, mate, mate_d, touched, best_press
 
 
 @njit(**_JIT)
-def _target_whisker_hits(dx, dy, cos_w, sin_w, length, occlusion, result):
+def _target_whisker_hits(dx, dy, cos_w, sin_w, length, occlusion, result, kc):
     """Shorten result[k] to the distance along whisker k at which the target at offset (dx, dy)
     lies within WHISKER_TARGET_WIDTH of the ray, if it is no farther than `length` and closer
     than occlusion[k]."""
     for k in range(cos_w.shape[0]):
         t = dx * cos_w[k] + dy * sin_w[k]
         if t > 0.0 and t <= length and t < occlusion[k]:
-            if abs(dy * cos_w[k] - dx * sin_w[k]) <= WHISKER_TARGET_WIDTH and t < result[k]:
+            if abs(dy * cos_w[k] - dx * sin_w[k]) <= kc[_K_WHISKER_WIDTH] and t < result[k]:
                 result[k] = t
 
 
 @njit(**_JIT)
 def _kernel(obs, whisker_angles, herbs, carns, carcasses, food_xy, rects, crowns,
-            lake_shape, lake_waves, world_w, world_h, light, season, light_factor, out,
-            whisker_dist, target_whisker_dist, target_dist, target_found, smell_self, eye_out):
+            lake_shape, lake_waves, world_w, world_h, light, season, light_factor, kc, columns,
+            out, whisker_dist, target_whisker_dist, target_dist, target_found, smell_self,
+            eye_out):
+    """Fills `out` (the INPUTS column of field _C_* is columns[_C_*]) and the side outputs."""
     n = obs.shape[0]
     n_w = whisker_angles.shape[1]
     herb_max_size, carn_max_size = _max_size(herbs), _max_size(carns)
@@ -284,19 +278,19 @@ def _kernel(obs, whisker_angles, herbs, carns, carcasses, food_xy, rects, crowns
     for i in range(n):
         if obs[i, _PREDATOR] == 0.0:
             max_eye = max(max_eye, obs[i, _SIGHT_D] * light_factor)
-    reach_max = max_eye + WHISKER_TARGET_WIDTH + 2.0
+    reach_max = max_eye + kc[_K_WHISKER_WIDTH] + 2.0
     cell = max(reach_max, 16.0)
     n_food = food_xy.shape[0]
-    cols = max(1, int(world_w / cell) + 1)
-    rows = max(1, int(world_h / cell) + 1)
+    grid_cols = max(1, int(world_w / cell) + 1)
+    grid_rows = max(1, int(world_h / cell) + 1)
     food_cell = np.empty(n_food, dtype=np.int64)
-    counts = np.zeros(cols * rows + 1, dtype=np.int64)
+    counts = np.zeros(grid_cols * grid_rows + 1, dtype=np.int64)
     for f in range(n_food):
-        cx = min(max(int(math.floor(food_xy[f, 0] / cell)), 0), cols - 1)
-        cy = min(max(int(math.floor(food_xy[f, 1] / cell)), 0), rows - 1)
-        food_cell[f] = cy * cols + cx
+        cx = min(max(int(math.floor(food_xy[f, 0] / cell)), 0), grid_cols - 1)
+        cy = min(max(int(math.floor(food_xy[f, 1] / cell)), 0), grid_rows - 1)
+        food_cell[f] = cy * grid_cols + cx
         counts[food_cell[f] + 1] += 1
-    for k in range(cols * rows):
+    for k in range(grid_cols * grid_rows):
         counts[k + 1] += counts[k]
     fill = counts[:-1].copy()
     food_order = np.empty(n_food, dtype=np.int64)
@@ -378,7 +372,7 @@ def _kernel(obs, whisker_angles, herbs, carns, carcasses, food_xy, rects, crowns
                     whisker_dist[i, k] = min(whisker_dist[i, k], t0 * sight)
             # (min is exact, so folding each rect in at once matches the reduction over rects)
         for k in range(n_w):
-            out[i, _OBST_W + k] = 1.0 - whisker_dist[i, k] / sight
+            out[i, columns[_C_OBST_W] + k] = 1.0 - whisker_dist[i, k] / sight
 
         # --- crown occlusion along each whisker: the entry of a crown ahead, or the exit of a
         # crown the observer stands under
@@ -404,83 +398,83 @@ def _kernel(obs, whisker_angles, herbs, carns, carcasses, food_xy, rects, crowns
         # touch, and the carnivore's target whiskers on prey
         for k in range(n_w):
             tw[k] = _INF
-        target_reach = eye + WHISKER_TARGET_WIDTH + 1.0
+        target_reach = eye + kc[_K_WHISKER_WIDTH] + 1.0
         seen, near, near_d, touched, press = _scan(
             x, y, own_id, cos_a, sin_a, eye, half_angle, cos_half, size, other, crowns,
-            _touch_reach(size, other_max_size), target_reach if predator else -1.0,
-            cos_w, sin_w, occlusion, tw)
+            _touch_reach(size, other_max_size, kc), target_reach if predator else -1.0,
+            cos_w, sin_w, occlusion, tw, kc)
         if seen >= 0:
             seen_angle = _angle_to(x, y, angle, other, seen) / half_angle
             seen_dist = math.hypot(other[seen, _T_X] - x, other[seen, _T_Y] - y) / eye
         else:
             seen_angle, seen_dist = 0.0, 1.0
-        if near >= 0 and near_d < SMELL_DISTANCE:
-            out[i, _C_SMELL_ANGLE] = _angle_to(x, y, angle, other, near) / _PI
-            smell = 1.0 - near_d / SMELL_DISTANCE
-            out[i, _C_SMELL_STRENGTH] = smell
+        if near >= 0 and near_d < kc[_K_SMELL]:
+            out[i, columns[_C_SMELL_ANGLE]] = _angle_to(x, y, angle, other, near) / _PI
+            smell = 1.0 - near_d / kc[_K_SMELL]
+            out[i, columns[_C_SMELL_STRENGTH]] = smell
             smell_self[i] = smell
         else:
             smell_self[i] = 0.0
         if touched >= 0:
-            out[i, _C_TOUCH_OTHER] = press
-            out[i, _C_TOUCH_OTHER_ANGLE] = _angle_to(x, y, angle, other, touched) / _PI
+            out[i, columns[_C_TOUCH_OTHER]] = press
+            out[i, columns[_C_TOUCH_OTHER_ANGLE]] = _angle_to(x, y, angle, other, touched) / _PI
 
         # --- kin: nearest, density, the loudest signal, the nearest fertile mate, touch
         near, near_d, dense, loudest, heard, mate, mate_d, touched, press = _scan_kin(
-            x, y, own_id, size, kin, _touch_reach(size, kin_max_size))
-        if near >= 0 and near_d < KIN_SENSE_RADIUS:
-            out[i, _C_KIN_ANGLE] = _angle_to(x, y, angle, kin, near) / _PI
-            out[i, _C_KIN_DIST] = near_d / KIN_SENSE_RADIUS
+            x, y, own_id, size, kin, _touch_reach(size, kin_max_size, kc), kc)
+        if near >= 0 and near_d < kc[_K_KIN]:
+            out[i, columns[_C_KIN_ANGLE]] = _angle_to(x, y, angle, kin, near) / _PI
+            out[i, columns[_C_KIN_DIST]] = near_d / kc[_K_KIN]
         else:
-            out[i, _C_KIN_DIST] = 1.0
+            out[i, columns[_C_KIN_DIST]] = 1.0
         if kin.shape[0]:
-            out[i, _C_KIN_DENSITY] = min(1.0, dense / KIN_DENSITY_NORM)
+            out[i, columns[_C_KIN_DENSITY]] = min(1.0, dense / kc[_K_DENSITY])
         if loudest >= 0:
-            out[i, _C_SIGNAL_ANGLE] = _angle_to(x, y, angle, kin, loudest) / _PI
-            out[i, _C_SIGNAL_STRENGTH] = heard
-        if mate >= 0 and mate_d < MATE_ATTRACTION_RADIUS:
-            out[i, _C_MATE_ANGLE] = _angle_to(x, y, angle, kin, mate) / _PI
-            out[i, _C_MATE_DIST] = mate_d / MATE_ATTRACTION_RADIUS
+            out[i, columns[_C_SIGNAL_ANGLE]] = _angle_to(x, y, angle, kin, loudest) / _PI
+            out[i, columns[_C_SIGNAL_STRENGTH]] = heard
+        if mate >= 0 and mate_d < kc[_K_MATE]:
+            out[i, columns[_C_MATE_ANGLE]] = _angle_to(x, y, angle, kin, mate) / _PI
+            out[i, columns[_C_MATE_DIST]] = mate_d / kc[_K_MATE]
         else:
-            out[i, _C_MATE_DIST] = 1.0
+            out[i, columns[_C_MATE_DIST]] = 1.0
         if touched >= 0:
-            out[i, _C_TOUCH_KIN] = press
-            out[i, _C_TOUCH_KIN_ANGLE] = _angle_to(x, y, angle, kin, touched) / _PI
+            out[i, columns[_C_TOUCH_KIN]] = press
+            out[i, columns[_C_TOUCH_KIN_ANGLE]] = _angle_to(x, y, angle, kin, touched) / _PI
 
         if predator:
-            out[i, _C_TARGET_ANGLE], out[i, _C_TARGET_DIST] = seen_angle, seen_dist
+            out[i, columns[_C_TARGET_ANGLE]], out[i, columns[_C_TARGET_DIST]] = seen_angle, seen_dist
             target_dist[i], target_found[i] = seen_dist, seen >= 0
             if seen >= 0:
                 ratio = other[seen, _T_SPEED_RATIO]
-                out[i, _C_PREY_VX] = math.cos(other[seen, _T_ANGLE]) * ratio
-                out[i, _C_PREY_VY] = math.sin(other[seen, _T_ANGLE]) * ratio
-            out[i, _C_CARCASS_DIST] = 1.0
+                out[i, columns[_C_PREY_VX]] = math.cos(other[seen, _T_ANGLE]) * ratio
+                out[i, columns[_C_PREY_VY]] = math.sin(other[seen, _T_ANGLE]) * ratio
+            out[i, columns[_C_CARCASS_DIST]] = 1.0
             # carcasses: sight, smell and target whiskers
             seen, near, near_d, _, _ = _scan(
                 x, y, own_id, cos_a, sin_a, eye, half_angle, cos_half, size, carcasses, crowns,
-                -1.0, target_reach, cos_w, sin_w, occlusion, tw)
+                -1.0, target_reach, cos_w, sin_w, occlusion, tw, kc)
             if seen >= 0:
-                out[i, _C_CARCASS_ANGLE] = _angle_to(x, y, angle, carcasses, seen) / half_angle
-                out[i, _C_CARCASS_DIST] = math.hypot(carcasses[seen, _T_X] - x,
+                out[i, columns[_C_CARCASS_ANGLE]] = _angle_to(x, y, angle, carcasses, seen) / half_angle
+                out[i, columns[_C_CARCASS_DIST]] = math.hypot(carcasses[seen, _T_X] - x,
                                                      carcasses[seen, _T_Y] - y) / eye
-            if near >= 0 and near_d < SMELL_DISTANCE:
-                out[i, _C_CARCASS_SMELL_ANGLE] = _angle_to(x, y, angle, carcasses, near) / _PI
-                out[i, _C_CARCASS_SMELL_STRENGTH] = 1.0 - near_d / SMELL_DISTANCE
+            if near >= 0 and near_d < kc[_K_SMELL]:
+                out[i, columns[_C_CARCASS_SMELL_ANGLE]] = _angle_to(x, y, angle, carcasses, near) / _PI
+                out[i, columns[_C_CARCASS_SMELL_STRENGTH]] = 1.0 - near_d / kc[_K_SMELL]
         else:
-            out[i, _C_CARCASS_DIST] = 1.0
+            out[i, columns[_C_CARCASS_DIST]] = 1.0
             # food: target whiskers, then the nearest item in the cone (the first of equally
             # near ones in food_xy order)
             food_best, food_best_d = -1, _INF
             if n_food:
                 # Cells within target_reach, plus 1 px so rounding never loses an item.
                 pad = target_reach + 1.0
-                gx0 = min(max(int(math.floor((x - pad) / cell)), 0), cols - 1)
-                gx1 = min(max(int(math.floor((x + pad) / cell)), 0), cols - 1)
-                gy0 = min(max(int(math.floor((y - pad) / cell)), 0), rows - 1)
-                gy1 = min(max(int(math.floor((y + pad) / cell)), 0), rows - 1)
+                gx0 = min(max(int(math.floor((x - pad) / cell)), 0), grid_cols - 1)
+                gx1 = min(max(int(math.floor((x + pad) / cell)), 0), grid_cols - 1)
+                gy0 = min(max(int(math.floor((y - pad) / cell)), 0), grid_rows - 1)
+                gy1 = min(max(int(math.floor((y + pad) / cell)), 0), grid_rows - 1)
                 for gy in range(gy0, gy1 + 1):
                     for gx in range(gx0, gx1 + 1):
-                        g = gy * cols + gx
+                        g = gy * grid_cols + gx
                         for at in range(counts[g], counts[g + 1]):
                             f = food_order[at]
                             dx = food_xy[f, 0] - x
@@ -490,7 +484,7 @@ def _kernel(obs, whisker_angles, herbs, carns, carcasses, food_xy, rects, crowns
                             d = math.hypot(dx, dy)
                             if not d <= target_reach:
                                 continue
-                            _target_whisker_hits(dx, dy, cos_w, sin_w, eye, occlusion, tw)
+                            _target_whisker_hits(dx, dy, cos_w, sin_w, eye, occlusion, tw, kc)
                             if not (d > 0.0 and d <= eye):
                                 continue
                             if d > food_best_d or (d == food_best_d and f > food_best):
@@ -508,15 +502,15 @@ def _kernel(obs, whisker_angles, herbs, carns, carcasses, food_xy, rects, crowns
                 food_angle, food_dist = 0.0, 1.0
             fade = 1 - seen_dist
             blended = food_angle - seen_angle * (fade * fade)
-            out[i, _C_TARGET_ANGLE] = min(max(blended, -1.0), 1.0)
-            out[i, _C_TARGET_DIST] = food_dist
+            out[i, columns[_C_TARGET_ANGLE]] = min(max(blended, -1.0), 1.0)
+            out[i, columns[_C_TARGET_DIST]] = food_dist
             target_dist[i], target_found[i] = food_dist, food_best >= 0
         for k in range(n_w):
             target_whisker_dist[i, k] = tw[k]
-            out[i, _TARGET_W + k] = 1.0 - tw[k] / eye if tw[k] < _INF else 0.0
+            out[i, columns[_C_TARGET_W] + k] = 1.0 - tw[k] / eye if tw[k] < _INF else 0.0
 
         # --- water: the lake blob whose shore is nearest
-        out[i, _C_WATER_DIST] = 1.0
+        out[i, columns[_C_WATER_DIST]] = 1.0
         n_lakes = lake_shape.shape[0]
         if n_lakes:
             best, best_gap = 0, _INF
@@ -524,7 +518,7 @@ def _kernel(obs, whisker_angles, herbs, carns, carcasses, food_xy, rects, crowns
                 dx = x - lake_shape[lk, 0]
                 dy = y - lake_shape[lk, 1]
                 # The shore is at most max_radius from the centre; the +1 absorbs rounding.
-                limit = lake_shape[lk, 3] + WATER_SENSE_RADIUS + 1.0
+                limit = lake_shape[lk, 3] + kc[_K_WATER] + 1.0
                 if dx * dx + dy * dy > (limit + 1.0) * (limit + 1.0):
                     continue
                 d = math.hypot(dx, dy)
@@ -541,29 +535,29 @@ def _kernel(obs, whisker_angles, herbs, carns, carcasses, food_xy, rects, crowns
                 if gap < best_gap:
                     best, best_gap = lk, gap
             if best_gap < 0.0:
-                out[i, _C_IN_WATER] = 1.0
-            if best_gap < WATER_SENSE_RADIUS:
+                out[i, columns[_C_IN_WATER]] = 1.0
+            if best_gap < kc[_K_WATER]:
                 to_water = _wrap(math.atan2(lake_shape[best, 1] - y, lake_shape[best, 0] - x)
                                  - angle)
-                out[i, _C_WATER_ANGLE] = to_water / _PI
-                out[i, _C_WATER_DIST] = max(best_gap, 0.0) / WATER_SENSE_RADIUS
+                out[i, columns[_C_WATER_ANGLE]] = to_water / _PI
+                out[i, columns[_C_WATER_DIST]] = max(best_gap, 0.0) / kc[_K_WATER]
 
         # --- the creature itself
-        out[i, _C_LIGHT] = light
-        out[i, _C_SEASON] = season
-        out[i, _C_THIRST] = obs[i, _THIRST]
-        out[i, _C_EATING] = obs[i, _EATING]
-        out[i, _C_HURT] = obs[i, _HURT]
-        out[i, _C_FERTILE] = obs[i, _FERTILE]
-        out[i, _C_HEALTH] = obs[i, _HEALTH] / obs[i, _MAX_HEALTH]
-        out[i, _C_SIN] = sin_a
-        out[i, _C_COS] = cos_a
-        out[i, _C_SIZE] = size / _MAX_SIZE
-        out[i, _C_SPEED] = obs[i, _CUR_SPEED] / obs[i, _GEN_MAX_SPEED]
-        out[i, _C_SIGHT] = sight / MAX_NORMALIZED_SIGHT_DISTANCE
-        out[i, _C_SIGHT_ANGLE] = sight_angle / _TWO_PI
-        out[i, _C_STAMINA] = obs[i, _STAMINA] / obs[i, _MAX_STAMINA]
-        out[i, _C_HUNGER] = min(1.0, obs[i, _HUNGER] / HUNGER_MAX)
+        out[i, columns[_C_LIGHT]] = light
+        out[i, columns[_C_SEASON]] = season
+        out[i, columns[_C_THIRST]] = obs[i, _THIRST]
+        out[i, columns[_C_EATING]] = obs[i, _EATING]
+        out[i, columns[_C_HURT]] = obs[i, _HURT]
+        out[i, columns[_C_FERTILE]] = obs[i, _FERTILE]
+        out[i, columns[_C_HEALTH]] = obs[i, _HEALTH] / obs[i, _MAX_HEALTH]
+        out[i, columns[_C_SIN]] = sin_a
+        out[i, columns[_C_COS]] = cos_a
+        out[i, columns[_C_SIZE]] = size / kc[_K_MAX_SIZE]
+        out[i, columns[_C_SPEED]] = obs[i, _CUR_SPEED] / obs[i, _GEN_MAX_SPEED]
+        out[i, columns[_C_SIGHT]] = sight / kc[_K_SIGHT_NORM]
+        out[i, columns[_C_SIGHT_ANGLE]] = sight_angle / _TWO_PI
+        out[i, columns[_C_STAMINA]] = obs[i, _STAMINA] / obs[i, _MAX_STAMINA]
+        out[i, columns[_C_HUNGER]] = min(1.0, obs[i, _HUNGER] / kc[_K_HUNGER])
 
 
 def _gather(creatures, tick):
@@ -668,17 +662,20 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
     static = _static.get(obstacles, lakes)
     world_w, world_h = creatures[0].world_bounds
 
-    whisker_dist = np.empty((n, NUM_WHISKERS))
-    target_whisker_dist = np.empty((n, NUM_WHISKERS))
+    n_w = whisker_angles.shape[1]
+    whisker_dist = np.empty((n, n_w))
+    target_whisker_dist = np.empty((n, n_w))
     target_dist = np.empty(n)
     target_found = np.zeros(n, dtype=np.bool_)
     smell_self = np.empty(n)
     eye = np.empty(n)
+    columns = np.array([_column(name) for name in _FIELDS], dtype=np.int64)
     _kernel(obs, whisker_angles, herb_rows, carn_rows, _carcass_rows(carcasses),
             np.ascontiguousarray(food_xy, dtype=np.float64), static.rects, static.crowns,
             static.lakes, static.waves, float(world_w), float(world_h), float(light),
-            float(season), NIGHT_SIGHT_FACTOR + (1 - NIGHT_SIGHT_FACTOR) * light, out,
-            whisker_dist, target_whisker_dist, target_dist, target_found, smell_self, eye)
+            float(season), NIGHT_SIGHT_FACTOR + (1 - NIGHT_SIGHT_FACTOR) * light, _tunables(),
+            columns,
+            out, whisker_dist, target_whisker_dist, target_dist, target_found, smell_self, eye)
     out[:, IN.memory] = [c.memory for c in creatures]
 
     wl = whisker_dist.tolist()
