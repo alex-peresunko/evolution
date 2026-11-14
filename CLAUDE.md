@@ -227,7 +227,7 @@ Each file also stores that species' chart `history` (score and longevity, capped
 - Without a new record, exit still updates the history (`update_saved_history`).
 
 **Brain history** (`persistence/brain_history.py`):
-- Every start of `game.py`/`game_headless.py` (not island workers) snapshots the current best files as a pair into `saved_brains/history/<YYYYmmdd-HHMMSS>[-label]/` (git-ignored), after the starting populations were read.
+- Every start of `game.py`/`game_headless.py` (not island workers) snapshots the current best files as a pair into `saved_brains/history/<YYYYmmdd-HHMMSS>[-label]/` (UTC, git-ignored), after the starting populations were read.
 - A snapshot is skipped when the brains equal the newest one. Chart history and uptime are ignored in that comparison, because every exit rewrites them.
 - `--new` and `--load` move the best files out instead of copying, so the run's own records save from scratch.
 - Only the newest `BRAIN_HISTORY_KEEP` snapshots are kept, plus the one loaded this run.

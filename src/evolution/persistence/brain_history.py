@@ -48,8 +48,9 @@ def _same_as(folder, save_dir):
 
 
 def new_snapshot_dir(label=None, save_dir=SAVE_DIR):
-    """A fresh, empty snapshot folder (created)."""
-    base = time.strftime("%Y%m%d-%H%M%S") + (f"-{label}" if label else "")
+    """A fresh, empty snapshot folder (created). Named in UTC, so snapshots from the host and
+    from the container (whose clock is UTC) sort in the order they were taken."""
+    base = time.strftime("%Y%m%d-%H%M%S", time.gmtime()) + (f"-{label}" if label else "")
     name, n = base, 1
     while os.path.exists(os.path.join(history_dir(save_dir), name)):
         n += 1
@@ -71,7 +72,10 @@ def snapshot_best(save_dir=SAVE_DIR, move=False, label=None):
     if not (names and _same_as(os.path.join(history_dir(save_dir), names[0]), save_dir)):
         path = new_snapshot_dir(label, save_dir)
         for sp in present:
-            shutil.copy2(os.path.join(save_dir, sp.brain_file), path)
+            # Contents only: copying timestamps (copy2) fails with EPERM on a Windows bind
+            # mount in the podman container, and nothing reads a snapshot's mtime.
+            shutil.copyfile(os.path.join(save_dir, sp.brain_file),
+                            os.path.join(path, sp.brain_file))
     if move:
         for sp in present:
             os.remove(os.path.join(save_dir, sp.brain_file))
