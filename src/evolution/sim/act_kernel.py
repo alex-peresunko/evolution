@@ -34,6 +34,7 @@ from ..brain.layout import OUTPUTS as OUT
 from ..diet import GrazingDiet, PredatorDiet
 from ..species import ALL_SPECIES
 from ..world import creature as creature_module
+from ..world import creature_table as T
 from ..world import food as food_module
 from . import breeding
 
@@ -55,6 +56,14 @@ N_FL = 23
  FAT_INT, SCORE_INT, ACTS) = range(21)
 N_IT = 21
 CARCASS_OFF_LIST = -2      # MEAL_CARCASS of a carcass no longer in world.carcasses: it is gone
+# The kernel works on the creatures' CreatureTable rows in place. Its columns are spelled out
+# here, not imported, because Numba's disk cache only notices edits to this file.
+for _name in ("X Y ANGLE TURN HEALTH MAX_HEALTH FAT STAMINA MAX_STAMINA SIZE MAX_SPEED GEN_SIZE "
+              "EFF_MAX_SPEED SPEED HURT MEAL_HEALTH SCORE TRAIT_UPKEEP LIFESPAN MATE_INSTINCT "
+              "TARGET_DIST SMELL SIGNAL SPECIES AGE THIRST HUNGER EATING STUNNED IMMUNE ADULT "
+              "WINDED IN_WATER WILLING MATE_OVERRIDE LAST_BITE LAST_HIT LAST_TRAMPLE "
+              "LAST_TRAMPLED MEAL_CARCASS STAMINA_INT FAT_INT SCORE_INT ACTS NONE").split():
+    assert getattr(T, _name) == globals()[_name], f"act_kernel's {_name} is not the table's"
 
 # Tally counters (array `tally`).
 T_BITES, T_CONFUSED, T_PACK, T_TRAMPLES, T_MOB, T_FOOD = range(6)
@@ -911,67 +920,39 @@ def supported(world):
     return world.geometry.kind in ("headless", "pygame") and _species_table() is not None
 
 
-def _tick(value):
-    return NONE if value is None else value
-
-
-def _gene_keys():
-    return [list(s.gene_bounds) for s in ALL_SPECIES]
-
-
-def _gather(world, creatures):
-    """(members, fl, it, genes): the acting creatures, then every other creature their
-    recent_biters / recent_tramplers name (their score can change)."""
-    members = list(creatures)
-    slot = {id(c): n for n, c in enumerate(members)}
+def _outside_attackers(creatures):
+    """(slot, extras): every creature that a recent_biters / recent_tramplers dict of
+    `creatures` names but that is not among them (their score can change), and the kernel row
+    of each creature in either list by id(); (None, []) when every dict is empty."""
+    if not any(c.recent_biters or c.recent_tramplers for c in creatures):
+        return None, []
+    n = len(creatures)
+    slot = {id(c): j for j, c in enumerate(creatures)}
+    extras = []
     for c in creatures:
         for recent in (c.recent_biters, c.recent_tramplers):
             for other in recent:
                 if id(other) not in slot:
-                    slot[id(other)] = len(members)
-                    members.append(other)
-    acting = len(creatures)
-    carcass_at = {id(k): n for n, k in enumerate(world.carcasses)}
-    nan = math.nan
-    fl = np.array([
-        (c.pos.x, c.pos.y, c.angle, c.turn, c.health, c.max_health, c.fat, c.stamina,
-         c.max_stamina, c.size, c.max_speed, c.genetic_size, c.effective_max_speed,
-         c.current_speed, c.hurt, c.meal_health, c.score, c.trait_upkeep, c.genes["lifespan"],
-         c.genes["mate_instinct"],
-         nan if c.nearest_target_dist is None else c.nearest_target_dist,
-         c.nearest_smell_strength, c.signal)
-        for c in members], dtype=np.float64).reshape(-1, N_FL)
-    it = np.array([
-        (_SPECIES_AT[id(c.species)], c.age, c.thirst, c.hunger, c.eating_ticks, c.stunned_ticks,
-         c.respawn_immunity_ticks, c.is_adult, c.winded, c.in_water, c.willing, c.mate_override,
-         _tick(c.last_bite_tick), _tick(c.last_hit_tick), _tick(c.last_trample_tick),
-         _tick(c.last_trampled_tick),
-         -1 if c.meal_carcass is None else carcass_at.get(id(c.meal_carcass), CARCASS_OFF_LIST),
-         type(c.stamina) is int, type(c.fat) is int, type(c.score) is int, n < acting)
-        for n, c in enumerate(members)], dtype=np.int64).reshape(-1, N_IT)
-    keys = _gene_keys()
-    width = max(len(k) for k in keys)
-    genes = np.zeros((len(members), width))
-    for n, c in enumerate(members):
-        row = [c.genes[g] for g in keys[_SPECIES_AT[id(c.species)]]]
-        genes[n, :len(row)] = row
-    return members, slot, fl, it, genes
+                    slot[id(other)] = n + len(extras)
+                    extras.append(other)
+    return slot, extras
 
 
-def _recent(members, slot, acting, attribute):
-    """(who, when, count) of each acting member's recent attackers dict. The extra members
-    (attackers pulled in by reference) get empty rows: only acting creatures are bitten or
-    trampled, and the attackers their own dicts name need not be members."""
-    dicts = [getattr(c, attribute) for c in members[:acting]]
+def _recent(creatures, slot, rows, attribute):
+    """(who, when, count) of each acting creature's recent attackers dict, `rows` rows. The
+    extra rows (attackers pulled in by reference) stay empty: only acting creatures are bitten
+    or trampled, and the attackers their own dicts name need not be in the kernel."""
+    dicts = [getattr(c, attribute) for c in creatures] if slot is not None else []
     width = max(4, max((len(d) for d in dicts), default=0) + 4)
-    who = np.full((len(members), width), -1, dtype=np.int64)
-    when = np.zeros((len(members), width), dtype=np.int64)
-    count = np.zeros(len(members), dtype=np.int64)
+    who = np.full((rows, width), -1, dtype=np.int64)
+    when = np.zeros((rows, width), dtype=np.int64)
+    count = np.zeros(rows, dtype=np.int64)
     for j, d in enumerate(dicts):
-        for e, (other, tick) in enumerate(d.items()):
-            who[j, e] = slot[id(other)]
-            when[j, e] = tick
-        count[j] = len(d)
+        if d:
+            for e, (other, tick) in enumerate(d.items()):
+                who[j, e] = slot[id(other)]
+                when[j, e] = tick
+            count[j] = len(d)
     return who, when, count
 
 
@@ -1002,22 +983,53 @@ class _Random:
 _random = None
 
 
+class _Genes:
+    """The (species, gene) arrays of the gene spans, built once."""
+
+    def __init__(self):
+        bounds = [list(s.gene_bounds.values()) for s in ALL_SPECIES]
+        self.span = np.ones((len(ALL_SPECIES), T.N_GENES))
+        for n, b in enumerate(bounds):
+            self.span[n, :len(b)] = [hi - lo for lo, hi in b]
+        self.count = np.array([len(b) for b in bounds], dtype=np.int64)
+
+
+_genes = None
+
+
 def act_all(world, creatures, outputs):
     """The act loop of Simulation._think_and_act for `creatures` (world.creatures()) with the
-    brain `outputs` rows, compiled. The world must be `supported`."""
-    global _random
+    brain `outputs` rows, compiled, on the world's CreatureTable in place. The world must be
+    `supported`."""
+    global _random, _genes
     if _random is None:
-        _random = _Random()
+        _random, _genes = _Random(), _Genes()
     species = _species_table()
-    members, slot, fl, it, genes = _gather(world, creatures)
-    keys = [list(s.gene_bounds.values()) for s in ALL_SPECIES]
-    width = genes.shape[1]
-    gene_span = np.ones((len(ALL_SPECIES), width))
-    for n, bounds in enumerate(keys):
-        gene_span[n, :len(bounds)] = [hi - lo for lo, hi in bounds]
-    gene_count = np.array([len(b) for b in keys], dtype=np.int64)
-    rb = _recent(members, slot, len(creatures), "recent_biters")
-    rt = _recent(members, slot, len(creatures), "recent_tramplers")
+    table = world.table
+    table.arrange(creatures)
+    n = len(creatures)
+    slot, extras = _outside_attackers(creatures)
+    members = creatures + extras if extras else creatures
+    if extras:
+        fl = np.concatenate([table.fl, np.array([o._t.fl[o._r] for o in extras])])
+        it = np.concatenate([table.it, np.array([o._t.it[o._r] for o in extras])])
+        genes = np.concatenate([table.genes, np.array([o._t.genes[o._r] for o in extras])])
+    else:
+        fl, it, genes = table.fl, table.it, table.genes
+    it[:, ACTS] = 0
+    it[:n, ACTS] = 1
+    carcass_list = world.carcasses
+    it[:, MEAL_CARCASS] = -1
+    carcass_at = None
+    for j, c in enumerate(creatures):
+        meal = c.meal_carcass
+        if meal is not None:
+            if carcass_at is None:
+                carcass_at = {id(k): m for m, k in enumerate(carcass_list)}
+            it[j, MEAL_CARCASS] = carcass_at.get(id(meal), CARCASS_OFF_LIST)
+    meals_before = it[:n, MEAL_CARCASS].copy()
+    rb = _recent(creatures, slot, len(members), "recent_biters")
+    rt = _recent(creatures, slot, len(members), "recent_tramplers")
     rb_changed = np.zeros(len(members), dtype=np.bool_)
     rt_changed = np.zeros(len(members), dtype=np.bool_)
 
@@ -1026,7 +1038,7 @@ def act_all(world, creatures, outputs):
     if food_xy is None:
         food_xy = np.array([(f.pos.x, f.pos.y) for f in food], dtype=np.float64).reshape(-1, 2)
     food_life = np.array([f.lifetime for f in food], dtype=np.float64)
-    carcasses = np.array([(k.pos.x, k.pos.y, k.radius, k.meat, k.age) for k in world.carcasses],
+    carcasses = np.array([(k.pos.x, k.pos.y, k.radius, k.meat, k.age) for k in carcass_list],
                          dtype=np.float64).reshape(-1, 5)
     grid = world.index.food
     terrain = _terrain.get(world)
@@ -1035,8 +1047,8 @@ def act_all(world, creatures, outputs):
 
     version, gauss = _random.load()
     (eaten, abandoned, abandon_order, tally, draws, rb_who, rb_when, rt_who, rt_when) = _act_all(
-        np.ascontiguousarray(outputs, dtype=np.float64), _OUT_COLUMNS, fl, it, genes, gene_span,
-        gene_count, len(creatures), *species, world.tick, float(world.season), float(w),
+        np.ascontiguousarray(outputs, dtype=np.float64), _OUT_COLUMNS, fl, it, genes,
+        _genes.span, _genes.count, n, *species, world.tick, float(world.season), float(w),
         float(h), world.geometry.kind == "pygame", float(grid.cell_size), grid.cols, grid.rows,
         np.ascontiguousarray(food_xy, dtype=np.float64), food_life, carcasses,
         float(t.cell_size), t.cols, t.rows, float(t.reach), terrain.obs_start, terrain.obs,
@@ -1045,12 +1057,25 @@ def act_all(world, creatures, outputs):
     if draws:
         _random.store(version, gauss)
 
-    _write_back(members, len(creatures), fl, it, world.carcasses)
+    if extras:   # only their score can change
+        table.fl[:] = fl[:n]
+        table.it[:] = it[:n]
+        for m, o in enumerate(extras, n):
+            o._t.fl[o._r, SCORE] = fl[m, SCORE]
+            o._t.it[o._r, SCORE_INT] = it[m, SCORE_INT]
+    table.it[:, T.HEALTH_INT] = 0     # acting leaves health a float, as Creature.act does
+    meals = table.it[:, MEAL_CARCASS]
+    for j in np.flatnonzero(meals != meals_before).tolist():
+        meal = int(meals[j])
+        if meal == -1:
+            creatures[j].meal_carcass = None
+        elif meal >= 0:
+            creatures[j].meal_carcass = carcass_list[meal]
     _write_recent(members, "recent_biters", rb_who, rb_when, rb[2], rb_changed)
     _write_recent(members, "recent_tramplers", rt_who, rt_when, rt[2], rt_changed)
     for f in np.flatnonzero(eaten).tolist():
         food[f].consumed = True
-    for k, meat in zip(world.carcasses, carcasses[:, 3].tolist()):
+    for k, meat in zip(carcass_list, carcasses[:, 3].tolist()):
         k.meat = meat
     tallied = world.tally
     tallied.bites += int(tally[T_BITES])
@@ -1064,33 +1089,3 @@ def act_all(world, creatures, outputs):
         meals = tallied.meals_abandoned = Counter(meals)
     for s in abandon_order.tolist():
         meals[ALL_SPECIES[s].name] += int(abandoned[s])
-
-
-def _write_back(members, acting, fl, it, carcasses):
-    fls, its = fl.tolist(), it.tolist()
-    for n in range(acting):
-        c, f, i = members[n], fls[n], its[n]
-        c.pos.x, c.pos.y = f[X], f[Y]
-        c.angle, c.turn, c.health = f[ANGLE], f[TURN], f[HEALTH]
-        c.fat = int(f[FAT]) if i[FAT_INT] else f[FAT]
-        c.stamina = int(f[STAMINA]) if i[STAMINA_INT] else f[STAMINA]
-        c.score = int(f[SCORE]) if i[SCORE_INT] else f[SCORE]
-        c.size, c.max_speed, c.current_speed = f[SIZE], f[MAX_SPEED], f[SPEED]
-        c.hurt, c.meal_health = f[HURT], f[MEAL_HEALTH]
-        c.age, c.thirst, c.hunger = i[AGE], i[THIRST], i[HUNGER]
-        c.eating_ticks, c.stunned_ticks = i[EATING], i[STUNNED]
-        c.respawn_immunity_ticks = i[IMMUNE]
-        c.is_adult, c.winded, c.in_water = bool(i[ADULT]), bool(i[WINDED]), bool(i[IN_WATER])
-        c.willing, c.mate_override = bool(i[WILLING]), bool(i[MATE_OVERRIDE])
-        c.last_bite_tick = None if i[LAST_BITE] == NONE else i[LAST_BITE]
-        c.last_hit_tick = None if i[LAST_HIT] == NONE else i[LAST_HIT]
-        c.last_trample_tick = None if i[LAST_TRAMPLE] == NONE else i[LAST_TRAMPLE]
-        c.last_trampled_tick = None if i[LAST_TRAMPLED] == NONE else i[LAST_TRAMPLED]
-        meal = i[MEAL_CARCASS]
-        if meal == -1:
-            c.meal_carcass = None
-        elif meal >= 0:
-            c.meal_carcass = carcasses[meal]
-    for n in range(acting, len(members)):   # only their score can change
-        c, f, i = members[n], fls[n], its[n]
-        c.score = int(f[SCORE]) if i[SCORE_INT] else f[SCORE]

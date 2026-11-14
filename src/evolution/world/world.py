@@ -15,6 +15,7 @@ from ..config import (
 )
 from ..species import ALL_SPECIES, CARNIVORE, HERBIVORE
 from .collision import separate
+from .creature_table import CreatureTable
 from .environment import FoodPatch, day_light, season
 from .food import Food
 from .geometry import HEADLESS
@@ -57,6 +58,8 @@ class World:
         self.season = 0.0
         self.index = SpatialIndex(world_bounds, ALL_SPECIES, GRID_CELL_SIZE)
         self.tally = WorldTally()
+        # The creatures' state, arranged in creatures() order by perceive (world.creature_table).
+        self.table = CreatureTable()
 
     @property
     def obstacles(self):
@@ -107,7 +110,9 @@ class World:
 
     def perceive(self):
         """Brain input rows for creatures() (see perception.perceive_all)."""
-        return perceive_all(self.creatures(), self.food, self.herbivores, self.carnivores,
+        creatures = self.creatures()
+        self.table.arrange(creatures)
+        return perceive_all(creatures, self.food, self.herbivores, self.carnivores,
                             self.obstacles, self.carcasses, self.light, self.season, self.lakes,
                             self.tick, food_xy=self.index.food_xy(self.food))
 

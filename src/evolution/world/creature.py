@@ -51,6 +51,8 @@ from ..config import (
     WINTER_FAT_INSULATION,
 )
 from ..genetics import clamp_genes
+from . import creature_table as T
+from .creature_table import CreatureTable
 from .geometry import HEADLESS
 
 # attrition: upkeep, effort, signalling and wall or rock hits, with no other cause in effect.
@@ -61,11 +63,64 @@ DEATH_CAUSES = ("bitten", "retaliation", "trampled", "impact", "starved", "thirs
 class Creature:
     _id_counter = 1
 
+    # Fields stored in the creature's CreatureTable row (see world.creature_table).
+    pos = T.VectorField(T.X, T.Y, "pos")
+    knock = T.VectorField(T.KNOCK_X, T.KNOCK_Y, "knock")
+    angle = T.Float(T.ANGLE)
+    turn = T.Float(T.TURN)
+    health = T.Number(T.HEALTH, T.HEALTH_INT)
+    fat = T.Number(T.FAT, T.FAT_INT)
+    stamina = T.Number(T.STAMINA, T.STAMINA_INT)
+    score = T.Number(T.SCORE, T.SCORE_INT)
+    size = T.Float(T.SIZE)
+    max_speed = T.Float(T.MAX_SPEED)
+    current_speed = T.Float(T.SPEED)
+    hurt = T.Float(T.HURT)
+    meal_health = T.Float(T.MEAL_HEALTH)
+    nearest_target_dist = T.OptionalFloat(T.TARGET_DIST)
+    nearest_smell_strength = T.Float(T.SMELL)
+    signal = T.Float(T.SIGNAL)
+    effective_sight = T.Float(T.EFFECTIVE_SIGHT)
+    memory = T.Floats(T.MEMORY)
+    whiskers = T.Floats(T.WHISKERS)
+    target_whiskers = T.Floats(T.TARGET_WHISKERS, inf_is_none=True)
+    max_health = T.Mirror(T.MAX_HEALTH, "max_health")
+    max_stamina = T.Mirror(T.MAX_STAMINA, "max_stamina")
+    genetic_size = T.Mirror(T.GEN_SIZE, "genetic_size")
+    genetic_max_speed = T.Mirror(T.GEN_MAX_SPEED, "genetic_max_speed")
+    effective_max_speed = T.Mirror(T.EFF_MAX_SPEED, "effective_max_speed")
+    sight_distance = T.Mirror(T.SIGHT, "sight_distance")
+    sight_angle = T.Mirror(T.SIGHT_ANGLE, "sight_angle")
+    attractiveness = T.Mirror(T.ATTRACTIVENESS, "attractiveness")
+    trait_upkeep = T.Mirror(T.TRAIT_UPKEEP, "trait_upkeep")
+    whisker_angles = T.Mirrors(T.WHISKER_ANGLES, "whisker_angles")
+    age = T.Int(T.AGE)
+    thirst = T.Int(T.THIRST)
+    hunger = T.Int(T.HUNGER)
+    eating_ticks = T.Int(T.EATING)
+    stunned_ticks = T.Int(T.STUNNED)
+    respawn_immunity_ticks = T.Int(T.IMMUNE)
+    reproductions = T.Int(T.REPRODUCTIONS)
+    is_adult = T.Bool(T.ADULT)
+    winded = T.Bool(T.WINDED)
+    in_water = T.Bool(T.IN_WATER)
+    willing = T.Bool(T.WILLING)
+    mate_override = T.Bool(T.MATE_OVERRIDE)
+    last_bite_tick = T.Tick(T.LAST_BITE)
+    last_hit_tick = T.Tick(T.LAST_HIT)
+    last_trample_tick = T.Tick(T.LAST_TRAMPLE)
+    last_trampled_tick = T.Tick(T.LAST_TRAMPLED)
+    last_reproduction_tick = T.Tick(T.LAST_REPRODUCTION)
+    last_impact_tick = T.Tick(T.LAST_IMPACT)
+
     def __init__(self, species, world_bounds, brain=None, genes=None, *, geometry=HEADLESS):
+        self._t, self._r = CreatureTable.own(self), 0
         self.species = species
         self.geometry = geometry
         self.id = Creature._id_counter
         Creature._id_counter += 1
+        self._t.it[0, T.SPECIES] = T.SPECIES_AT[id(species)]
+        self._t.it[0, T.ID] = self.id
         self.world_bounds = world_bounds
         self.pos = geometry.vec2(random.uniform(0, world_bounds[0]),
                                  random.uniform(0, world_bounds[1]))
@@ -149,6 +204,19 @@ class Creature:
 
         self.whisker_angles = np.linspace(-self.sight_angle / 2, self.sight_angle / 2,
                                           NUM_WHISKERS)
+        t, r = self._t, self._r
+        t.fl[r, T.LIFESPAN] = self.genes["lifespan"]
+        t.fl[r, T.MATE_INSTINCT] = self.genes["mate_instinct"]
+        row = [self.genes[g] for g in T.GENE_KEYS[t.it[r, T.SPECIES]]]
+        t.genes[r] = 0.0
+        t.genes[r, :len(row)] = row
+
+    def _release(self):
+        """Move out of a shared table into one of its own (CreatureTable.arrange)."""
+        t, r = self._t, self._r
+        own = CreatureTable.own(self)
+        own.fl[0], own.it[0], own.genes[0] = t.fl[r], t.it[r], t.genes[r]
+        self._t, self._r = own, 0
 
     def adopt(self, brain, genes):
         """Take another brain and genes mid-life; position, health, age, fat and the rest of
