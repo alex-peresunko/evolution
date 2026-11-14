@@ -1,5 +1,7 @@
 import random
 
+import numpy as np
+
 from ..config import (
     FAT_SIZE_FACTOR,
     FOOD_MAX_LIFETIME,
@@ -18,7 +20,7 @@ from . import creature_table as T
 from .collision import separate
 from .creature_table import CreatureTable
 from .environment import FoodPatch, day_light, season
-from .food import Food
+from .food import Food, FoodClock
 from .geometry import HEADLESS
 from .perception import perceive_all
 from .spatial import SpatialIndex
@@ -61,6 +63,13 @@ class World:
         self.tally = WorldTally()
         # The creatures' state, arranged in creatures() order by perceive (world.creature_table).
         self.table = CreatureTable()
+        # Food ages by the clock: the items of _food_list (the food list as last synced) are
+        # attached to it, with their birth ticks and ids in arrays in list order.
+        self._food_clock = FoodClock()
+        self._food_list = None
+        self._food_last = None
+        self._food_born = np.zeros(0, dtype=np.int64)
+        self._food_ids = np.zeros(0, dtype=np.int64)
 
     @property
     def obstacles(self):
@@ -129,21 +138,53 @@ class World:
 
     # --- food ------------------------------------------------------------------------------
 
+    def _sync_food_clock(self):
+        """Attach the items appended to self.food since the last sync, or every item after
+        any other change to the list."""
+        food, clock = self.food, self._food_clock
+        n = len(self._food_born)
+        if (food is not self._food_list or len(food) < n
+                or (n and food[n - 1] is not self._food_last)):
+            clock.eaten = []
+            new, born, ids = food, None, None
+        else:
+            new, born, ids = food[n:], self._food_born, self._food_ids
+        if new or born is None:
+            for item in new:
+                item.attach(clock)
+            new_born = np.array([f._born for f in new], dtype=np.int64)
+            new_ids = np.array([f.id for f in new], dtype=np.int64)
+            self._food_born = new_born if born is None else np.concatenate((born, new_born))
+            self._food_ids = new_ids if ids is None else np.concatenate((ids, new_ids))
+        self._food_list = food
+        self._food_last = food[-1] if food else None
+
+    def food_lifetimes(self):
+        """(F,) float lifetimes of the items of self.food."""
+        self._sync_food_clock()
+        return (self._food_clock.now - self._food_born).astype(np.float64)
+
     def age_food(self):
         """Age every food item by a tick and drop the eaten and the rotten ones."""
-        food = self.food
-        gone = []
-        i = 0
-        for item in food:
-            item.lifetime = lifetime = item.lifetime + 1
-            if item.consumed or lifetime >= FOOD_MAX_LIFETIME:
-                gone.append(i)
-            i += 1
-        if gone:
+        self._sync_food_clock()
+        food, clock = self.food, self._food_clock
+        clock.now += 1
+        gone = self._food_born <= clock.now - FOOD_MAX_LIFETIME
+        eaten, clock.eaten = clock.eaten, []
+        if eaten:
+            gone |= np.isin(self._food_ids, np.array([f.id for f in eaten], dtype=np.int64))
+        gone = np.flatnonzero(gone)
+        if len(gone):
+            self._food_born = np.delete(self._food_born, gone)
+            self._food_ids = np.delete(self._food_ids, gone)
+            gone = gone.tolist()
             items = [food[i] for i in gone]
             self.tally.food_rotted += sum(not item.consumed for item in items)
             for i in reversed(gone):
                 del food[i]
+            for item in items:
+                item.detach()
+            self._food_last = food[-1] if food else None
             self.index.food_removed(food, gone, items)
 
     def drift_food_patches(self):

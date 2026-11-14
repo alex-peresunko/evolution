@@ -11,6 +11,15 @@ from ..config import (
 from .geometry import HEADLESS
 
 
+class FoodClock:
+    """A world's food age clock. Food attached to it ages by one tick with every `now += 1`,
+    and food eaten while attached is listed in `eaten` until the world collects it."""
+
+    def __init__(self):
+        self.now = 0
+        self.eaten = []
+
+
 class Food:
     _id_counter = -1
 
@@ -20,8 +29,42 @@ class Food:
         if pos is None:
             pos = (random.uniform(0, world_bounds[0]), random.uniform(0, world_bounds[1]))
         self.pos = geometry.vec2(*pos)
-        self.lifetime = 0
-        self.consumed = False
+        # Detached (no clock), _born holds the lifetime; attached, the clock tick it was born at.
+        self._clock = None
+        self._born = 0
+        self._consumed = False
+
+    @property
+    def lifetime(self):
+        clock = self._clock
+        return self._born if clock is None else clock.now - self._born
+
+    @lifetime.setter
+    def lifetime(self, value):
+        clock = self._clock
+        self._born = value if clock is None else clock.now - value
+
+    @property
+    def consumed(self):
+        return self._consumed
+
+    @consumed.setter
+    def consumed(self, value):
+        self._consumed = value
+        if value and self._clock is not None:
+            self._clock.eaten.append(self)
+
+    def attach(self, clock):
+        """Age with `clock` from now on, keeping the current lifetime."""
+        lifetime = self.lifetime
+        self._clock = clock
+        self._born = clock.now - lifetime
+        if self._consumed:
+            clock.eaten.append(self)
+
+    def detach(self):
+        """Stop ageing, keeping the current lifetime."""
+        self._born, self._clock = self.lifetime, None
 
     def update(self):
         self.lifetime += 1

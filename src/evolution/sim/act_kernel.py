@@ -1037,7 +1037,7 @@ def act_all(world, creatures, outputs):
     food_xy = world.index.food_xy(food)
     if food_xy is None:
         food_xy = np.array([(f.pos.x, f.pos.y) for f in food], dtype=np.float64).reshape(-1, 2)
-    food_life = np.array([f.lifetime for f in food], dtype=np.float64)
+    food_life = world.food_lifetimes()
     carcasses = np.array([(k.pos.x, k.pos.y, k.radius, k.meat, k.age) for k in carcass_list],
                          dtype=np.float64).reshape(-1, 5)
     grid = world.index.food
