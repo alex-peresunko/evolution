@@ -20,7 +20,7 @@ import operator
 
 import numpy as np
 
-from ..config import NUM_MEMORY, NUM_WHISKERS
+from ..config import NUM_MEMORY, NUM_SIGNALS, NUM_WHISKERS
 from ..species import ALL_SPECIES
 
 NONE = -(2 ** 62)          # an int field that is None
@@ -34,7 +34,8 @@ MEMORY = slice(30, 30 + NUM_MEMORY)
 WHISKERS = slice(MEMORY.stop, MEMORY.stop + NUM_WHISKERS)
 TARGET_WHISKERS = slice(WHISKERS.stop, WHISKERS.stop + NUM_WHISKERS)   # inf: nothing seen
 WHISKER_ANGLES = slice(TARGET_WHISKERS.stop, TARGET_WHISKERS.stop + NUM_WHISKERS)
-N_FL = WHISKER_ANGLES.stop
+CALLS = slice(WHISKER_ANGLES.stop, WHISKER_ANGLES.stop + NUM_SIGNALS)   # SIGNAL is their sum
+N_FL = CALLS.stop
 
 # Int columns. The first 21 are sim.act_kernel's and must stay in this order.
 (SPECIES, AGE, THIRST, HUNGER, EATING, STUNNED, IMMUNE, ADULT, WINDED, IN_WATER, WILLING,

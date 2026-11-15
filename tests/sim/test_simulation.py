@@ -114,7 +114,8 @@ def test_step_stores_signal_and_memory():
     sim = _make_sim(n_herbs=3, n_carns=2)
     sim.step()
     for c in sim.world.creatures():
-        assert 0.0 <= c.signal <= 1.0
+        assert len(c.calls) == config.NUM_SIGNALS and all(0.0 <= v <= 1.0 for v in c.calls)
+        assert c.signal == pytest.approx(sum(c.calls))
         assert len(c.memory) == config.NUM_MEMORY
     assert any(m != 0.0 for c in sim.world.herbivores for m in c.memory)
 

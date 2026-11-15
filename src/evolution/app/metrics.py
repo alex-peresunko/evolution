@@ -118,7 +118,7 @@ class GameMetrics:
             ("in_water_share", "Share of creatures swimming"),
             ("eating_share", "Share of creatures standing still to eat"),
             ("winded_share", "Share of creatures out of stamina"),
-            ("signal_mean", "Mean signal output"),
+            ("signal_mean", "Mean loudness of the calls, summed over the channels"),
             ("willing_share", "Share of creatures whose mate output is not refusing"),
             ("herd_density", "Mean kin_density input: 0 alone .. 1 in a dense group"))}
         counters = {name: _family("counter", name, doc, sp) for name, doc in (

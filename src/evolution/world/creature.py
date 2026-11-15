@@ -29,6 +29,7 @@ from ..config import (
     MAX_REPRODUCTIONS,
     MEAL_BREAK_THRESHOLD,
     NUM_MEMORY,
+    NUM_SIGNALS,
     NUM_WHISKERS,
     REPRODUCTION_COOLDOWN_TICKS,
     REPRODUCTION_HEALTH_THRESHOLD,
@@ -80,6 +81,7 @@ class Creature:
     nearest_target_dist = T.OptionalFloat(T.TARGET_DIST)
     nearest_smell_strength = T.Float(T.SMELL)
     signal = T.Float(T.SIGNAL)
+    calls = T.Floats(T.CALLS)
     effective_sight = T.Float(T.EFFECTIVE_SIGHT)
     memory = T.Floats(T.MEMORY)
     whiskers = T.Floats(T.WHISKERS)
@@ -168,7 +170,8 @@ class Creature:
         self.nearest_target_dist: float | None = None
         self.nearest_smell_strength = 0.0
         # Written by the simulation after the brain runs.
-        self.signal = 0.0                   # heard by kin
+        self.calls = [0.0] * NUM_SIGNALS    # loudness on each channel, heard by kin
+        self.signal = 0.0                   # their sum: what calling costs
         self.memory = [0.0] * NUM_MEMORY    # fed back as inputs on the next tick
         self._brain_io = None               # (inputs, outputs) rows, unless the table has them
         self.mate_override = False          # last tick's outputs were steered toward a mate

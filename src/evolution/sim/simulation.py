@@ -3,6 +3,7 @@ import math
 import numpy as np
 
 from ..brain.batch import BatchBrain
+from ..brain.layout import CALL_OUTPUTS
 from ..brain.layout import OUTPUTS as OUT
 from ..config import (
     ELITE_REINJECT_COUNT,
@@ -93,15 +94,16 @@ class Simulation:
         world.leave_scent(np.maximum(0.0, outputs[:, OUT.mark]) if len(outputs) else ())
         if len(outputs):
             table = world.table
+            calls = np.maximum(0.0, outputs[:, CALL_OUTPUTS])
             if table.holds(creatures):     # World.perceive arranged it
-                table.fl[:, T.SIGNAL] = np.maximum(0.0, outputs[:, OUT.signal])
+                table.fl[:, T.CALLS] = calls
+                table.fl[:, T.SIGNAL] = calls.sum(axis=1)
                 table.fl[:, T.MEMORY] = outputs[:, OUT.memory]
                 table.brain_io = (inputs, outputs)
             else:
-                signals = np.maximum(0.0, outputs[:, OUT.signal]).tolist()
                 memories = outputs[:, OUT.memory].tolist()
-                for c, sig, mem, x, y in zip(creatures, signals, memories, inputs, outputs):
-                    c.signal, c.memory = sig, mem
+                for c, call, mem, x, y in zip(creatures, calls, memories, inputs, outputs):
+                    c.calls, c.signal, c.memory = call, float(call.sum()), mem
                     c._t.brain_io, c._brain_io = None, (x, y)
             if self.compiled_act and act_kernel.supported(world):
                 act_kernel.act_all(world, creatures, outputs)

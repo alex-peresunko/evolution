@@ -282,9 +282,10 @@ ROWS = [
                    "breed (mate output above MATE_REFUSE_THRESHOLD). Breeding costs a parent "
                    "part of its health, so a dip can mean they learned to wait until fed.",
                    *by_species("willing_share"), unit="percentunit", min_=0, w=6),
-        timeseries("Signalling", "Mean signal output (0 to 1). Kin within SIGNAL_RADIUS hear "
-                   "it, and it costs health, so a rising signal means it pays off: they "
-                   "evolved to communicate.",
+        timeseries("Signalling", "Mean loudness of a creature's calls, summed over its "
+                   "NUM_SIGNALS channels (0 to 1 each). Kin within SIGNAL_RADIUS hear each "
+                   "channel, the other species overhears the loudest, and calling costs "
+                   "health, so a rising signal means it pays off: they evolved to communicate.",
                    q(m("signal_mean"), "{{species}}"), min_=0, w=6),
     ),
     row(

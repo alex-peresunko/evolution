@@ -233,8 +233,9 @@ FAT_SIZE_FACTOR = 0.4           # body size * (1 + 0.4 * fat/FAT_MAX)
 # --- Kin sense / signals ---
 KIN_SENSE_RADIUS = 250
 KIN_DENSITY_NORM = 8
-SIGNAL_RADIUS = 300
-SIGNAL_HEALTH_COST = 0.5        # per tick at full signal
+NUM_SIGNALS = 3                 # call channels; a creature hears the loudest kin on each
+SIGNAL_RADIUS = 300             # also how far the other species overhears a call
+SIGNAL_HEALTH_COST = 0.5        # per tick for each channel at full loudness
 
 # --- Scent marks (each species' decaying trails on a grid, smelled through three antennae) ---
 SCENT_CELL_SIZE = 40            # px
@@ -290,8 +291,11 @@ BRAIN_INPUTS = (
     + 3             # nearest fertile kin angle/dist, own fertility
     + 3             # thirst, nearest water angle/dist
     + 4             # scent marks of the own / the other species: strength, bearing
+    + 2 * (NUM_SIGNALS - 1)   # kin calls on the channels after the first: angle, strength
+    + 2             # the other species' loudest call: angle, strength
 )
-BRAIN_OUTPUTS = 6 + NUM_MEMORY  # rotation, speed, signal, memory, stop eating, mate, mark
+# rotation, speed, signal, memory, stop eating, mate, mark, calls on the other channels
+BRAIN_OUTPUTS = 6 + NUM_MEMORY + NUM_SIGNALS - 1
 BRAIN_TOPOLOGY = [BRAIN_INPUTS, 24, 12, BRAIN_OUTPUTS]
 
 # --- Evolution ---

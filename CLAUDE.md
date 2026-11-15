@@ -133,7 +133,7 @@ World mechanics, all tuned through `config.py`:
 - **Speciation:** only pairs within `SPECIATION_DISTANCE` (`genetics.genetic_distance`, the RMS of gene differences scaled by the species' `gene_bounds`) breed or seek each other (`genetics.compatible`). The neutral `color` gene hue-shifts the sprite (`COLOR_BUCKETS`, `COLOR_HUE_RANGE`).
 - **Seasons:** off by default (`SEASONS_ENABLED`): `world.season` then stays at 1, an endless midsummer. When on, `season(tick)` runs over `SEASON_LENGTH_TICKS` and goes into `world.season` (-1 is midwinter, 1 is midsummer). It scales the food cap (`food_cap`, `SEASON_FOOD_AMPLITUDE`) and is a brain input. A year is short enough for one creature to live through several seasons. In winter (season below 0) every creature pays `Creature.cold(season)` on top of its upkeep: up to `WINTER_COLD_COST` per tick at midwinter, of which full fat stores take away `WINTER_FAT_INSULATION`.
 - **Lineage:** a child inherits `lineage` (the founder id) from its first parent and gets `parent_ids` and `descent`. At each score sample, `Statistics.sample` records each species' mean genes in `sim.stats[species].gene_history` and its number of live lineages in `.lineages`.
-- **Signal and memory:** after the brain runs, the extra outputs are stored as `c.signal` (heard by kin within `SIGNAL_RADIUS`, with a small health cost) and `c.memory` (fed back as inputs next tick).
+- **Signals and memory:** after the brain runs, the call outputs (`brain.layout.CALL_OUTPUTS`: `signal` and `call1`.., `NUM_SIGNALS` channels, negative values silent) are stored as `c.calls`, their sum as `c.signal` (what calling costs, `SIGNAL_HEALTH_COST`), and the memory outputs as `c.memory` (fed back as inputs next tick). Within `SIGNAL_RADIUS` a creature hears the loudest kin on each channel separately (`INPUTS.signal_angle` / `signal_strength`, then `call1_angle` / `call1_strength`, ...) and overhears the other species' loudest call on any channel (`overheard_angle` / `overheard_strength`), so calls can carry different meanings and can give the caller away.
 
 **Evolution is continuous.** Creatures die and are retired by `Simulation.retire`, which enters them into the statistics and the `HallOfFame` (`sim/records.py`).
 - Eligible nearby adults reproduce (`sim/breeding.py`: brain crossover + gene averaging + mutation, in `genetics.py`).
@@ -181,7 +181,7 @@ Entities take their vector and rect types from a `world.geometry.Geometry(vec2, 
 - **Also drawn:**
   - carcasses (`carcass_art`): the dead creature's skeleton seen from above, lying at its death angle (`Carcass.angle`), with flesh and a blood stain that shrink as it's eaten;
   - a red glow on creatures hit within the last few ticks;
-  - pulsing rings around creatures that are signalling;
+  - pulsing rings around creatures that are signalling, one colour per call channel (`CALL_COLORS`);
   - a night overlay scaled by `world.light`, with food glowing through it.
 - **Zoom** (`ViewState.zoom`, mouse wheel): `WorldRenderer.draw` scales positions and sprite sizes by the zoom, so sprites are built and cached at their on-screen size and stay sharp. The size is part of the cache key, so zoom levels that round to the same size share sprites.
   - When zoomed, the background is a scaled copy of the view plus a `BG_CACHE_MARGIN`. It is rebuilt only when the camera leaves it or the zoom changes.
@@ -192,14 +192,14 @@ Entities take their vector and rect types from a `world.geometry.Geometry(vec2, 
 
 ### Neural network
 
-Topology is `config.BRAIN_TOPOLOGY = [BRAIN_INPUTS, 24, 12, BRAIN_OUTPUTS]` = `[55, 24, 12, 12]`, tanh on all layers. `NeuralNetwork` (`brain/network.py`) is pure math; `to_data` / `from_data` convert it for `persistence.brain_store`.
+Topology is `config.BRAIN_TOPOLOGY = [BRAIN_INPUTS, 24, 12, BRAIN_OUTPUTS]` = `[61, 24, 12, 14]`, tanh on all layers. `NeuralNetwork` (`brain/network.py`) is pure math; `to_data` / `from_data` convert it for `persistence.brain_store`.
 
 `brain/layout.py` names every column: `INPUTS.target_whiskers`, `OUTPUTS.speed` and so on (an int for scalars, a slice for groups), plus `labels` for the brain panel.
 - `perceive_all`, `imitation`, the simulation and the brain panel all index through it.
 - To add an input, write it in `perceive_all` (and in `_reference_see` of `tests/world/test_perception.py`), append a field to `INPUTS`, and update the `BRAIN_INPUTS` formula. A module-level assert checks the widths.
 - New inputs and outputs go at the end: `NeuralNetwork.from_data` copies the overlapping top-left block and zeroes the rest, so saved brains keep their existing wiring and behave as before until mutation connects the new columns.
 
-Outputs: `[rotation, speed, signal, memory..., stop_eating, mate, mark]`.
+Outputs: `[rotation, speed, signal, memory..., stop_eating, mate, mark, call1...]`.
 
 **Mating.** A creature breeds when it is fertile (`Creature.fertile`: adult, healthy, off cooldown) and willing (`c.willing`: its `mate` output is not below `MATE_REFUSE_THRESHOLD`). The brain sees the nearest fertile kin (`INPUTS.mate_angle` / `mate_dist`) and its own fertility. `sim.breeding.mate_seeking_drive` still blends a ready adult's steering toward the nearest mate, by the creature's heritable `mate_instinct` gene: at 0 the brain steers alone. During a tick the nearest mate comes from a `MateRadar` (one per species, told of every `act` through `acted`), which must keep answering exactly like the plain scan `_scan_for_mate`.
 

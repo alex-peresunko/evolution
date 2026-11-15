@@ -13,8 +13,8 @@ are saved and carried over between runs.
   inside a herd and when several mob the same one. Herds confuse attackers (bites miss more
   often), while packs bite harder and share the credit for a kill. A creature standing still
   is harder to see and smell, so an ambush can beat a chase and freezing can beat fleeing.
-- **Neural brains:** every creature has a `[55, 24, 12, 12]` tanh network. It sees through
-  whiskers, a vision cone and smell, follows scent trails, hears kin signals, feels bodies touching it (kin or the
+- **Neural brains:** every creature has a `[61, 24, 12, 14]` tanh network. It sees through
+  whiskers, a vision cone and smell, follows scent trails, hears kin calls on three channels and overhears the other species, feels bodies touching it (kin or the
   other species, and from which side), and feels its health, stamina, fat, water, the season,
   a bite (`hurt`) and how much of its meal is left. It steers, sets its
   speed, signals, leaves scent marks, keeps six memory values and can break off a meal to
@@ -103,7 +103,7 @@ Watch mode only allows the keys that don't write `saved_brains/`.
 - **In the world:**
   - creature sprites, hue-shifted by the colour gene, with a glow: red when just hit, yellow
     for the species' best, cyan for the newborn;
-  - pulsing rings around signalling creatures;
+  - pulsing rings around signalling creatures, one colour per call channel;
   - with T, the scent marks under everything else: blue for herbivores, orange for carnivores;
   - whiskers and the sight cone on the selected creature, whiskers on each species' best;
   - a bubble around carnivores still immune after a respawn;

@@ -1,6 +1,6 @@
 """Named columns of the brain's input and output vectors. Saved brains are wired to these
 positions, so new fields go at the end (NeuralNetwork.from_data keeps the overlapping block)."""
-from ..config import BRAIN_INPUTS, BRAIN_OUTPUTS, NUM_MEMORY, NUM_WHISKERS
+from ..config import BRAIN_INPUTS, BRAIN_OUTPUTS, NUM_MEMORY, NUM_SIGNALS, NUM_WHISKERS
 
 
 class Layout:
@@ -42,7 +42,7 @@ INPUTS = Layout([
     ("kin_angle", 1, "kin_ang"),
     ("kin_dist", 1, "kin_dist"),
     ("kin_density", 1, "kin_density"),
-    ("signal_angle", 1, "signal_ang"),
+    ("signal_angle", 1, "signal_ang"),                # the loudest kin call on channel 0
     ("signal_strength", 1, "signal_str"),
     ("carcass_angle", 1, "carcass_ang"),              # carnivore only
     ("carcass_dist", 1, "carcass_dist"),
@@ -73,17 +73,26 @@ INPUTS = Layout([
     ("trail_kin_bearing", 1, "trail_kin_dir"),
     ("trail_other", 1, "trail_other"),
     ("trail_other_bearing", 1, "trail_other_dir"),
+    # the loudest kin call on each channel after the first: call1_angle, call1_strength, ...
+    *[(f"call{n}_{part}", 1, f"call{n}_{part[:3]}")
+      for n in range(1, NUM_SIGNALS) for part in ("angle", "strength")],
+    # the other species' loudest call on any channel
+    ("overheard_angle", 1, "overheard_ang"),
+    ("overheard_strength", 1, "overheard_str"),
 ])
 
 OUTPUTS = Layout([
     ("rotation", 1, "turn"),
     ("speed", 1, "speed"),
-    ("signal", 1, "signal"),
+    ("signal", 1, "signal"),                          # the call on channel 0
     ("memory", NUM_MEMORY, "mem{}"),
     ("stop_eating", 1, "stop_eat"),                   # > MEAL_BREAK_THRESHOLD abandons a meal
     ("mate", 1, "mate"),                              # < MATE_REFUSE_THRESHOLD refuses to breed
     ("mark", 1, "mark"),                              # > 0 leaves extra scent (SCENT_MARK)
+    *[(f"call{n}", 1, f"call{n}") for n in range(1, NUM_SIGNALS)],
 ])
+# The output column of each call channel.
+CALL_OUTPUTS = [OUTPUTS.signal] + [getattr(OUTPUTS, f"call{n}") for n in range(1, NUM_SIGNALS)]
 
 assert INPUTS.width == BRAIN_INPUTS and OUTPUTS.width == BRAIN_OUTPUTS, \
     "config.BRAIN_INPUTS / BRAIN_OUTPUTS must match the layouts"

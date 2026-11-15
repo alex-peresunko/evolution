@@ -12,6 +12,7 @@ from ...world.terrain import Tree
 from .sprite_cache import SpriteCache
 from .style import (
     BG_CACHE_MARGIN,
+    CALL_COLORS,
     CARCASS_LEVELS,
     CROWN_GHOST_ALPHA,
     FOOD_DRAW_RADIUS,
@@ -174,11 +175,13 @@ class WorldRenderer:
         screen.blits(sprites, doreturn=False)
         screen.blits(bubbles, doreturn=False)
         for c, x, y in signallers:
-            t = ((self.frame + c.id * 7) % 30) / 30
-            color = (255, 230, 120) if c.species.is_predator else (150, 230, 255)
-            pygame.gfxdraw.aacircle(screen, int(x), int(y),
-                                    int((c.size * 1.3 + 4 + t * 16) * z),
-                                    (*color, int(220 * (1 - t) * c.signal)))
+            for channel, loudness in enumerate(c.calls):
+                if loudness > config.SIGNAL_RENDER_THRESHOLD:
+                    t = ((self.frame + c.id * 7 + channel * 10) % 30) / 30
+                    pygame.gfxdraw.aacircle(
+                        screen, int(x), int(y), int((c.size * 1.3 + 4 + t * 16) * z),
+                        (*CALL_COLORS[channel % len(CALL_COLORS)],
+                         int(220 * (1 - t) * min(1.0, loudness))))
 
         self._draw_crowns(screen, cam_x, cam_y, z)
         for (c, _, _, _), (spr, pos) in zip(visible, sprites):

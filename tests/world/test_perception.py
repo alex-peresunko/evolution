@@ -179,10 +179,14 @@ def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasse
     else:
         inputs += [0.0, 1.0]
     inputs.append(min(1.0, len(near) / config.KIN_DENSITY_NORM))
-    heard = [(k.signal * (1 - self.pos.distance_to(k.pos) / config.SIGNAL_RADIUS), k)
-             for k in kin if self.pos.distance_to(k.pos) < config.SIGNAL_RADIUS]
-    loudest = max(heard, key=lambda h: h[0], default=(0.0, None))
-    inputs += [rel_angle(loudest[1]) / math.pi if loudest[0] > 0 else 0.0, loudest[0]]
+    def loudest_call(callers, channels):
+        heard = [(k.calls[ch] * (1 - self.pos.distance_to(k.pos) / config.SIGNAL_RADIUS), k)
+                 for k in callers if self.pos.distance_to(k.pos) < config.SIGNAL_RADIUS
+                 for ch in channels]
+        loudest = max(heard, key=lambda h: h[0], default=(0.0, None))
+        return [rel_angle(loudest[1]) / math.pi if loudest[0] > 0 else 0.0, loudest[0]]
+
+    inputs += loudest_call(kin, [0])
 
     visible_carcasses = [cc for cc in carcasses if in_sight(cc)] if self.is_carnivore else []
     if visible_carcasses:
@@ -260,6 +264,10 @@ def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasse
         for marks in zip(*antennae):
             inputs += [math.tanh(max(marks) / config.SCENT_NORM),
                        (marks[2] - marks[0]) / sum(marks) if sum(marks) > 0 else 0.0]
+    for ch in range(1, config.NUM_SIGNALS):
+        inputs += loudest_call(kin, [ch])
+    inputs += loudest_call(herbivores if self.is_carnivore else carnivores,
+                           range(config.NUM_SIGNALS))
     return inputs, whiskers, target_whiskers, nearest_target_dist, nearest_smell_strength
 
 
@@ -276,7 +284,8 @@ def _random_creature(rnd, is_carnivore, obstacles):
     c.current_speed = rnd.uniform(0, c.max_speed)
     c.stamina = c.max_stamina * rnd.uniform(0, 1)
     c.hunger = rnd.randint(0, 2 * config.HUNGER_MAX)
-    c.signal = rnd.choice([0.0, rnd.uniform(0, 1)])
+    c.calls = [rnd.choice([0.0, rnd.uniform(0, 1)]) for _ in range(config.NUM_SIGNALS)]
+    c.signal = sum(c.calls)
     c.memory = [rnd.uniform(-1, 1) for _ in range(config.NUM_MEMORY)]
     c.is_adult = rnd.random() < 0.7
     c.thirst = rnd.randint(0, 2 * config.THIRST_MAX)
@@ -481,6 +490,41 @@ def test_carcasses_are_smelled_from_the_full_range():
     dead = _facing(False, 500 + config.SMELL_DISTANCE * 0.9, 400, speed=0.0)
     row = perceive_all([carn], [], [], [carn], [], [Carcass(dead)])[0]
     assert row[INPUTS.carcass_smell_strength] == pytest.approx(0.1)
+
+
+def _calling(is_carnivore, x, y, calls):
+    c = _facing(is_carnivore, x, y)
+    c.calls = calls
+    return c
+
+
+def test_kin_calls_are_heard_per_channel_and_the_other_species_overhears_the_loudest():
+    half = config.SIGNAL_RADIUS / 2
+    me = _facing(False, 1000, 1000)
+    ahead = _calling(False, 1000 + half, 1000, [0.0, 0.8, 0.0])
+    beside = _calling(False, 1000, 1000 + half, [0.4, 0.2, 0.0])
+    hunter = _calling(True, 1000 - half, 1000, [0.0, 0.0, 0.6])
+    row = perceive_all([me], [], [me, ahead, beside], [hunter], [])[0]
+    assert (row[INPUTS.signal_angle], row[INPUTS.signal_strength]) == pytest.approx((0.5, 0.2))
+    assert (row[INPUTS.call1_angle], row[INPUTS.call1_strength]) == pytest.approx((0.0, 0.4))
+    assert (row[INPUTS.call2_angle], row[INPUTS.call2_strength]) == (0.0, 0.0)
+    assert abs(row[INPUTS.overheard_angle]) == pytest.approx(1.0)
+    assert row[INPUTS.overheard_strength] == pytest.approx(0.3)
+
+    row = perceive_all([hunter], [], [me, ahead, beside], [hunter], [])[0]
+    assert row[INPUTS.signal_strength] == 0.0          # no other carnivore calls
+    # `me` is nearer but silent and `ahead` is out of earshot: `beside` on its loudest channel
+    assert row[INPUTS.overheard_strength] == pytest.approx(
+        0.4 * (1 - math.hypot(half, half) / config.SIGNAL_RADIUS))
+
+
+def test_calls_fade_to_nothing_at_the_signal_radius():
+    me = _facing(False, 1000, 1000)
+    far = _calling(False, 1000 + config.SIGNAL_RADIUS, 1000, [1.0, 1.0, 1.0])
+    hunter = _calling(True, 1000, 1000 + config.SIGNAL_RADIUS, [1.0, 1.0, 1.0])
+    row = perceive_all([me], [], [me, far], [hunter], [])[0]
+    assert row[INPUTS.signal_strength] == row[INPUTS.call1_strength] == 0.0
+    assert row[INPUTS.overheard_strength] == 0.0
 
 
 def test_no_touch_beyond_the_tolerance():
