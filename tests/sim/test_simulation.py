@@ -75,6 +75,7 @@ def test_herbivore_mate_seeking_skipped_when_predator_smelled(predator_x, expect
     herb, mate = _adult(HERBIVORE, 500, 400), _adult(HERBIVORE, 550, 400)
     herb.angle = math.pi  # facing away from the mate
     predator = _adult(CARNIVORE, predator_x, 400)
+    predator.max_speed = predator.current_speed = 5.0   # running: smelled from the full range
     world = World(WORLD_BOUNDS, {HERBIVORE: [herb, mate], CARNIVORE: [predator]}, [])
     world.reindex()
     world.perceive()

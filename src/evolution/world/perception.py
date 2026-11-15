@@ -27,6 +27,8 @@ from ..config import (
     NIGHT_SIGHT_FACTOR,
     SIGNAL_RADIUS,
     SMELL_DISTANCE,
+    STILL_SIGHT_RANGE,
+    STILL_SMELL_RANGE,
     THIRST_MAX,
     TOUCH_TOLERANCE,
     WATER_SENSE_RADIUS,
@@ -83,8 +85,11 @@ def _column(name):
  _MAX_SPEED) = range(21)
 _OBS_COLS = 21
 # Target columns of the (M, _TGT_COLS) arrays of each species.
-_T_X, _T_Y, _T_ID, _T_ANGLE, _T_SPEED_RATIO, _T_SIZE, _T_SIGNAL, _T_FERTILE = range(8)
-_TGT_COLS = 8
+# _T_SIGHT_RANGE / _T_SMELL_RANGE: the share of an observer's sight / smell range from which
+# the other species detects the target (stealth; 1 for carcasses).
+(_T_X, _T_Y, _T_ID, _T_ANGLE, _T_SPEED_RATIO, _T_SIZE, _T_SIGNAL, _T_FERTILE, _T_SIGHT_RANGE,
+ _T_SMELL_RANGE) = range(10)
+_TGT_COLS = 10
 
 _JIT = {"cache": True, "error_model": "numpy"}
 
@@ -178,15 +183,17 @@ def _press(d, size, tgt_size, kc):
 def _scan(x, y, own_id, cos_a, sin_a, eye, half_angle, cos_half, size, tgt, crowns,
           touch_reach, whisker_reach, cos_w, sin_w, occlusion, tw, kc):
     """One pass over the targets (rows of tgt: x, y, id, ...) for every sense of them.
-    Returns (seen, near, near_d, touched, press):
-      seen: the nearest target inside the sight cone (up to `eye`) not hidden by a crown;
-      near, near_d: the nearest target (smell), only guaranteed within SMELL_DISTANCE;
+    Returns (seen, smelled, smell, touched, press):
+      seen: the nearest target inside the sight cone not hidden by a crown, within `eye`
+        times the target's sight range;
+      smelled, smell: the target smelled most strongly, and how strongly (1 at no distance, 0
+        from SMELL_DISTANCE times the target's smell range);
       touched, press: the first of the bodies pressing hardest (touch_reach < 0: none).
-    Indices are -1 when there is none. The first of equally near targets wins every sense.
+    Indices are -1 when there is none. The first of equal targets wins every sense.
     Targets within `whisker_reach` also shorten the target whiskers `tw` (whisker_reach < 0:
-    none)."""
+    none), up to their sight range."""
     seen, seen_d = -1, _INF
-    near, near_d = -1, _INF
+    smelled, best_smell = -1, 0.0
     touched, best_press = -1, 0.0
     # Nothing farther than `reach` matters; squared distances above it skip the exact hypot.
     reach = max(max(eye, kc[_K_SMELL]), max(touch_reach, whisker_reach)) + 1.0
@@ -197,21 +204,23 @@ def _scan(x, y, own_id, cos_a, sin_a, eye, half_angle, cos_half, size, tgt, crow
         if dx * dx + dy * dy > reach2:
             continue
         d = math.hypot(dx, dy)
+        sight = eye * tgt[j, _T_SIGHT_RANGE]
         if d <= whisker_reach:
-            _target_whisker_hits(dx, dy, cos_w, sin_w, eye, occlusion, tw, kc)
+            _target_whisker_hits(dx, dy, cos_w, sin_w, sight, occlusion, tw, kc)
         if tgt[j, _T_ID] == own_id:
             continue
-        if d < near_d:
-            near, near_d = j, d
+        smell = 1.0 - d / (kc[_K_SMELL] * tgt[j, _T_SMELL_RANGE])
+        if smell > best_smell:
+            smelled, best_smell = j, smell
         if d < touch_reach:
             press = _press(d, size, tgt[j, _T_SIZE], kc)
             if press > best_press:
                 touched, best_press = j, press
-        if (d > 0.0 and d <= eye and d < seen_d
+        if (d > 0.0 and d <= sight and d < seen_d
                 and _in_cone(dx, dy, d, cos_a, sin_a, half_angle, cos_half)
                 and not (crowns.shape[0] and _crown_hides(x, y, dx, dy, crowns))):
             seen, seen_d = j, d
-    return seen, near, near_d, touched, best_press
+    return seen, smelled, best_smell, touched, best_press
 
 
 @njit(**_JIT)
@@ -402,7 +411,7 @@ def _kernel(obs, whisker_angles, herbs, carns, carcasses, food_xy, rects, crowns
         for k in range(n_w):
             tw[k] = _INF
         target_reach = eye + kc[_K_WHISKER_WIDTH] + 1.0
-        seen, near, near_d, touched, press = _scan(
+        seen, smelled, smell, touched, press = _scan(
             x, y, own_id, cos_a, sin_a, eye, half_angle, cos_half, size, other, crowns,
             _touch_reach(size, other_max_size, kc), target_reach if predator else -1.0,
             cos_w, sin_w, occlusion, tw, kc)
@@ -411,13 +420,10 @@ def _kernel(obs, whisker_angles, herbs, carns, carcasses, food_xy, rects, crowns
             seen_dist = math.hypot(other[seen, _T_X] - x, other[seen, _T_Y] - y) / eye
         else:
             seen_angle, seen_dist = 0.0, 1.0
-        if near >= 0 and near_d < kc[_K_SMELL]:
-            out[i, columns[_C_SMELL_ANGLE]] = _angle_to(x, y, angle, other, near) / _PI
-            smell = 1.0 - near_d / kc[_K_SMELL]
+        if smelled >= 0:
+            out[i, columns[_C_SMELL_ANGLE]] = _angle_to(x, y, angle, other, smelled) / _PI
             out[i, columns[_C_SMELL_STRENGTH]] = smell
-            smell_self[i] = smell
-        else:
-            smell_self[i] = 0.0
+        smell_self[i] = smell
         if touched >= 0:
             out[i, columns[_C_TOUCH_OTHER]] = press
             out[i, columns[_C_TOUCH_OTHER_ANGLE]] = _angle_to(x, y, angle, other, touched) / _PI
@@ -453,16 +459,17 @@ def _kernel(obs, whisker_angles, herbs, carns, carcasses, food_xy, rects, crowns
                 out[i, columns[_C_PREY_VY]] = math.sin(other[seen, _T_ANGLE]) * ratio
             out[i, columns[_C_CARCASS_DIST]] = 1.0
             # carcasses: sight, smell and target whiskers
-            seen, near, near_d, _, _ = _scan(
+            seen, smelled, smell, _, _ = _scan(
                 x, y, own_id, cos_a, sin_a, eye, half_angle, cos_half, size, carcasses, crowns,
                 -1.0, target_reach, cos_w, sin_w, occlusion, tw, kc)
             if seen >= 0:
                 out[i, columns[_C_CARCASS_ANGLE]] = _angle_to(x, y, angle, carcasses, seen) / half_angle
                 out[i, columns[_C_CARCASS_DIST]] = math.hypot(carcasses[seen, _T_X] - x,
                                                      carcasses[seen, _T_Y] - y) / eye
-            if near >= 0 and near_d < kc[_K_SMELL]:
-                out[i, columns[_C_CARCASS_SMELL_ANGLE]] = _angle_to(x, y, angle, carcasses, near) / _PI
-                out[i, columns[_C_CARCASS_SMELL_STRENGTH]] = 1.0 - near_d / kc[_K_SMELL]
+            if smelled >= 0:
+                out[i, columns[_C_CARCASS_SMELL_ANGLE]] = _angle_to(x, y, angle, carcasses,
+                                                                    smelled) / _PI
+                out[i, columns[_C_CARCASS_SMELL_STRENGTH]] = smell
         else:
             out[i, columns[_C_CARCASS_DIST]] = 1.0
             # food: target whiskers, then the nearest item in the cone (the first of equally
@@ -626,11 +633,15 @@ def _targets(obs):
     t[:, _T_SIZE] = obs[:, _SIZE]
     t[:, _T_SIGNAL] = obs[:, _SIGNAL]
     t[:, _T_FERTILE] = obs[:, _FERTILE]
+    moving = np.minimum(1.0, t[:, _T_SPEED_RATIO])
+    t[:, _T_SIGHT_RANGE] = STILL_SIGHT_RANGE + (1 - STILL_SIGHT_RANGE) * moving
+    t[:, _T_SMELL_RANGE] = STILL_SMELL_RANGE + (1 - STILL_SMELL_RANGE) * moving
     return t
 
 
 def _carcass_rows(carcasses):
     t = np.zeros((len(carcasses), _TGT_COLS))
+    t[:, (_T_SIGHT_RANGE, _T_SMELL_RANGE)] = 1.0
     if carcasses:
         t[:, (_T_X, _T_Y, _T_ID)] = carcass_columns(carcasses)[:, (0, 1, 3)]
     return t
@@ -673,7 +684,8 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
 
     Carnivores look at and smell `herbivores` and `carcasses`; herbivores look at
     `food_items`, look at and smell `carnivores`. Both sense their own species (kin and
-    signals). `light` (0 = midnight, 1 = noon) shrinks the vision cones, not whiskers or smell.
+    signals). The slower a creature moves, the nearer the other species must be to see or
+    smell it (STILL_SIGHT_RANGE, STILL_SMELL_RANGE). `light` (0 = midnight, 1 = noon) shrinks the vision cones, not whiskers or smell.
     Tree crowns among `obstacles` block sight (cones and target whiskers), not obstacle
     whiskers, smell or the kin/signal senses.
     `season` (-1 = midwinter, 1 = midsummer) is passed through as an input.

@@ -207,6 +207,11 @@ MOB_WINDOW_TICKS = 60
 MOB_BONUS = 1.3
 MOB_ASSIST_SCORE = 0.5
 
+# Stealth: the other species sees and smells a creature standing still from this share of the
+# usual range, growing linearly to the whole range at its top speed. 1 turns stealth off.
+STILL_SIGHT_RANGE = 0.7
+STILL_SMELL_RANGE = 0.5
+
 # --- Carcasses ---
 CARCASS_MEAT_PER_SIZE = 120
 CARCASS_LIFETIME = 1200

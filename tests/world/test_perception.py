@@ -57,6 +57,14 @@ def _reference_crown_occlusion(p, ux, uy, trees):
     return best
 
 
+def _reference_range(target, still_range):
+    """Share of the observer's range from which the other species detects `target`."""
+    if not isinstance(target, Creature):
+        return 1.0
+    moving = min(1.0, target.current_speed / target.max_speed) if target.max_speed > 0 else 0.0
+    return still_range + (1 - still_range) * moving
+
+
 def _reference_scent(scent, own, others, x, y):
     col, row = math.floor(x / scent.cell_size), math.floor(y / scent.cell_size)
     if not (0 <= col < scent.cols and 0 <= row < scent.rows):
@@ -90,7 +98,7 @@ def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasse
         if target.id == self.id or _reference_crown_hides(self.pos, target.pos, trees):
             return False
         vec = target.pos - self.pos
-        if 0 < vec.length() <= eye:
+        if 0 < vec.length() <= eye * _reference_range(target, config.STILL_SIGHT_RANGE):
             angle_to_target = (math.atan2(vec.y, vec.x) - self.angle + math.pi) % (2 * math.pi) - math.pi
             return abs(angle_to_target) <= self.sight_angle / 2
         return False
@@ -129,13 +137,15 @@ def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasse
     smell_angle, smell_strength, nearest_smell_strength = 0.0, 0.0, 0.0
     others = [o for o in (herbivores if self.is_carnivore else carnivores) if o.id != self.id]
     if others:
-        closest = min(others, key=lambda p: self.pos.distance_to(p.pos))
-        dist = self.pos.distance_to(closest.pos)
-        if dist < config.SMELL_DISTANCE:
-            angle = (math.atan2(closest.pos.y - self.pos.y, closest.pos.x - self.pos.x)
+        def smell_of(o):
+            return 1.0 - self.pos.distance_to(o.pos) / (
+                config.SMELL_DISTANCE * _reference_range(o, config.STILL_SMELL_RANGE))
+        strongest = max(others, key=smell_of)
+        if smell_of(strongest) > 0:
+            angle = (math.atan2(strongest.pos.y - self.pos.y, strongest.pos.x - self.pos.x)
                      - self.angle + math.pi) % (2 * math.pi) - math.pi
             smell_angle = angle / math.pi
-            smell_strength = 1.0 - dist / config.SMELL_DISTANCE
+            smell_strength = smell_of(strongest)
             # Fixed vs. the original see(), which only recorded this for carnivores.
             nearest_smell_strength = smell_strength
     inputs.extend([smell_angle, smell_strength])
@@ -191,7 +201,9 @@ def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasse
         for t in targets:
             dx, dy = t.pos.x - self.pos.x, t.pos.y - self.pos.y
             along, perp = dx * ux + dy * uy, abs(dy * ux - dx * uy)
-            if (0 < along <= eye and along < obstacle_dist and perp <= config.WHISKER_TARGET_WIDTH
+            reach = eye * _reference_range(t, config.STILL_SIGHT_RANGE)
+            if (0 < along <= reach and along < obstacle_dist
+                    and perp <= config.WHISKER_TARGET_WIDTH
                     and (best is None or along < best)):
                 best = along
         target_whiskers.append(best)
@@ -352,9 +364,11 @@ def test_whiskers_see_the_world_edge():
     assert c.whiskers[centre] == pytest.approx(40)
 
 
-def _facing(is_carnivore, x, y, angle=0.0):
+def _facing(is_carnivore, x, y, angle=0.0, speed=1.0):
+    """`speed`: share of its top speed the creature moves at (1: detected from the full range)."""
     c = Creature(CARNIVORE if is_carnivore else HERBIVORE, WORLD_BOUNDS)
     c.pos, c.angle = c.geometry.vec2(x, y), angle
+    c.current_speed = c.max_speed * speed
     return c
 
 
@@ -419,6 +433,54 @@ def test_touch_feels_the_body_pressing_from_behind():
     assert row[INPUTS.touch_kin_angle] == pytest.approx(0.5)
     assert row[INPUTS.touch_other] == pytest.approx(0.5 + 2 / (2 * config.TOUCH_TOLERANCE))
     assert abs(row[INPUTS.touch_other_angle]) == pytest.approx(1.0)
+
+
+def test_a_still_creature_is_seen_and_smelled_from_a_shorter_range():
+    carn = _facing(True, 500, 400)
+    eye = carn.sight_distance
+    just_inside = 500 + eye * config.STILL_SIGHT_RANGE - 5
+    assert _sees_prey(carn, _facing(False, just_inside, 400, speed=0.0), [])
+    assert not _sees_prey(carn, _facing(False, just_inside + 10, 400, speed=0.0), [])
+    assert _sees_prey(carn, _facing(False, 500 + eye - 5, 400, speed=1.0), [])
+
+    herb = _facing(False, 500, 400)
+    reach = config.SMELL_DISTANCE * config.STILL_SMELL_RANGE
+    smell = INPUTS.smell_strength
+    lurking = _facing(True, 500 + reach / 2, 400, speed=0.0)
+    assert perceive_all([herb], [], [herb], [lurking], [])[0][smell] == pytest.approx(0.5)
+    assert herb.nearest_smell_strength == pytest.approx(0.5)
+    lurking.pos.x = 500 + reach + 1
+    assert perceive_all([herb], [], [herb], [lurking], [])[0][smell] == 0
+    lurking.current_speed = lurking.max_speed
+    assert perceive_all([herb], [], [herb], [lurking], [])[0][smell] == pytest.approx(
+        1 - (reach + 1) / config.SMELL_DISTANCE)
+
+
+def test_target_whiskers_miss_still_prey_beyond_its_sight_range():
+    carn = _facing(True, 500, 400)
+    carn.whisker_angles = [0.0] * config.NUM_WHISKERS
+    prey = _facing(False, 500 + carn.sight_distance * 0.8, 400, speed=0.0)
+    perceive_all([carn], [], [prey], [carn], [])
+    assert all(d is None for d in carn.target_whiskers)
+    prey.current_speed = prey.max_speed
+    perceive_all([carn], [], [prey], [carn], [])
+    assert all(d == pytest.approx(carn.sight_distance * 0.8) for d in carn.target_whiskers)
+
+
+def test_the_strongest_smell_wins_over_the_nearest_body():
+    herb = _facing(False, 500, 400)
+    still = _facing(True, 500, 400 + 100, speed=0.0)      # nearer, but faint
+    running = _facing(True, 500 + 150, 400, speed=1.0)
+    row = perceive_all([herb], [], [herb], [still, running], [])[0]
+    assert row[INPUTS.smell_strength] == pytest.approx(1 - 150 / config.SMELL_DISTANCE)
+    assert row[INPUTS.smell_angle] == pytest.approx(0.0)
+
+
+def test_carcasses_are_smelled_from_the_full_range():
+    carn = _facing(True, 500, 400)
+    dead = _facing(False, 500 + config.SMELL_DISTANCE * 0.9, 400, speed=0.0)
+    row = perceive_all([carn], [], [], [carn], [], [Carcass(dead)])[0]
+    assert row[INPUTS.carcass_smell_strength] == pytest.approx(0.1)
 
 
 def test_no_touch_beyond_the_tolerance():

@@ -11,7 +11,8 @@ are saved and carried over between runs.
   chase, bite and scavenge carcasses. Bites take time and aim, prey gets an adrenaline boost,
   and big herbivores fight back: a charging herbivore tramples and stuns a carnivore, harder
   inside a herd and when several mob the same one. Herds confuse attackers (bites miss more
-  often), while packs bite harder and share the credit for a kill.
+  often), while packs bite harder and share the credit for a kill. A creature standing still
+  is harder to see and smell, so an ambush can beat a chase and freezing can beat fleeing.
 - **Neural brains:** every creature has a `[55, 24, 12, 12]` tanh network. It sees through
   whiskers, a vision cone and smell, follows scent trails, hears kin signals, feels bodies touching it (kin or the
   other species, and from which side), and feels its health, stamina, fat, water, the season,
