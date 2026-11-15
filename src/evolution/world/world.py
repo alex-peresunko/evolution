@@ -171,8 +171,11 @@ class World:
         clock.now += 1
         gone = self._food_born <= clock.now - FOOD_MAX_LIFETIME
         eaten, clock.eaten = clock.eaten, []
-        if eaten:
+        if len(eaten) > 8:
             gone |= np.isin(self._food_ids, np.array([f.id for f in eaten], dtype=np.int64))
+        else:
+            for item in eaten:
+                gone |= self._food_ids == item.id
         gone = np.flatnonzero(gone)
         if len(gone):
             self._food_born = np.delete(self._food_born, gone)

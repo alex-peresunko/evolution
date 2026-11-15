@@ -144,7 +144,7 @@ class SpatialIndex:
             if gone:
                 for item in gone[1]:
                     self.food.remove(item)
-                self._food_xy = np.delete(self._food_xy, gone[0], axis=0)
+                self._food_xy = _delete_rows(self._food_xy, gone[0])
             if len(food) > n:
                 new = food[n:]
                 for item in new:
@@ -152,6 +152,13 @@ class SpatialIndex:
                 self._food_xy = np.concatenate((self._food_xy, _xy(new)))
         self._food_list = food
         self._food_last = food[-1] if food else None
+
+
+def _delete_rows(xy, rows):
+    """np.delete(xy, rows, axis=0) of a C-contiguous (N, 2) float array, deleting each row as
+    one 16-byte element, which is much faster."""
+    pairs = np.ascontiguousarray(xy).view(np.complex128).reshape(-1)
+    return np.delete(pairs, rows).view(np.float64).reshape(-1, 2)
 
 
 def _xy(items):
