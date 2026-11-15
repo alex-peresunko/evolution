@@ -13,6 +13,7 @@ from .sprite_cache import SpriteCache
 from .style import (
     BG_CACHE_MARGIN,
     CALL_COLORS,
+    CARCASS_FADE_BELOW,
     CARCASS_LEVELS,
     CROWN_GHOST_ALPHA,
     FOOD_DRAW_RADIUS,
@@ -93,18 +94,26 @@ class WorldRenderer:
 
         steps = config.SPRITE_ANGLE_STEPS
         angle_scale = steps / (2 * math.pi)
-        carcass_blits = []
+        carcass_blits, fading = [], []
         for cc in world.carcasses:
             x, y = (cc.pos.x - cam_x) * z, (cc.pos.y - cam_y) * z
             r = (cc.radius * 2.6 + 3) * z
             if -r <= x <= sw + r and -r <= y <= sh + r:
-                lvl = min(CARCASS_LEVELS - 1, int((1 - cc.meat / cc.max_meat) * CARCASS_LEVELS))
+                left = max(0.0, cc.meat / cc.max_meat)
+                lvl = min(CARCASS_LEVELS - 1, int((1 - left) * CARCASS_LEVELS))
                 spr, ox, oy = cache.carcass(cc.species.is_predator,
                                             max(2, int(cc.radius * z + 0.5)), lvl,
                                             color_bucket(cc.color),
                                             int(cc.angle * angle_scale + 0.5) % steps)
-                carcass_blits.append((spr, (x + ox, y + oy)))
+                if left < CARCASS_FADE_BELOW:
+                    fading.append((spr, (x + ox, y + oy), int(255 * left / CARCASS_FADE_BELOW)))
+                else:
+                    carcass_blits.append((spr, (x + ox, y + oy)))
         screen.blits(carcass_blits, doreturn=False)
+        for spr, pos, alpha in fading:
+            spr.set_alpha(alpha)
+            screen.blit(spr, pos)
+            spr.set_alpha(255)
 
         creatures = world.creatures()
         poses = view.poses

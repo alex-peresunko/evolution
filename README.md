@@ -23,7 +23,7 @@ are saved and carried over between runs.
   even the brain's own mutation rate are inherited and mutate. Only genetically close pairs
   breed (speciation), and every trait costs upkeep.
 - **Life history:** young grow into adults, eating takes time, surplus food becomes fat (slower
-  but a reserve), old age costs health, and every dead creature leaves a carcass.
+  but a reserve), old age costs health, and every dead creature leaves a carcass that rots down to bones and fades away.
 - **World:** solid bodies (creatures collide with momentum: the lighter one bounces off, hard
   impacts hurt, and nobody walks through carcasses),
   walls at the edges, rocks, trees whose crowns hide what's under them, lakes to

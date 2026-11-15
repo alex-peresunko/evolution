@@ -3,7 +3,7 @@ import math
 import pytest
 
 from evolution import config
-from evolution.brain.layout import INPUTS
+from evolution.brain.layout import INPUTS, OUTPUTS
 from evolution.brain.network import NeuralNetwork
 from evolution.sim import breeding
 from evolution.sim import simulation as simulation_module
@@ -13,7 +13,7 @@ from evolution.sim.records import Record
 from evolution.sim.simulation import Simulation
 from evolution.species import CARNIVORE, HERBIVORE
 from evolution.world.creature import Creature
-from evolution.world.food import Food
+from evolution.world.food import Carcass, Food
 from evolution.world.terrain import Lake
 from evolution.world.world import World
 
@@ -98,6 +98,26 @@ def test_dead_creature_leaves_carcass_that_rots():
         c.health = c.max_health
     sim.step()
     assert carcass not in sim.world.carcasses
+
+
+def test_an_uneaten_carcass_rots_down_to_bones_over_its_lifetime():
+    sim = _make_sim(n_herbs=1, n_carns=0)
+    carcass = Carcass(sim.world.herbivores[0])
+    for _ in range(config.CARCASS_FRESH_TICKS):
+        carcass.update()
+    assert carcass.meat == carcass.max_meat
+    for _ in range((config.CARCASS_LIFETIME - config.CARCASS_FRESH_TICKS) // 2):
+        carcass.update()
+    assert carcass.meat == pytest.approx(carcass.max_meat / 2)
+    assert not carcass.is_gone()
+    while carcass.age < config.CARCASS_LIFETIME - 1:
+        carcass.update()
+    assert 0 < carcass.meat < carcass.max_meat * 0.01 and not carcass.is_gone()
+
+    sim.world.carcasses.append(carcass)
+    sim._update_carcasses()
+    assert sim.world.carcasses == []
+    assert (sim.world.tally.carcasses_rotted, sim.world.tally.carcasses_eaten) == (1, 0)
 
 
 def test_step_leaves_scent_trails():
@@ -240,6 +260,7 @@ def test_generation_is_the_deepest_birth():
     for c in (a, b):
         c.is_adult = True
         c.pos = c.geometry.vec2(500, 500)
+        c.brain.biases[-1][0, OUTPUTS.mate] = 5.0   # a random brain may refuse to mate
     a.generation, b.generation = 3, 9
     sim.step()
     children = [c for c in sim.world.herbivores if c not in (a, b)]

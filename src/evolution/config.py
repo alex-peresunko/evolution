@@ -215,6 +215,7 @@ STILL_SMELL_RANGE = 0.5
 # --- Carcasses ---
 CARCASS_MEAT_PER_SIZE = 120
 CARCASS_LIFETIME = 1200
+CARCASS_FRESH_TICKS = 300       # then the meat rots away evenly, down to bones at the lifetime
 CARCASS_EAT_RATE = 40           # meat eaten per tick of contact
 SCAVENGE_SCORE_FACTOR = 0.5
 

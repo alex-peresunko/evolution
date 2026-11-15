@@ -5,6 +5,7 @@ import random
 import numpy as np
 
 from ..config import (
+    CARCASS_FRESH_TICKS,
     CARCASS_LIFETIME,
     CARCASS_MEAT_PER_SIZE,
     FOOD_MAX_LIFETIME,
@@ -103,6 +104,9 @@ class Carcass:
 
     def update(self):
         self.age += 1
+        if self.age > CARCASS_FRESH_TICKS:
+            self.meat = max(0.0, self.meat
+                            - self.max_meat / (CARCASS_LIFETIME - CARCASS_FRESH_TICKS))
 
     def is_gone(self):
         return self.meat <= 0 or self.age >= CARCASS_LIFETIME

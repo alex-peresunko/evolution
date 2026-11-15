@@ -77,10 +77,11 @@ class Simulation:
         carcasses, tally = self.world.carcasses, self.world.tally
         kept = []
         for carcass in carcasses:
+            eaten = carcass.meat <= 0
             carcass.update()
             if not carcass.is_gone():
                 kept.append(carcass)
-            elif carcass.meat <= 0:
+            elif eaten:
                 tally.carcasses_eaten += 1
             else:
                 tally.carcasses_rotted += 1

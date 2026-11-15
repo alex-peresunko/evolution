@@ -11,6 +11,7 @@ HEALTH_LEVELS = 4
 WALK_FRAMES = 8
 PULSE_LEVELS = 4
 CARCASS_LEVELS = 6
+CARCASS_FADE_BELOW = 0.5  # share of its meat left below which a carcass fades out with it
 HIT_FLASH_TICKS = 8
 CROWN_GHOST_ALPHA = 120  # creatures under a crown show through it this strongly
 BG_CACHE_MARGIN = 0.25  # share of the view cached around it on each side when zoomed
