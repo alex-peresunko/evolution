@@ -67,6 +67,8 @@ class TerrainGrid:
         self.cols = max(1, math.ceil(world_bounds[0] / cell_size))
         self.rows = max(1, math.ceil(world_bounds[1] / cell_size))
         self.cells = {}
+        self._obstacles = obstacles
+        self._obstacle_arrays = None
         for cx in range(self.cols):
             x0 = -math.inf if cx == 0 else cx * cell_size
             x1 = math.inf if cx == self.cols - 1 else (cx + 1) * cell_size
@@ -81,6 +83,23 @@ class TerrainGrid:
                     lake for lake in lakes
                     if _box_distance(lake.x, lake.y, x0, x1, y0, y1) <= lake.max_radius + reach)
                 self.cells[cx, cy] = (near_obstacles, near_lakes)
+
+    def obstacle_arrays(self):
+        """(start, items, rects) for compiled code: rects is the (x, y, w, h) of every
+        obstacle, and the obstacles near cell (cx, cy) are
+        items[start[cx * rows + cy]:start[cx * rows + cy + 1]], indices into rects."""
+        if self._obstacle_arrays is None:
+            at = {id(o): n for n, o in enumerate(self._obstacles)}
+            start, items = [0], []
+            for cx in range(self.cols):
+                for cy in range(self.rows):
+                    items += [at[id(o)] for o in self.cells[cx, cy][0]]
+                    start.append(len(items))
+            rects = np.array([(o.rect.x, o.rect.y, o.rect.w, o.rect.h)
+                              for o in self._obstacles], dtype=np.float64).reshape(-1, 4)
+            self._obstacle_arrays = (np.array(start, dtype=np.int64),
+                                     np.array(items, dtype=np.int64), rects)
+        return self._obstacle_arrays
 
     def near(self, x, y):
         """(obstacles, lake blobs) that may touch a body at x, y."""
