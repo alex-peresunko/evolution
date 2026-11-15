@@ -62,30 +62,50 @@ class SpatialIndex:
 
     The food grid is kept between rebuilds, which relies on food never moving. A rebuild only
     adds the items appended to the food list since the last one and takes out those reported
-    through food_removed(); after any other change to the list it starts over."""
+    through food_removed(); after any other change to the list it starts over.
+
+    The species and carcass grids are filled on first use after a rebuild, from the members
+    and positions the rebuild saw."""
 
     def __init__(self, world_bounds, species, cell_size):
         w, h = world_bounds
         self.food = SpatialHashGrid(w, h, cell_size)
-        self.carcasses = SpatialHashGrid(w, h, cell_size)
+        self._carcasses = SpatialHashGrid(w, h, cell_size)
         self._species = {s: SpatialHashGrid(w, h, cell_size) for s in species}
+        self._unfilled = {}      # grid id -> (grid, items, positions or None) not yet filled
         self._food_xy = np.zeros((0, 2))
         self._food_list = None   # the list last indexed, while its changes are all known
         self._food_last = None   # its last indexed item
         self._food_gone = None   # (rows of _food_xy, items) removed since the last rebuild
 
     def of(self, species):
-        return self._species[species]
+        return self._filled(self._species[species])
+
+    @property
+    def carcasses(self):
+        return self._filled(self._carcasses)
+
+    def _filled(self, grid):
+        if self._unfilled:
+            pending = self._unfilled.pop(id(grid), None)
+            if pending is not None:
+                _, items, xy = pending
+                if xy is None:
+                    _fill(grid, items)
+                else:
+                    _fill_at(grid, items, xy)
+        return grid
 
     def rebuild(self, food, populations, carcasses, positions=None):
-        """`positions`: optional {species: (N, 2) array} of the populations' positions."""
+        """`positions`: optional {species: (N, 2) array} of the populations' positions, which
+        the caller must not change afterwards."""
         self._sync_food(food)
         for species, grid in self._species.items():
             if positions is None:
                 _fill(grid, populations[species])
             else:
-                _fill_at(grid, populations[species], positions[species])
-        _fill(self.carcasses, carcasses)
+                self._unfilled[id(grid)] = (grid, list(populations[species]), positions[species])
+        self._unfilled[id(self._carcasses)] = (self._carcasses, list(carcasses), None)
 
     def food_xy(self, food):
         """(F, 2) positions of the items of `food`, or None unless `food` is still the list as
