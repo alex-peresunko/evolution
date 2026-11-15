@@ -87,6 +87,14 @@ def shrink_charts(app):
     app.view.scale_charts(-1)
 
 
+def more_opaque_hud(app):
+    app.view.fade_hud(1)
+
+
+def more_transparent_hud(app):
+    app.view.fade_hud(-1)
+
+
 def toggle_fps_limit(app):
     app.view.fps_limited = not app.view.fps_limited
     print(f"FPS Limiting {'Enabled' if app.view.fps_limited else 'Disabled'}")
@@ -127,8 +135,10 @@ KEY_COMMANDS = {
     pygame.K_KP_PLUS: faster,
     pygame.K_MINUS: slower,
     pygame.K_KP_MINUS: slower,
-    pygame.K_RIGHTBRACKET: grow_charts,
-    pygame.K_LEFTBRACKET: shrink_charts,
+    pygame.K_PERIOD: grow_charts,
+    pygame.K_COMMA: shrink_charts,
+    pygame.K_LEFTBRACKET: more_opaque_hud,
+    pygame.K_RIGHTBRACKET: more_transparent_hud,
     pygame.K_RETURN: toggle_fps_limit,
     pygame.K_g: toggle_genes,
     pygame.K_n: toggle_brain,

@@ -26,6 +26,21 @@ def test_ticks_due_averages_the_speed_in_whole_ticks(speed, label):
     assert view.speed_label() == label
 
 
+def test_hud_opacity_is_clamped():
+    view = ViewState()
+    assert view.hud_alpha == config.HUD_ALPHA
+    for _ in range(40):
+        view.fade_hud(-1)
+    assert view.hud_alpha == config.HUD_ALPHA_MIN
+    for _ in range(config.HUD_ALPHA_STEPS - 1):
+        view.fade_hud(1)
+    assert view.hud_alpha < 255
+    view.fade_hud(1)
+    assert view.hud_alpha == 255
+    view.fade_hud(1)
+    assert view.hud_alpha == 255
+
+
 def test_chart_scale_is_clamped():
     view = ViewState()
     for _ in range(100):

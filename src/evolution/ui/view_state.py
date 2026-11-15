@@ -24,6 +24,7 @@ class ViewState:
     poses: dict | None = None                # {creature id: (x, y, angle)} drawn instead
     tps: int = 0
     chart_scale: float = config.CHART_SCALE_DEFAULT
+    hud_alpha: int = config.HUD_ALPHA        # opacity of the HUD panels and charts, up to 255
     cam_x: float = 0.0
     cam_y: float = 0.0
     zoom: float = 1.0
@@ -84,6 +85,11 @@ class ViewState:
     def scale_charts(self, direction):
         self.chart_scale = max(config.CHART_SCALE_MIN, min(
             config.CHART_SCALE_MAX, self.chart_scale + config.CHART_SCALE_STEP * direction))
+
+    def fade_hud(self, direction):
+        step = (255 - config.HUD_ALPHA_MIN) / config.HUD_ALPHA_STEPS
+        self.hud_alpha = round(max(config.HUD_ALPHA_MIN, min(
+            255, self.hud_alpha + step * direction)))
 
     # --- selection ---------------------------------------------------------------------------
 

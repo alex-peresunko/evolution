@@ -82,7 +82,8 @@ The container setup is described in `README.Podman.md`.
 | L | Reload the best brains from file |
 | Enter | Toggle the 60 FPS cap |
 | D | Toggle drawing |
-| [ / ] | Shrink / grow the score charts |
+| [ / ] | More opaque / more transparent HUD panels and charts |
+| , / . | Shrink / grow the score charts |
 | G | Gene-drift chart for the selected creature's species |
 | N | Brain panel of the selected creature |
 | T | Scent trails: each species' marks as a coloured overlay |

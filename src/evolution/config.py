@@ -333,9 +333,12 @@ COLOR_TEXT = (255, 255, 255)
 COLOR_BIRTH = (0, 255, 255)
 CHART_FONT_SIZE = 15         # at chart scale 1.0
 CHART_SIZE = (150, 75)       # at chart scale 1.0
-CHART_SCALE_DEFAULT = 2.0    # [ / ] in game.py zoom the charts
+CHART_SCALE_DEFAULT = 2.0    # , / . in game.py zoom the charts
 CHART_SCALE_MIN, CHART_SCALE_MAX, CHART_SCALE_STEP = 1.0, 3.0, 0.25
-HUD_ALPHA = 60               # opacity of every HUD panel and chart (background, text, lines),
+# [ / ] in game.py raise and lower the opacity in HUD_ALPHA_STEPS equal steps between
+# HUD_ALPHA_MIN and 255 (solid).
+HUD_ALPHA_MIN, HUD_ALPHA_STEPS = 15, 20
+HUD_ALPHA = 63               # starting opacity of every HUD panel and chart (background, text, lines),
                              # 0 (clear) .. 255 (solid)
 HUD_FONT_SIZE = 18
 

@@ -43,7 +43,8 @@ def draw_faded(screen, rect, alpha, draw, *args):
     screen.blit(layer, rect.topleft, area=rect)
 
 
-def draw_text_block(screen, text_font, lines, x, y, title=None, right=None):
+def draw_text_block(screen, text_font, lines, x, y, title=None, right=None, *,
+                    alpha=config.HUD_ALPHA):
     """right: the panel's right edge on screen; when given, x is ignored."""
     surfs = ([text_font.render(title, True, config.COLOR_BEST_CREATURE)] if title else [])
     surfs += [text_font.render(line, True, config.COLOR_TEXT) for line in lines]
@@ -60,4 +61,4 @@ def draw_text_block(screen, text_font, lines, x, y, title=None, right=None):
             surface.blit(surf, (x, y))
             y += line_h
 
-    draw_faded(screen, rect, config.HUD_ALPHA, paint)
+    draw_faded(screen, rect, alpha, paint)

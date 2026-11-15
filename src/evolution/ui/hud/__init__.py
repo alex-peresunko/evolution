@@ -14,14 +14,14 @@ def draw_hud(screen, font, sim, view, minimap_background, fps):
     sw, sh = screen.get_size()
     draw_minimap(screen, minimap_background, sim.world, view)
     draw_text_block(screen, font, stats_lines(sim, view, fps), 10,
-                    config.MINIMAP_Y + config.MINIMAP_HEIGHT + 15)
+                    config.MINIMAP_Y + config.MINIMAP_HEIGHT + 15, alpha=view.hud_alpha)
     selected = view.selected
     if selected:
         info_lines = [f"{k}: {v}" for k, v in creature_info(selected).items()]
         draw_text_block(screen, font, info_lines, None, 16, title="Selected Creature",
-                        right=sw - 10)
+                        right=sw - 10, alpha=view.hud_alpha)
         if view.show_brain and selected.brain_inputs is not None:
-            draw_faded(screen, brain_panel.panel_rect(sh), config.HUD_ALPHA,
+            draw_faded(screen, brain_panel.panel_rect(sh), view.hud_alpha,
                        brain_panel.draw_brain_panel, selected, view.brain_history)
     scale = view.chart_scale
     chart_w, chart_h = round(config.CHART_SIZE[0] * scale), round(config.CHART_SIZE[1] * scale)
@@ -34,7 +34,7 @@ def draw_hud(screen, font, sim, view, minimap_background, fps):
                            chart_w, chart_h)
         series = [(getattr(sim.stats[HERBIVORE], metric), config.COLOR_CREATURE, "Herb"),
                   (getattr(sim.stats[CARNIVORE], metric), config.COLOR_CARNIVORE, "Carn")]
-        draw_faded(screen, rect, config.HUD_ALPHA, draw_dual_chart, rect, title, series,
+        draw_faded(screen, rect, view.hud_alpha, draw_dual_chart, rect, title, series,
                    scale, label)
     if view.show_genes:
         species = selected.species if selected else HERBIVORE
@@ -42,7 +42,7 @@ def draw_hud(screen, font, sim, view, minimap_background, fps):
         rect = pygame.Rect(sw - chart_w - gene_w - 20,
                            sh - 10 - chart_h * 2 - spacing, gene_w,
                            chart_h * 2 + spacing)
-        draw_faded(screen, rect, config.HUD_ALPHA, draw_gene_chart, rect, species,
+        draw_faded(screen, rect, view.hud_alpha, draw_gene_chart, rect, species,
                    sim.stats[species].gene_history, scale)
     if view.paused:
         screen.blit(font.render("PAUSED", True, (255, 100, 100)),
