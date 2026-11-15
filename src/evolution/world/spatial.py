@@ -116,6 +116,11 @@ class SpatialIndex:
             return self._food_xy
         return None
 
+    def indexed_food_xy(self):
+        """(F, 2) positions of the food in the grid: the list as of the last rebuild(),
+        including items removed from it since."""
+        return self._food_xy
+
     def food_removed(self, food, indices, items):
         """Report that `items`, which were at the ascending `indices` of `food`, were just
         deleted from it. The grid keeps them until the next rebuild()."""

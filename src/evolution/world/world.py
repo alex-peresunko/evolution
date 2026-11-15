@@ -204,8 +204,14 @@ class World:
         return food
 
     def _open_ground(self, x, y):
-        return not (any(lake.contains(x, y) for lake in self.lakes)
-                    or any(circle_hits_rect(x, y, FOOD_RADIUS, o.rect) for o in self.obstacles))
+        obstacles, lakes = self.terrain.near(x, y)
+        for lake in lakes:
+            if lake.contains(x, y):
+                return False
+        for o in obstacles:
+            if circle_hits_rect(x, y, FOOD_RADIUS, o.rect):
+                return False
+        return True
 
     def _food_site(self):
         """(x, y) for new food, or None for anywhere."""
@@ -225,7 +231,7 @@ class World:
                 _fold(y + random.gauss(0, sigma), FOOD_RADIUS, h - FOOD_RADIUS))
 
     def _crowded(self, x, y):
-        near = self.index.food.query(self.geometry.vec2(x, y), FOOD_REGROW_CROWD_RADIUS)
-        limit = FOOD_REGROW_CROWD_RADIUS ** 2
-        return sum((f.pos.x - x) ** 2 + (f.pos.y - y) ** 2 <= limit
-                   for f in near) >= FOOD_REGROW_CROWD
+        xy = self.index.indexed_food_xy()
+        dx, dy = xy[:, 0] - x, xy[:, 1] - y
+        near = dx * dx + dy * dy <= FOOD_REGROW_CROWD_RADIUS ** 2
+        return np.count_nonzero(near) >= FOOD_REGROW_CROWD
