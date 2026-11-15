@@ -196,10 +196,12 @@ def mate_preference(mates, species):
                       + MATE_SCORE_WEIGHT * m.score / top_score)
 
 
-def _ready(world, group):
-    """(ready, xy): the willing, fertile members of `group` and their (N, 2) positions."""
+def _ready(world, group, rows=None):
+    """(ready, xy): the willing, fertile members of `group` and their (N, 2) positions.
+    `rows`: the slice of world.table holding `group` in order, when the caller knows it."""
     table = world.table
-    rows = T.rows_in(table, group)
+    if rows is None:
+        rows = T.rows_in(table, group)
     if rows is None:
         ready = [p for p in group if p.willing and p.fertile(world.tick)]
         return ready, np.array([(p.pos.x, p.pos.y) for p in ready]).reshape(-1, 2)
@@ -220,11 +222,16 @@ def breed(world):
     offspring = []
     paired = set()
     now = time.time()
+    held = world.table.holds(world.creatures())
+    end = 0
     for species in ALL_SPECIES:
         group = world.population(species)
+        start, end = end, end + len(group)
         pop_cap = int(species.start_count * REPRODUCTION_POP_CAP_FACTOR)
+        if len(group) + len(offspring) >= pop_cap:
+            continue
         # Readiness only changes for creatures that pair this tick, which `paired` excludes.
-        ready, xy = _ready(world, group)
+        ready, xy = _ready(world, group, slice(start, end) if held else None)
         if len(ready) < 2:
             continue
         close = np.hypot(xy[:, None, 0] - xy[None, :, 0],
@@ -232,6 +239,8 @@ def breed(world):
         np.fill_diagonal(close, False)
         # Each row's neighbours in column order, as np.flatnonzero(close[i]) gives them.
         rows, cols = np.nonzero(close)
+        if not len(rows):
+            continue
         bounds = np.searchsorted(rows, np.arange(len(ready) + 1)).tolist()
         cols = cols.tolist()
         for i, p1 in enumerate(ready):
