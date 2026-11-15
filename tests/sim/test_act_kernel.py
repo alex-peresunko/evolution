@@ -60,7 +60,7 @@ def _run_with_outside_attackers(compiled, monkeypatch):
         biter, trampler = world.carnivores[0], world.herbivores[1]
         world.populations[biter.species].remove(biter)
         world.populations[trampler.species].remove(trampler)
-        herbivore.recent_biters[biter] = world.tick
+        herbivore.recent_biters[biter] = herbivore.last_hit_tick = world.tick
         biter.recent_tramplers[trampler] = world.tick
         states = []
         for _ in range(5):

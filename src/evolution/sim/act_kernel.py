@@ -920,34 +920,43 @@ def supported(world):
     return world.geometry.kind in ("headless", "pygame") and _species_table() is not None
 
 
-def _outside_attackers(creatures):
-    """(slot, extras): every creature that a recent_biters / recent_tramplers dict of
-    `creatures` names but that is not among them (their score can change), and the kernel row
-    of each creature in either list by id(); (None, []) when every dict is empty."""
-    if not any(c.recent_biters or c.recent_tramplers for c in creatures):
-        return None, []
-    n = len(creatures)
-    slot = {id(c): j for j, c in enumerate(creatures)}
-    extras = []
-    for c in creatures:
+def _recently_hit(it, n, tick):
+    """Rows of the acting creatures whose recent_biters / recent_tramplers can hold an entry
+    still inside its window. Every entry is recorded together with last_hit_tick, and older
+    entries are pruned before anything reads them, so the other rows' dicts count as empty."""
+    window = max(diet_module.PACK_WINDOW_TICKS, diet_module.MOB_WINDOW_TICKS)
+    return np.flatnonzero(it[:n, LAST_HIT] >= tick - window).tolist()
+
+
+def _outside_attackers(creatures, hit):
+    """(slot, extras): every creature that a recent_biters / recent_tramplers dict of the
+    `hit` rows of `creatures` names but that is not among `creatures` (their score can change),
+    and the kernel row of each creature in either list by id(); (None, []) when every dict is
+    empty."""
+    slot, extras = None, []
+    for j in hit:
+        c = creatures[j]
         for recent in (c.recent_biters, c.recent_tramplers):
-            for other in recent:
-                if id(other) not in slot:
-                    slot[id(other)] = n + len(extras)
-                    extras.append(other)
+            if recent:
+                if slot is None:
+                    slot = {id(o): m for m, o in enumerate(creatures)}
+                for other in recent:
+                    if id(other) not in slot:
+                        slot[id(other)] = len(creatures) + len(extras)
+                        extras.append(other)
     return slot, extras
 
 
-def _recent(creatures, slot, rows, attribute):
-    """(who, when, count) of each acting creature's recent attackers dict, `rows` rows. The
+def _recent(creatures, hit, slot, rows, attribute):
+    """(who, when, count) of the recent attackers dicts of the `hit` rows, `rows` rows. The
     extra rows (attackers pulled in by reference) stay empty: only acting creatures are bitten
     or trampled, and the attackers their own dicts name need not be in the kernel."""
-    dicts = [getattr(c, attribute) for c in creatures] if slot is not None else []
-    width = max(4, max(map(len, dicts), default=0) + 4)
+    dicts = [(j, getattr(creatures[j], attribute)) for j in hit] if slot is not None else []
+    width = max(4, max((len(d) for _, d in dicts), default=0) + 4)
     who = np.full((rows, width), -1, dtype=np.int64)
     when = np.zeros((rows, width), dtype=np.int64)
     count = np.zeros(rows, dtype=np.int64)
-    for j, d in enumerate(dicts):
+    for j, d in dicts:
         if d:
             for e, (other, tick) in enumerate(d.items()):
                 who[j, e] = slot[id(other)]
@@ -1008,7 +1017,8 @@ def act_all(world, creatures, outputs):
     table = world.table
     table.arrange(creatures)
     n = len(creatures)
-    slot, extras = _outside_attackers(creatures)
+    hit = _recently_hit(table.it, n, world.tick)
+    slot, extras = _outside_attackers(creatures, hit)
     members = creatures + extras if extras else creatures
     if extras:
         fl = np.concatenate([table.fl, np.array([o._t.fl[o._r] for o in extras])])
@@ -1028,8 +1038,8 @@ def act_all(world, creatures, outputs):
                 carcass_at = {id(k): m for m, k in enumerate(carcass_list)}
             it[j, MEAL_CARCASS] = carcass_at.get(id(meal), CARCASS_OFF_LIST)
     meals_before = it[:n, MEAL_CARCASS].copy()
-    rb = _recent(creatures, slot, len(members), "recent_biters")
-    rt = _recent(creatures, slot, len(members), "recent_tramplers")
+    rb = _recent(creatures, hit, slot, len(members), "recent_biters")
+    rt = _recent(creatures, hit, slot, len(members), "recent_tramplers")
     rb_changed = np.zeros(len(members), dtype=np.bool_)
     rt_changed = np.zeros(len(members), dtype=np.bool_)
 
