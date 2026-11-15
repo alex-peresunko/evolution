@@ -54,6 +54,9 @@ class CreatureTable:
     def __init__(self, rows=0):
         self.members = []
         self.stale = False
+        # (inputs, outputs) matrices of the last brain run, row n for members[n]; None once
+        # the rows have been rearranged since.
+        self.brain_io = None
         self._allocate(rows)
 
     def _allocate(self, rows):
@@ -108,6 +111,7 @@ class CreatureTable:
             c._t, c._r = self, j
         self.members = list(creatures)
         self.stale = False
+        self.brain_io = None
 
 
 def rows_in(table, creatures):

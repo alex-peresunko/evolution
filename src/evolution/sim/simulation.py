@@ -95,13 +95,13 @@ class Simulation:
             if table.holds(creatures):     # World.perceive arranged it
                 table.fl[:, T.SIGNAL] = np.maximum(0.0, outputs[:, OUT.signal])
                 table.fl[:, T.MEMORY] = outputs[:, OUT.memory]
+                table.brain_io = (inputs, outputs)
             else:
                 signals = np.maximum(0.0, outputs[:, OUT.signal]).tolist()
                 memories = outputs[:, OUT.memory].tolist()
-                for c, sig, mem in zip(creatures, signals, memories):
+                for c, sig, mem, x, y in zip(creatures, signals, memories, inputs, outputs):
                     c.signal, c.memory = sig, mem
-            for c, x, y in zip(creatures, inputs, outputs):
-                c.brain_inputs, c.brain_outputs = x, y
+                    c._t.brain_io, c._brain_io = None, (x, y)
             if self.compiled_act and act_kernel.supported(world):
                 act_kernel.act_all(world, creatures, outputs)
                 return

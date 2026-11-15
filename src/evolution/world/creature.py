@@ -170,8 +170,7 @@ class Creature:
         # Written by the simulation after the brain runs.
         self.signal = 0.0                   # heard by kin
         self.memory = [0.0] * NUM_MEMORY    # fed back as inputs on the next tick
-        self.brain_inputs = None
-        self.brain_outputs = None
+        self._brain_io = None               # (inputs, outputs) rows, unless the table has them
         self.mate_override = False          # last tick's outputs were steered toward a mate
         self.willing = True                 # the brain's mate output is not refusing
 
@@ -216,7 +215,24 @@ class Creature:
         t, r = self._t, self._r
         own = CreatureTable.own(self)
         own.fl[0], own.it[0], own.genes[0] = t.fl[r], t.it[r], t.genes[r]
+        if t.brain_io is not None:
+            self._brain_io = (t.brain_io[0][r], t.brain_io[1][r])
         self._t, self._r = own, 0
+
+    @property
+    def brain_inputs(self):
+        """The input row of the last brain run, or None before the first."""
+        io = self._t.brain_io
+        if io is not None:
+            return io[0][self._r]
+        return None if self._brain_io is None else self._brain_io[0]
+
+    @property
+    def brain_outputs(self):
+        io = self._t.brain_io
+        if io is not None:
+            return io[1][self._r]
+        return None if self._brain_io is None else self._brain_io[1]
 
     def adopt(self, brain, genes):
         """Take another brain and genes mid-life; position, health, age, fat and the rest of

@@ -1,4 +1,9 @@
+import operator
+
 import numpy as np
+
+_is = operator.is_
+_brain = operator.attrgetter("brain")
 
 
 class BatchBrain:
@@ -8,11 +13,19 @@ class BatchBrain:
     brain never changing in place after the creature is created."""
 
     def __init__(self):
+        self._creatures = ()
+        self._brains = ()
         self._key = None
         self._slot = {}
         self._layers = None
 
     def _stacked_layers(self, creatures):
+        if (len(creatures) == len(self._creatures)
+                and all(map(_is, creatures, self._creatures))
+                and all(map(_is, map(_brain, creatures), self._brains))):
+            return self._layers
+        self._creatures = list(creatures)
+        self._brains = [c.brain for c in creatures]
         key = [(c.id, id(c.brain)) for c in creatures]
         if self._key != key:
             # Rows of creatures stacked last time are copied over; only newcomers are stacked.
