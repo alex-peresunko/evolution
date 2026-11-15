@@ -1031,8 +1031,8 @@ def act_all(world, creatures, outputs):
     carcass_list = world.carcasses
     it[:, MEAL_CARCASS] = -1
     carcass_at = None
-    for j, c in enumerate(creatures):
-        meal = c.meal_carcass
+    for j in np.flatnonzero(it[:n, EATING] > 0).tolist():   # a meal carcass implies eating
+        meal = creatures[j].meal_carcass
         if meal is not None:
             if carcass_at is None:
                 carcass_at = {id(k): m for m, k in enumerate(carcass_list)}
@@ -1048,8 +1048,10 @@ def act_all(world, creatures, outputs):
     if food_xy is None:
         food_xy = np.array([(f.pos.x, f.pos.y) for f in food], dtype=np.float64).reshape(-1, 2)
     food_life = world.food_lifetimes()
-    carcasses = np.array([(k.pos.x, k.pos.y, k.radius, k.meat, k.age) for k in carcass_list],
-                         dtype=np.float64).reshape(-1, 5)
+    carcasses = np.empty((len(carcass_list), 5))
+    carcasses[:, :3] = food_module.carcass_columns(carcass_list)[:, :3]
+    carcasses[:, 3] = [k.meat for k in carcass_list]
+    carcasses[:, 4] = [k.age for k in carcass_list]
     grid = world.index.food
     terrain = _terrain.get(world)
     t = world.terrain

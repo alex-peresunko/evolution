@@ -34,6 +34,7 @@ from ..config import (
 )
 from ..species import ALL_SPECIES
 from . import creature_table as T
+from .food import carcass_columns
 
 _PI = math.pi
 _TWO_PI = 2 * math.pi
@@ -562,6 +563,15 @@ def _kernel(obs, whisker_angles, herbs, carns, carcasses, food_xy, rects, crowns
         out[i, columns[_C_HUNGER]] = min(1.0, obs[i, _HUNGER] / kc[_K_HUNGER])
 
 
+_COPIED = ((_X, T.X), (_Y, T.Y), (_ANGLE, T.ANGLE), (_SIGHT_D, T.SIGHT),
+           (_SIGHT_A, T.SIGHT_ANGLE), (_HEALTH, T.HEALTH), (_MAX_HEALTH, T.MAX_HEALTH),
+           (_SIZE, T.SIZE), (_CUR_SPEED, T.SPEED), (_GEN_MAX_SPEED, T.GEN_MAX_SPEED),
+           (_STAMINA, T.STAMINA), (_MAX_STAMINA, T.MAX_STAMINA), (_SIGNAL, T.SIGNAL),
+           (_HURT, T.HURT), (_MAX_SPEED, T.MAX_SPEED))
+_OBS_FROM_TABLE = [col for col, _ in _COPIED]
+_TABLE_TO_OBS = [source for _, source in _COPIED]
+
+
 def _rows(creatures):
     """(fl, it, held): the CreatureTable arrays of `creatures`, row n being creatures[n]: the
     table's own (held) when one holds exactly them, else copies of their rows."""
@@ -583,13 +593,7 @@ def _observe(fl, it, tick):
     predator = np.array([s.is_predator for s in ALL_SPECIES], dtype=np.float64)
     eating = it[:, T.EATING]
     obs = np.empty((len(fl), _OBS_COLS))
-    for col, source in ((_X, T.X), (_Y, T.Y), (_ANGLE, T.ANGLE), (_SIGHT_D, T.SIGHT),
-                        (_SIGHT_A, T.SIGHT_ANGLE), (_HEALTH, T.HEALTH),
-                        (_MAX_HEALTH, T.MAX_HEALTH), (_SIZE, T.SIZE), (_CUR_SPEED, T.SPEED),
-                        (_GEN_MAX_SPEED, T.GEN_MAX_SPEED), (_STAMINA, T.STAMINA),
-                        (_MAX_STAMINA, T.MAX_STAMINA), (_SIGNAL, T.SIGNAL), (_HURT, T.HURT),
-                        (_MAX_SPEED, T.MAX_SPEED)):
-        obs[:, col] = fl[:, source]
+    obs[:, _OBS_FROM_TABLE] = fl[:, _TABLE_TO_OBS]
     obs[:, _HUNGER] = it[:, T.HUNGER]
     obs[:, _PREDATOR] = predator[species]
     obs[:, _ID] = it[:, T.ID]
@@ -628,7 +632,7 @@ def _targets(obs):
 def _carcass_rows(carcasses):
     t = np.zeros((len(carcasses), _TGT_COLS))
     if carcasses:
-        t[:, :3] = [(k.pos.x, k.pos.y, k.id) for k in carcasses]
+        t[:, (_T_X, _T_Y, _T_ID)] = carcass_columns(carcasses)[:, (0, 1, 3)]
     return t
 
 

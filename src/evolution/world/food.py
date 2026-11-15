@@ -1,5 +1,8 @@
 """What creatures eat: plant food for herbivores, carcasses for carnivores."""
+import operator
 import random
+
+import numpy as np
 
 from ..config import (
     CARCASS_LIFETIME,
@@ -103,3 +106,26 @@ class Carcass:
 
     def is_gone(self):
         return self.meat <= 0 or self.age >= CARCASS_LIFETIME
+
+
+class _CarcassColumns:
+    def __init__(self):
+        self._members = ()
+        self._columns = np.zeros((0, 4))
+
+    def of(self, carcasses):
+        members = self._members
+        if len(carcasses) != len(members) or not all(map(operator.is_, carcasses, members)):
+            self._members = list(carcasses)
+            self._columns = np.array([(k.pos.x, k.pos.y, k.radius, k.id) for k in carcasses],
+                                     dtype=np.float64).reshape(-1, 4)
+        return self._columns
+
+
+_carcass_columns = _CarcassColumns()
+
+
+def carcass_columns(carcasses):
+    """(C, 4) read-only array of the x, y, radius and id of `carcasses`, which never change
+    during a carcass's life; kept until the list's members change."""
+    return _carcass_columns.of(carcasses)

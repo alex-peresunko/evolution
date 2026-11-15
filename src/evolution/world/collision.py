@@ -15,6 +15,7 @@ from ..config import (
 )
 from . import creature_table as T
 from .creature_table import CreatureTable
+from .food import carcass_columns
 
 _JIT = {"cache": True, "error_model": "numpy"}
 
@@ -256,8 +257,8 @@ def separate(creatures, carcasses, obstacles, tick, terrain=None):
     if not table.holds(creatures):
         table = CreatureTable()
         table.arrange(creatures)
-    solid = [(c.pos.x, c.pos.y, c.radius * BODY_RADIUS_FACTOR) for c in carcasses if c.meat > 0]
-    bodies = np.array(solid, dtype=np.float64).reshape(-1, 3)
+    solid = np.array([c.meat > 0 for c in carcasses], dtype=np.bool_)
+    bodies = carcass_columns(carcasses)[solid]
     if terrain is None:
         rects, cell_start, cell_rects, cell, cols, rows, reach = (
             _rects(obstacles), _NO_CELLS, _NO_CELLS, 1.0, 0, 0, 0.0)
@@ -268,6 +269,6 @@ def separate(creatures, carcasses, obstacles, tick, terrain=None):
     first = creatures[0]
     w, h = first.world_bounds
     _separate(table.fl, table.it, _COLUMNS, _tunables(), tick,
-              np.ascontiguousarray(bodies[:, :2]), np.ascontiguousarray(bodies[:, 2]),
+              np.ascontiguousarray(bodies[:, :2]), bodies[:, 2] * BODY_RADIUS_FACTOR,
               float(w), float(h), first.geometry.kind == "pygame", rects, cell_start,
               cell_rects, cell, cols, rows, reach)
