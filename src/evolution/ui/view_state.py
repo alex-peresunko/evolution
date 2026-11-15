@@ -18,6 +18,7 @@ class ViewState:
     drawing_enabled: bool = True
     show_brain: bool = True
     show_genes: bool = True
+    show_scent: bool = False
     ticks_per_frame: float = 1
     tick_carry: float = 0.0                  # unspent fraction of a tick (speeds below 1)
     poses: dict | None = None                # {creature id: (x, y, angle)} drawn instead

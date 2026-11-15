@@ -14,6 +14,8 @@ from ..config import (
     FOOD_REGROW_RADIUS,
     FOOD_REGROW_SHARE,
     GRID_CELL_SIZE,
+    SCENT_MARK,
+    SCENT_TRAIL,
 )
 from ..species import ALL_SPECIES, CARNIVORE, HERBIVORE
 from . import creature_table as T
@@ -23,6 +25,7 @@ from .environment import FoodPatch, day_light, season
 from .food import Food, FoodClock
 from .geometry import HEADLESS
 from .perception import perceive_all
+from .scent import ScentField
 from .spatial import SpatialIndex
 from .tally import WorldTally
 from .terrain import TerrainGrid, circle_hits_rect
@@ -61,6 +64,7 @@ class World:
         self.season = 0.0
         self.index = SpatialIndex(world_bounds, ALL_SPECIES, GRID_CELL_SIZE)
         self.tally = WorldTally()
+        self.scent = ScentField(world_bounds, len(ALL_SPECIES))
         # The creatures' state, arranged in creatures() order by perceive (world.creature_table).
         self.table = CreatureTable()
         # Food ages by the clock: the items of _food_list (the food list as last synced) are
@@ -131,7 +135,22 @@ class World:
         self.table.arrange(creatures)
         return perceive_all(creatures, self.food, self.herbivores, self.carnivores,
                             self.obstacles, self.carcasses, self.light, self.season, self.lakes,
-                            self.tick, food_xy=self.index.food_xy(self.food))
+                            self.tick, food_xy=self.index.food_xy(self.food), scent=self.scent)
+
+    def leave_scent(self, marking):
+        """Fade the scent marks by a tick, then let creatures()[n] leave its trail plus
+        marking[n] (0..1) of SCENT_MARK where it stands."""
+        self.scent.fade()
+        creatures = self.creatures()
+        if not creatures:
+            return
+        table = self.table
+        if table.holds(creatures):
+            xy, species = table.fl[:, (T.X, T.Y)], table.it[:, T.SPECIES]
+        else:
+            xy = np.array([(c.pos.x, c.pos.y) for c in creatures])
+            species = np.array([T.SPECIES_AT[id(c.species)] for c in creatures])
+        self.scent.leave(species, xy, SCENT_TRAIL + SCENT_MARK * np.asarray(marking))
 
     def separate(self):
         separate(self.creatures(), self.carcasses, self.obstacles, self.tick, self.terrain)

@@ -100,6 +100,10 @@ def toggle_brain(app):
     app.view.show_brain = not app.view.show_brain
 
 
+def toggle_scent(app):
+    app.view.show_scent = not app.view.show_scent
+
+
 def toggle_drawing(app):
     app.view.drawing_enabled = not app.view.drawing_enabled
     print(f"Drawing {'Enabled' if app.view.drawing_enabled else 'Disabled'}")
@@ -129,6 +133,7 @@ KEY_COMMANDS = {
     pygame.K_g: toggle_genes,
     pygame.K_n: toggle_brain,
     pygame.K_d: toggle_drawing,
+    pygame.K_t: toggle_scent,
     pygame.K_b: toggle_background_mode,
 }
 

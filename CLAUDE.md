@@ -118,6 +118,7 @@ World mechanics, all tuned through `config.py`:
 - **Meals:** eating makes a creature stand still for the species' `eat_ticks` (`c.eating_ticks`). The brain keeps running and sees the share of the meal left (`INPUTS.eating`). A `stop_eating` output above `MEAL_BREAK_THRESHOLD` abandons the meal, losing the rest, and the creature moves that tick (counted in `world.tally.meals_abandoned`). Herbivores absorb a food item's health gradually (`Creature.digest`); carnivores keep eating from `meal_carcass` until the meal ends, the carcass is gone, or health is full. A bite interrupts a herbivore's meal and forfeits the rest. Setting a duration to 0 restores instant eating.
 - **Weight:** food eaten at full health is stored as `c.fat` (`Creature.absorb`, `FAT_STORE_EFFICIENCY`, capped at `FAT_MAX`). Fat grows the body (`c.size`, `FAT_SIZE_FACTOR`) and lowers speed (`FAT_SPEED_PENALTY`). It burns slowly (`FAT_BURN_PER_TICK`) and pays the starvation penalty before health does. Carnivore meals continue past full health until the carnivore is stuffed (`Creature.is_stuffed`).
 - **Food:** each tick `FOOD_RESPAWN_RATE` items grow (a fraction is a chance), up to `food_cap`. `World.spawn_food` regrows grass locally: `FOOD_REGROW_SHARE` of the respawned food sprouts beside a random existing item (`FOOD_REGROW_RADIUS`), unless that spot already holds `FOOD_REGROW_CROWD` items, so grazed-out ground stays bare until seeded again. The rest is the seed rain: most of it lands near one of the `world.food_patches` (`FoodPatch`), which drift around the map, and the remainder anywhere.
+- **Scent marks:** `world.scent` (`world.scent.ScentField`) keeps one grid of marks per species (`SCENT_CELL_SIZE`). Between thinking and acting, `World.leave_scent` fades every mark by `SCENT_DECAY`, then each creature leaves `SCENT_TRAIL` where it stands, plus `SCENT_MARK` times its `mark` output. `ScentField.sense` samples the marks at three antennae (`SCENT_ANTENNA_REACH` ahead, and `SCENT_ANTENNA_ANGLE` to either side), so a creature doesn't smell the trail behind it: `INPUTS.trail_kin` / `trail_other` are the strength of the own / the other species' marks, and `trail_kin_bearing` / `trail_other_bearing` the side they are stronger on. Marking is free.
 - **Day/night:** `day_light(tick)` goes into `world.light`. At night vision cones and target whiskers shrink (`NIGHT_SIGHT_FACTOR`), while obstacle whiskers and smell don't.
 - **Upkeep:** the base per-tick health loss is `Creature.upkeep()`. It is `HEALTH_LOSS_PER_TICK` times a weighted sum (`UPKEEP_WEIGHTS`, summing to 1) of trait/species-default ratios:
   - the lean body, Kleiber-scaled (`KLEIBER_EXPONENT`);
@@ -190,14 +191,14 @@ Entities take their vector and rect types from a `world.geometry.Geometry(vec2, 
 
 ### Neural network
 
-Topology is `config.BRAIN_TOPOLOGY = [BRAIN_INPUTS, 24, 12, BRAIN_OUTPUTS]` = `[51, 24, 12, 11]`, tanh on all layers. `NeuralNetwork` (`brain/network.py`) is pure math; `to_data` / `from_data` convert it for `persistence.brain_store`.
+Topology is `config.BRAIN_TOPOLOGY = [BRAIN_INPUTS, 24, 12, BRAIN_OUTPUTS]` = `[55, 24, 12, 12]`, tanh on all layers. `NeuralNetwork` (`brain/network.py`) is pure math; `to_data` / `from_data` convert it for `persistence.brain_store`.
 
 `brain/layout.py` names every column: `INPUTS.target_whiskers`, `OUTPUTS.speed` and so on (an int for scalars, a slice for groups), plus `labels` for the brain panel.
 - `perceive_all`, `imitation`, the simulation and the brain panel all index through it.
-- To add an input, write it in `perceive_all`, append a field to `INPUTS`, and update the `BRAIN_INPUTS` formula. A module-level assert checks the widths.
+- To add an input, write it in `perceive_all` (and in `_reference_see` of `tests/world/test_perception.py`), append a field to `INPUTS`, and update the `BRAIN_INPUTS` formula. A module-level assert checks the widths.
 - New inputs and outputs go at the end: `NeuralNetwork.from_data` copies the overlapping top-left block and zeroes the rest, so saved brains keep their existing wiring and behave as before until mutation connects the new columns.
 
-Outputs: `[rotation, speed, signal, memory..., stop_eating, mate]`.
+Outputs: `[rotation, speed, signal, memory..., stop_eating, mate, mark]`.
 
 **Mating.** A creature breeds when it is fertile (`Creature.fertile`: adult, healthy, off cooldown) and willing (`c.willing`: its `mate` output is not below `MATE_REFUSE_THRESHOLD`). The brain sees the nearest fertile kin (`INPUTS.mate_angle` / `mate_dist`) and its own fertility. `sim.breeding.mate_seeking_drive` still blends a ready adult's steering toward the nearest mate, by the creature's heritable `mate_instinct` gene: at 0 the brain steers alone. During a tick the nearest mate comes from a `MateRadar` (one per species, told of every `act` through `acted`), which must keep answering exactly like the plain scan `_scan_for_mate`.
 
@@ -240,7 +241,7 @@ Each file also stores that species' chart `history` (score and longevity, capped
 
 ## game.py controls
 
-Space pause · +/- simulation speed (1/8–32 ticks per frame; below 1 a tick runs every few frames) · S save brains · L load brains · Enter toggle FPS cap · [ / ] shrink/grow the score charts · D toggle drawing · G toggle the gene-drift chart (species mean genes ÷ defaults, for the selected creature's species) · N toggle the brain panel of the selected creature (node activations, strongest weight×activation connections, top input drivers, output history) · B background mode + island workers · mouse wheel zoom (`ZOOM_STEP` per notch, up to `ZOOM_MAX`, around the cursor) · left-click: spawn food / select creature (the camera follows it; when it dies, it jumps to the best of that species; a minimap click stops following) · minimap drag to pan.
+Space pause · +/- simulation speed (1/8–32 ticks per frame; below 1 a tick runs every few frames) · S save brains · L load brains · Enter toggle FPS cap · [ / ] shrink/grow the score charts · D toggle drawing · T toggle the scent-trail overlay (`WorldRenderer._draw_scent`) · G toggle the gene-drift chart (species mean genes ÷ defaults, for the selected creature's species) · N toggle the brain panel of the selected creature (node activations, strongest weight×activation connections, top input drivers, output history) · B background mode + island workers · mouse wheel zoom (`ZOOM_STEP` per notch, up to `ZOOM_MAX`, around the cursor) · left-click: spawn food / select creature (the camera follows it; when it dies, it jumps to the best of that species; a minimap click stops following) · minimap drag to pan.
 
 ## Metrics
 

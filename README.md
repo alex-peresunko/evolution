@@ -12,11 +12,12 @@ are saved and carried over between runs.
   and big herbivores fight back: a charging herbivore tramples and stuns a carnivore, harder
   inside a herd and when several mob the same one. Herds confuse attackers (bites miss more
   often), while packs bite harder and share the credit for a kill.
-- **Neural brains:** every creature has a `[51, 24, 12, 11]` tanh network. It sees through
-  whiskers, a vision cone and smell, hears kin signals, feels bodies touching it (kin or the
+- **Neural brains:** every creature has a `[55, 24, 12, 12]` tanh network. It sees through
+  whiskers, a vision cone and smell, follows scent trails, hears kin signals, feels bodies touching it (kin or the
   other species, and from which side), and feels its health, stamina, fat, water, the season,
   a bite (`hurt`) and how much of its meal is left. It steers, sets its
-  speed, signals, keeps six memory values and can break off a meal to escape.
+  speed, signals, leaves scent marks, keeps six memory values and can break off a meal to
+  escape.
 - **Genetics:** size, speed, sight, stamina, attractiveness, lifespan, litter size, colour and
   even the brain's own mutation rate are inherited and mutate. Only genetically close pairs
   breed (speciation), and every trait costs upkeep.
@@ -83,6 +84,7 @@ The container setup is described in `README.Podman.md`.
 | [ / ] | Shrink / grow the score charts |
 | G | Gene-drift chart for the selected creature's species |
 | N | Brain panel of the selected creature |
+| T | Scent trails: each species' marks as a coloured overlay |
 | B | Background mode: island worker processes evolve in parallel |
 | Mouse wheel | Zoom around the cursor |
 | Left click | On a creature: select it and follow it; elsewhere: drop food |
@@ -101,6 +103,7 @@ Watch mode only allows the keys that don't write `saved_brains/`.
   - creature sprites, hue-shifted by the colour gene, with a glow: red when just hit, yellow
     for the species' best, cyan for the newborn;
   - pulsing rings around signalling creatures;
+  - with T, the scent marks under everything else: blue for herbivores, orange for carnivores;
   - whiskers and the sight cone on the selected creature, whiskers on each species' best;
   - a bubble around carnivores still immune after a respawn;
   - food, carcasses, rocks, trees, lakes, and a night overlay.

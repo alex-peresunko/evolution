@@ -68,6 +68,11 @@ INPUTS = Layout([
     # the nearest lake blob's centre and shore, within WATER_SENSE_RADIUS; dist 0 = in the water
     ("water_angle", 1, "water_ang"),
     ("water_dist", 1, "water_dist"),
+    # scent marks ahead (world.scent.ScentField.sense): the own species', then the other's
+    ("trail_kin", 1, "trail_kin"),
+    ("trail_kin_bearing", 1, "trail_kin_dir"),
+    ("trail_other", 1, "trail_other"),
+    ("trail_other_bearing", 1, "trail_other_dir"),
 ])
 
 OUTPUTS = Layout([
@@ -77,6 +82,7 @@ OUTPUTS = Layout([
     ("memory", NUM_MEMORY, "mem{}"),
     ("stop_eating", 1, "stop_eat"),                   # > MEAL_BREAK_THRESHOLD abandons a meal
     ("mate", 1, "mate"),                              # < MATE_REFUSE_THRESHOLD refuses to breed
+    ("mark", 1, "mark"),                              # > 0 leaves extra scent (SCENT_MARK)
 ])
 
 assert INPUTS.width == BRAIN_INPUTS and OUTPUTS.width == BRAIN_OUTPUTS, \

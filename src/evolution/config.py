@@ -231,6 +231,15 @@ KIN_DENSITY_NORM = 8
 SIGNAL_RADIUS = 300
 SIGNAL_HEALTH_COST = 0.5        # per tick at full signal
 
+# --- Scent marks (each species' decaying trails on a grid, smelled through three antennae) ---
+SCENT_CELL_SIZE = 40            # px
+SCENT_DECAY = 0.995             # share of a mark left after a tick: half gone in ~140 ticks
+SCENT_TRAIL = 1.0               # left per tick by every creature
+SCENT_MARK = 4.0                # extra per tick at a full `mark` output
+SCENT_ANTENNA_REACH = 60        # px from the body centre to each sample point
+SCENT_ANTENNA_ANGLE = math.radians(45)   # side antennae, either side of the heading
+SCENT_NORM = 10.0               # marks at which the strength input reads tanh(1) = 0.76
+
 # --- Food patches ---
 FOOD_PATCH_COUNT = 3
 FOOD_PATCH_SHARE = 0.8          # share of the food that didn't regrow, placed in a patch
@@ -275,8 +284,9 @@ BRAIN_INPUTS = (
     + 4             # touch by kin / the other species: strength, angle
     + 3             # nearest fertile kin angle/dist, own fertility
     + 3             # thirst, nearest water angle/dist
+    + 4             # scent marks of the own / the other species: strength, bearing
 )
-BRAIN_OUTPUTS = 5 + NUM_MEMORY  # rotation, speed, signal, memory, stop eating, mate
+BRAIN_OUTPUTS = 6 + NUM_MEMORY  # rotation, speed, signal, memory, stop eating, mate, mark
 BRAIN_TOPOLOGY = [BRAIN_INPUTS, 24, 12, BRAIN_OUTPUTS]
 
 # --- Evolution ---

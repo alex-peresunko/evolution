@@ -99,6 +99,16 @@ def test_dead_creature_leaves_carcass_that_rots():
     assert carcass not in sim.world.carcasses
 
 
+def test_step_leaves_scent_trails():
+    sim = _make_sim(n_herbs=3, n_carns=2)
+    sim.step()
+    herbs, carns = sim.world.scent.marks.sum(axis=(1, 2))
+    assert herbs >= 3 * config.SCENT_TRAIL and carns >= 2 * config.SCENT_TRAIL
+    sim.world.populations = {s: [] for s in sim.world.populations}
+    sim.world.leave_scent(())
+    assert sim.world.scent.marks.sum() == pytest.approx((herbs + carns) * config.SCENT_DECAY)
+
+
 def test_step_stores_signal_and_memory():
     sim = _make_sim(n_herbs=3, n_carns=2)
     sim.step()

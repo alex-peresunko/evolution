@@ -90,6 +90,7 @@ class Simulation:
         creatures = world.creatures()
         inputs = world.perceive()
         outputs = self._brains.forward(creatures, inputs)
+        world.leave_scent(np.maximum(0.0, outputs[:, OUT.mark]) if len(outputs) else ())
         if len(outputs):
             table = world.table
             if table.holds(creatures):     # World.perceive arranged it

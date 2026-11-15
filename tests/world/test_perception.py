@@ -11,6 +11,7 @@ from evolution.world import perception
 from evolution.world.creature import Creature
 from evolution.world.food import Carcass, Food
 from evolution.world.perception import perceive_all
+from evolution.world.scent import ScentField
 from evolution.world.terrain import Lake, Obstacle, Tree
 
 WORLD_BOUNDS = (config.WORLD_WIDTH, config.WORLD_HEIGHT)
@@ -56,8 +57,15 @@ def _reference_crown_occlusion(p, ux, uy, trees):
     return best
 
 
+def _reference_scent(scent, own, others, x, y):
+    col, row = math.floor(x / scent.cell_size), math.floor(y / scent.cell_size)
+    if not (0 <= col < scent.cols and 0 <= row < scent.rows):
+        return 0.0, 0.0
+    return scent.marks[own, row, col], sum(scent.marks[s, row, col] for s in others)
+
+
 def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasses=(), light=1.0,
-                   season=0.0, lakes=(), tick=0):
+                   season=0.0, lakes=(), tick=0, scent=None):
     """The original per-creature, pure-Python Creature.see(), plus scalar versions of the
     later inputs (kin, signal, carcass, light, memory); perceive_all must match it."""
     eye = self.sight_distance * (config.NIGHT_SIGHT_FACTOR + (1 - config.NIGHT_SIGHT_FACTOR) * light)
@@ -226,6 +234,20 @@ def _reference_see(self, food_items, obstacles, herbivores, carnivores, carcasse
         inputs += [to_water / math.pi, max(gap, 0.0) / config.WATER_SENSE_RADIUS]
     else:
         inputs += [0.0, 1.0]
+    if scent is None:
+        inputs += [0.0] * 4
+    else:
+        own = 1 if self.is_carnivore else 0
+        antennae = []
+        for side in (-1, 0, 1):
+            heading = self.angle + side * config.SCENT_ANTENNA_ANGLE
+            antennae.append(_reference_scent(
+                scent, own, [1 - own],
+                self.pos.x + math.cos(heading) * config.SCENT_ANTENNA_REACH,
+                self.pos.y + math.sin(heading) * config.SCENT_ANTENNA_REACH))
+        for marks in zip(*antennae):
+            inputs += [math.tanh(max(marks) / config.SCENT_NORM),
+                       (marks[2] - marks[0]) / sum(marks) if sum(marks) > 0 else 0.0]
     return inputs, whiskers, target_whiskers, nearest_target_dist, nearest_smell_strength
 
 
@@ -272,13 +294,16 @@ def test_perceive_all_matches_reference(seed, n_herb, n_carn, n_food, light):
                   rnd.uniform(100, 300)) for _ in range(seed)]
     season = light - 0.5
     tick = 1000
+    scent = ScentField(WORLD_BOUNDS, 2)
+    marks = np.random.default_rng(seed)
+    scent.marks[:] = marks.uniform(0, 30, scent.marks.shape) * (marks.random(scent.marks.shape) < 0.5)
     got = perceive_all(everyone, food, herbs, carns, obstacles, carcasses, light, season, lakes,
-                       tick)
+                       tick, scent=scent)
     assert got.shape == (len(everyone), config.BRAIN_TOPOLOGY[0])
     for row, c in zip(got, everyone):
         inputs, whiskers, target_whiskers, target_dist, smell = _reference_see(c, food, obstacles, herbs, carns,
                                                               carcasses, light, season, lakes,
-                                                              tick)
+                                                              tick, scent)
         np.testing.assert_allclose(row, inputs, atol=1e-9)
         np.testing.assert_allclose(c.whiskers, whiskers, atol=1e-9)
         assert [d is None for d in c.target_whiskers] == [d is None for d in target_whiskers]

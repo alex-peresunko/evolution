@@ -668,7 +668,7 @@ _static = _Static()
 
 
 def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carcasses=(),
-                 light=1.0, season=0.0, lakes=(), tick=0, food_xy=None):
+                 light=1.0, season=0.0, lakes=(), tick=0, food_xy=None, scent=None):
     """Brain inputs for `creatures` (any mix of species) as an (N, INPUTS.width) array.
 
     Carnivores look at and smell `herbivores` and `carcasses`; herbivores look at
@@ -680,6 +680,7 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
     `tick` decides who is fertile (Creature.fertile).
     Water is the lake blob in `lakes` whose shore is nearest.
     `food_xy`: the (F, 2) positions of `food_items`, when the caller already has them.
+    `scent`: the world's ScentField; without one the trail inputs stay 0.
     """
     n = len(creatures)
     out = np.zeros((n, IN.width))
@@ -718,6 +719,9 @@ def perceive_all(creatures, food_items, herbivores, carnivores, obstacles, carca
             columns,
             out, whisker_dist, target_whisker_dist, target_dist, target_found, smell_self, eye)
     out[:, IN.memory] = fl[:, T.MEMORY]
+    if scent is not None:
+        trail = (IN.trail_kin, IN.trail_kin_bearing, IN.trail_other, IN.trail_other_bearing)
+        out[:, trail] = scent.sense(it[:, T.SPECIES], fl[:, T.X], fl[:, T.Y], fl[:, T.ANGLE])
 
     if held:
         fl[:, T.EFFECTIVE_SIGHT] = eye

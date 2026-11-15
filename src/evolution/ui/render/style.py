@@ -15,6 +15,8 @@ HIT_FLASH_TICKS = 8
 CROWN_GHOST_ALPHA = 120  # creatures under a crown show through it this strongly
 BG_CACHE_MARGIN = 0.25  # share of the view cached around it on each side when zoomed
 NIGHT_COLOR = (8, 12, 42)
+SCENT_COLORS = ((150, 230, 255), (255, 150, 60))  # per species, in ALL_SPECIES order
+SCENT_MAX_ALPHA = 150
 
 HERBIVORE_PALETTE = {
     "rim": (36, 88, 70), "core": (132, 196, 136), "leg": (28, 70, 56), "spot": (168, 216, 156),

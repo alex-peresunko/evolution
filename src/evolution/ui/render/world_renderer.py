@@ -3,6 +3,7 @@ night and the selected creature's senses."""
 import math
 import time
 
+import numpy as np
 import pygame
 import pygame.gfxdraw
 
@@ -20,6 +21,8 @@ from .style import (
     HIT_FLASH_TICKS,
     NIGHT_COLOR,
     PULSE_LEVELS,
+    SCENT_COLORS,
+    SCENT_MAX_ALPHA,
     WALK_FRAMES,
     color_bucket,
 )
@@ -72,6 +75,8 @@ class WorldRenderer:
         z = view.zoom
         sw, sh = screen.get_size()
         self._draw_background(screen, cam_x, cam_y, z)
+        if view.show_scent:
+            self._draw_scent(screen, world.scent, cam_x, cam_y, z)
 
         food_r = max(2, round(FOOD_DRAW_RADIUS * z))
         food_sprites = cache.food(food_r)
@@ -192,6 +197,26 @@ class WorldRenderer:
         if self.frame % 600 == 0:
             alive = {c.id for c in creatures}
             self._phase = {k: v for k, v in self._phase.items() if k in alive}
+
+    def _draw_scent(self, screen, scent, cam_x, cam_y, z):
+        """The scent marks in view, one colour per species, as translucent grid cells."""
+        sw, sh = screen.get_size()
+        cell = scent.cell_size
+        c0, r0 = max(0, int(cam_x // cell)), max(0, int(cam_y // cell))
+        c1 = min(scent.cols, int((cam_x + sw / z) // cell) + 1)
+        r1 = min(scent.rows, int((cam_y + sh / z) // cell) + 1)
+        if c1 <= c0 or r1 <= r0:
+            return
+        level = np.tanh(scent.marks[:, r0:r1, c0:c1] / config.SCENT_NORM)
+        total = level.sum(axis=0)
+        rgba = np.zeros((r1 - r0, c1 - c0, 4), dtype=np.uint8)
+        colors = np.array(SCENT_COLORS[:len(level)], dtype=np.float64)
+        rgba[..., :3] = np.einsum("srw,sc->rwc", level, colors) / np.maximum(total, 1e-9)[..., None]
+        rgba[..., 3] = level.max(axis=0) * SCENT_MAX_ALPHA
+        cells = pygame.image.frombuffer(rgba.tobytes(), (c1 - c0, r1 - r0), "RGBA")
+        size = (round((c1 - c0) * cell * z), round((r1 - r0) * cell * z))
+        screen.blit(pygame.transform.scale(cells, size),
+                    ((c0 * cell - cam_x) * z, (r0 * cell - cam_y) * z))
 
     def _under_crown(self, c):
         x, y = c.pos.x, c.pos.y
